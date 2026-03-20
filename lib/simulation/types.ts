@@ -9,6 +9,12 @@ export interface AgentMessage {
   timestamp: string;
 }
 
+export interface TokenUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+}
+
 export interface SimulationState {
   audience_id: string;
   platform: string;

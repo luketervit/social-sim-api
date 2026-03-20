@@ -43,9 +43,8 @@ export default function DocsPage() {
             >
               Atharias is currently running as a closed beta. Open `/login` to
               sign in or manage an existing account, or visit `/waitlist` to
-              request access.
-              Once approved, `/dashboard` auto-provisions your first
-              trial key on access.
+              request access. Once approved, open `/dashboard` to create and
+              manage your trial keys.
             </p>
           </Step>
 
@@ -58,7 +57,17 @@ export default function DocsPage() {
   cache: "no-store"
 })
 
-→ { "key": "ssim_...", "email": "you@company.com", "credits": 7500, "created_at": "..." }`}</code>
+→ {
+  "keys": [
+    {
+      "key": "ssim_...",
+      "email": "you@company.com",
+      "credits": 7500,
+      "total_tokens_used": 0,
+      "created_at": "..."
+    }
+  ]
+}`}</code>
               </pre>
             </div>
           </Step>
@@ -66,28 +75,67 @@ export default function DocsPage() {
           <Step number={3} title="Run a simulation">
             <div className="code-block">
               <pre>
-                <code>{`curl -N -X POST http://localhost:3000/api/v1/simulate \\
+                <code>{`curl -X POST http://localhost:3000/api/v1/simulate \\
   -H "x-api-key: ssim_your_key" \\
   -H "Content-Type: application/json" \\
   -d '{
     "audience_id": "toxic_gamers",
     "platform": "twitter",
     "input": "We are proud to announce NFTs in our next game!"
-  }'`}</code>
+  }'
+
+→ {
+  "simulation_id": "uuid",
+  "status": "queued",
+  "expected_messages": 1000,
+  "simulation_rounds": 10,
+  "reserved_credits": 1000,
+  "progress_messages": 0,
+  "poll_url": "/api/v1/simulate?id=uuid"
+}`}</code>
               </pre>
             </div>
           </Step>
 
-          <Step number={4} title="Process the stream">
+          <Step number={4} title="Poll for progress">
             <p
               className="text-[13px] leading-[1.6]"
               style={{ color: "var(--text-secondary)" }}
             >
-              The response is streamed as NDJSON. Each line is a JSON object
-              representing one of the 100 agent responses in the audience. The
-              final line is a summary object with `aggression_score` and
-              `total_messages`.
+              Simulations now run through the queue and return immediately.
+              Each run can span multiple rounds, with every persona getting a
+              chance to post in every round. Poll the same route with the
+              `simulation_id` until the status becomes `completed` or `failed`.
             </p>
+            <div className="code-block mt-3">
+              <pre>
+                <code>{`curl http://localhost:3000/api/v1/simulate?id=uuid \\
+  -H "x-api-key: ssim_your_key"
+
+→ {
+  "simulation_id": "uuid",
+  "status": "running",
+  "progress_messages": 25,
+  "expected_messages": 1000
+}`}</code>
+              </pre>
+            </div>
+          </Step>
+
+          <Step number={5} title="Run a worker">
+            <p
+              className="text-[13px] leading-[1.6]"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              The API now enqueues jobs quickly, but they only execute when a
+              worker is running. In development or self-hosted environments,
+              start at least one hot worker process.
+            </p>
+            <div className="code-block mt-3">
+              <pre>
+                <code>{`npm run worker`}</code>
+              </pre>
+            </div>
           </Step>
         </div>
       </section>

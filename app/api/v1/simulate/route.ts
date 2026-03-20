@@ -1,24 +1,9 @@
 import { NextRequest } from "next/server";
 import { SimulateInputSchema } from "@/lib/schemas";
-import { consumeApiCredits, getApiKeyStatus } from "@/lib/auth";
-import { supabaseAdmin } from "@/lib/supabase/server";
-import { runSimulation } from "@/lib/simulation/engine";
-import type { AgentMessage } from "@/lib/simulation/types";
-import { CREDITS_PER_MESSAGE } from "@/lib/credits";
-
-function scoreAggression(messages: AgentMessage[]) {
-  const sentiments = messages.map((m) => m.sentiment);
-  const hostileCount = sentiments.filter((s) => s === "hostile").length;
-  const negativeCount = sentiments.filter((s) => s === "negative").length;
-  const total = Math.max(messages.length, 1);
-  const hostileRate = hostileCount / total;
-  const negativeRate = (hostileCount + negativeCount) / total;
-
-  if (hostileRate >= 0.35 || hostileCount >= 30) return "critical";
-  if (negativeRate >= 0.6 || hostileRate >= 0.2) return "high";
-  if (negativeRate >= 0.35) return "moderate";
-  return "low";
-}
+import { consumeApiCredits, getApiKeyStatus, refundApiCredits } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase/admin";
+import { createSimulationJob, getSimulationJob } from "@/lib/simulation/jobs";
+import { CREDITS_PER_MESSAGE, MAX_MESSAGES_PER_SIMULATION, SIMULATION_ROUNDS } from "@/lib/credits";
 
 export async function POST(request: NextRequest) {
   const apiKey = request.headers.get("x-api-key");
@@ -59,59 +44,90 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Audience has no personas" }, { status: 400 });
   }
 
-  const auth = await getApiKeyStatus(apiKey, personas.length * CREDITS_PER_MESSAGE);
+  const reservedCredits = personas.length * SIMULATION_ROUNDS * CREDITS_PER_MESSAGE;
+
+  const auth = await getApiKeyStatus(apiKey, reservedCredits);
   if (!auth.valid) {
     return Response.json({ error: auth.error }, { status: 401 });
   }
 
-  const allMessages: AgentMessage[] = [];
+  const debit = await consumeApiCredits(apiKey, reservedCredits);
+  if (!debit.valid) {
+    const status = debit.error === "No credits remaining" ? 402 : 500;
+    return Response.json({ error: debit.error ?? "Failed to reserve credits" }, { status });
+  }
 
-  const stream = new ReadableStream({
-    async start(controller) {
-      const encoder = new TextEncoder();
-      try {
-        for await (const message of runSimulation(
-          personas as any,
-          audience_id,
-          platform,
-          input,
-          {
-            onBeforeMessage: async () => {
-              const creditResult = await consumeApiCredits(apiKey, CREDITS_PER_MESSAGE);
-              if (!creditResult.valid) {
-                throw new Error(creditResult.error ?? "No credits remaining");
-              }
-            },
-          }
-        )) {
-          allMessages.push(message);
-          controller.enqueue(encoder.encode(JSON.stringify(message) + "\n"));
-        }
+  try {
+    const job = await createSimulationJob({
+      apiKey,
+      audienceId: audience_id,
+      platform,
+      input,
+      reservedCredits,
+    });
 
-        const score = scoreAggression(allMessages);
+    return Response.json(
+      {
+        simulation_id: job.id,
+        status: job.status,
+        expected_messages: reservedCredits / CREDITS_PER_MESSAGE,
+        simulation_rounds: SIMULATION_ROUNDS,
+        reserved_credits: reservedCredits,
+        progress_messages: 0,
+        poll_url: `/api/v1/simulate?id=${job.id}`,
+      },
+      { status: 202 }
+    );
+  } catch (error) {
+    const refund = await refundApiCredits(apiKey, reservedCredits);
+    if (!refund.ok) {
+      console.error("Failed to refund credits after enqueue error:", {
+        apiKeyPrefix: apiKey.slice(0, 12),
+        reservedCredits,
+        refundError: refund.error,
+      });
+    }
 
-        const summary = { type: "summary", aggression_score: score, total_messages: allMessages.length };
-        controller.enqueue(encoder.encode(JSON.stringify(summary) + "\n"));
+    const message = error instanceof Error ? error.message : "Failed to enqueue simulation";
+    return Response.json({ error: message }, { status: 500 });
+  }
+}
 
-        db.from("simulations")
-          .insert({ audience_id, platform, input, thread: allMessages, aggression_score: score })
-          .then(({ error }) => {
-            if (error) console.error("Failed to save simulation:", error.message);
-          });
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : "Simulation failed";
-        controller.enqueue(encoder.encode(JSON.stringify({ type: "error", error: errorMsg }) + "\n"));
-      } finally {
-        controller.close();
-      }
-    },
-  });
+export async function GET(request: NextRequest) {
+  const apiKey = request.headers.get("x-api-key");
+  if (!apiKey) {
+    return Response.json({ error: "Missing x-api-key header" }, { status: 401 });
+  }
 
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "application/x-ndjson",
-      "Cache-Control": "no-cache",
-      "Transfer-Encoding": "chunked",
-    },
-  });
+  const simulationId = request.nextUrl.searchParams.get("id");
+  if (!simulationId) {
+    return Response.json({ error: "Missing simulation id" }, { status: 400 });
+  }
+
+  try {
+    const job = await getSimulationJob(simulationId, apiKey);
+    if (!job) {
+      return Response.json({ error: "Simulation not found" }, { status: 404 });
+    }
+
+    return Response.json({
+      simulation_id: job.id,
+      status: job.status,
+      audience_id: job.audience_id,
+      platform: job.platform,
+      input: job.input,
+      progress_messages: job.progress_messages,
+      expected_messages: job.reserved_credits / CREDITS_PER_MESSAGE || MAX_MESSAGES_PER_SIMULATION,
+      simulation_rounds: SIMULATION_ROUNDS,
+      aggression_score: job.aggression_score,
+      error: job.error_message,
+      started_at: job.started_at,
+      completed_at: job.completed_at,
+      refunded_credits: job.refunded_credits,
+      thread: job.status === "completed" || job.status === "failed" ? job.thread : [],
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to load simulation";
+    return Response.json({ error: message }, { status: 500 });
+  }
 }

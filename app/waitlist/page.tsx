@@ -2,21 +2,19 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { createSupabaseBrowser } from "@/lib/supabase/browser";
 
 export default function WaitlistPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    setNotice(null);
+    setSubmittedEmail(null);
 
     if (password.length < 8) {
       setError("Password must be at least 8 characters.");
@@ -38,15 +36,7 @@ export default function WaitlistPage() {
       return;
     }
 
-    if (!data.session) {
-      setNotice(
-        "Your account has been created. Confirm your email if prompted, then use the sign in/up page to check access status."
-      );
-      return;
-    }
-
-    router.push("/dashboard");
-    router.refresh();
+    setSubmittedEmail(data.user?.email ?? email);
   }
 
   return (
@@ -137,85 +127,141 @@ export default function WaitlistPage() {
               </span>
             </div>
 
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-              <div>
-                <label htmlFor="email" className="mono-label" style={{ display: "block", marginBottom: 10 }}>
-                  Work Email
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@company.com"
-                  required
-                  spellCheck={false}
-                  autoComplete="email"
-                  className="input"
-                />
-              </div>
+            {submittedEmail ? (
+              <div className="waitlist-success-shell">
+                <div className="waitlist-success-mark" aria-hidden="true">
+                  <svg viewBox="0 0 64 64" className="waitlist-success-icon">
+                    <circle cx="32" cy="32" r="31" className="waitlist-success-ring" />
+                    <path d="M18 33.5 27 42.5 47 22.5" className="waitlist-success-check" />
+                  </svg>
+                </div>
 
-              <div>
-                <label htmlFor="password" className="mono-label" style={{ display: "block", marginBottom: 10 }}>
-                  Password
-                </label>
-                <input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Password (min 8 characters)"
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                  className="input"
-                />
-              </div>
-
-              <button type="submit" disabled={loading} className="btn-primary" style={{ marginTop: 6 }}>
-                {loading ? "Submitting request…" : "Join waitlist"}
-              </button>
-            </form>
-
-            {error && (
-              <div
-                className="mt-5 px-4 py-3 text-[13px]"
-                style={{
-                  background: "rgba(239, 68, 68, 0.08)",
-                  color: "#fca5a5",
-                  border: "1px solid rgba(239, 68, 68, 0.15)",
-                  borderRadius: 20,
-                }}
-              >
-                {error}
-              </div>
-            )}
-
-            {notice && (
-              <div
-                className="mt-5 px-4 py-3 text-[13px]"
-                style={{
-                  background: "rgba(34, 197, 94, 0.08)",
-                  color: "#86efac",
-                  border: "1px solid rgba(34, 197, 94, 0.15)",
-                  borderRadius: 20,
-                }}
-              >
-                {notice}
-              </div>
-            )}
-
-            <div className="mt-6" style={{ color: "var(--text-secondary)", fontSize: 13 }}>
-              <p>
-                Already have an account?{" "}
-                <Link
-                  href="/login"
-                  style={{ color: "var(--text-primary)", textDecoration: "underline", textUnderlineOffset: "3px" }}
+                <div className="mono-label">SIGNED UP</div>
+                <div
+                  style={{
+                    color: "var(--text-primary)",
+                    fontSize: 34,
+                    lineHeight: 0.96,
+                    letterSpacing: "-0.05em",
+                    marginTop: 14,
+                  }}
                 >
-                  Go to sign in/up
-                </Link>
-              </p>
-            </div>
+                  Request submitted.
+                </div>
+                <p
+                  style={{
+                    color: "var(--text-secondary)",
+                    fontSize: 14,
+                    lineHeight: 1.7,
+                    marginTop: 16,
+                    maxWidth: 420,
+                  }}
+                >
+                  <span style={{ color: "var(--text-primary)" }}>{submittedEmail}</span> is on the
+                  closed beta queue now. Sign in with the same credentials after approval to access
+                  the dashboard.
+                </p>
+
+                <div className="waitlist-success-band">
+                  <span className="mono-label" style={{ color: "#86efac" }}>
+                    STATUS
+                  </span>
+                  <span style={{ color: "#dcfce7", fontSize: 13 }}>Added to waitlist successfully.</span>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 12,
+                    flexWrap: "wrap",
+                    marginTop: 28,
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => {
+                      setSubmittedEmail(null);
+                      setEmail("");
+                      setPassword("");
+                    }}
+                  >
+                    Add another email
+                  </button>
+                  <Link href="/login" className="btn-secondary">
+                    Go to sign in
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <>
+                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                  <div>
+                    <label htmlFor="email" className="mono-label" style={{ display: "block", marginBottom: 10 }}>
+                      Work Email
+                    </label>
+                    <input
+                      id="email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@company.com"
+                      required
+                      spellCheck={false}
+                      autoComplete="email"
+                      className="input"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="password" className="mono-label" style={{ display: "block", marginBottom: 10 }}>
+                      Password
+                    </label>
+                    <input
+                      id="password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Password (min 8 characters)"
+                      required
+                      minLength={8}
+                      autoComplete="new-password"
+                      className="input"
+                    />
+                  </div>
+
+                  <button type="submit" disabled={loading} className="btn-primary" style={{ marginTop: 6 }}>
+                    {loading ? "Submitting request…" : "Join waitlist"}
+                  </button>
+                </form>
+
+                {error && (
+                  <div
+                    className="mt-5 px-4 py-3 text-[13px]"
+                    style={{
+                      background: "rgba(239, 68, 68, 0.08)",
+                      color: "#fca5a5",
+                      border: "1px solid rgba(239, 68, 68, 0.15)",
+                      borderRadius: 20,
+                    }}
+                  >
+                    {error}
+                  </div>
+                )}
+
+                <div className="mt-6" style={{ color: "var(--text-secondary)", fontSize: 13 }}>
+                  <p>
+                    Already have an account?{" "}
+                    <Link
+                      href="/login"
+                      style={{ color: "var(--text-primary)", textDecoration: "underline", textUnderlineOffset: "3px" }}
+                    >
+                      Go to sign in/up
+                    </Link>
+                  </p>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

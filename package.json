@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "seed": "tsx --env-file=.env scripts/seed.ts"
+    "seed": "tsx --env-file=.env scripts/seed.ts",
+    "worker": "tsx --env-file=.env scripts/worker.ts"
   },
   "keywords": [],
   "author": "",

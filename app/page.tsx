@@ -1,6 +1,7 @@
 import HeroSection from "./components/HeroSection";
 import AudienceDNA from "./components/AudienceDNA";
 import GhostShift from "./components/GhostShift";
+import PricingSection from "./components/PricingSection";
 
 export default function Home() {
   return (
@@ -8,6 +9,7 @@ export default function Home() {
       <HeroSection />
       <AudienceDNA />
       <GhostShift />
+      <PricingSection />
       <Footer />
     </div>
   );
