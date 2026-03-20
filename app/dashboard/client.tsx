@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { createSupabaseBrowser } from "@/lib/supabase/browser";
+import SignOutButton from "@/app/components/SignOutButton";
+import { CREDITS_PER_MESSAGE, STANDARD_AUDIENCE_SIZE, TRIAL_CREDITS } from "@/lib/credits";
 
 interface DashboardProps {
   apiKey: string;
@@ -21,7 +21,6 @@ export default function DashboardClient({
 }: DashboardProps) {
   const [copied, setCopied] = useState(false);
   const [showKey, setShowKey] = useState(false);
-  const router = useRouter();
 
   function handleCopy() {
     navigator.clipboard.writeText(apiKey);
@@ -29,15 +28,9 @@ export default function DashboardClient({
     setTimeout(() => setCopied(false), 2000);
   }
 
-  async function handleSignOut() {
-    const supabase = createSupabaseBrowser();
-    await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
-  }
-
   const maskedKey = apiKey.slice(0, 8) + "\u2022".repeat(32) + apiKey.slice(-4);
-  const creditsPercent = Math.min(100, (credits / 100) * 100);
+  const creditsPercent = Math.min(100, (credits / TRIAL_CREDITS) * 100);
+  const simulationsRemaining = Math.floor(credits / (STANDARD_AUDIENCE_SIZE * CREDITS_PER_MESSAGE));
   const createdDate = new Date(createdAt).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -51,7 +44,7 @@ export default function DashboardClient({
           <h1
             className="text-[28px]"
             style={{
-              fontWeight: "var(--font-weight-bold)" as unknown as number,
+              fontWeight: "var(--font-weight-medium)" as unknown as number,
               letterSpacing: "-0.03em",
             }}
           >
@@ -61,13 +54,9 @@ export default function DashboardClient({
             {userEmail}
           </p>
         </div>
-        <button
-          onClick={handleSignOut}
-          className="btn-secondary"
+        <SignOutButton
           style={{ padding: "6px 14px", minHeight: "auto", fontSize: "13px" }}
-        >
-          Sign out
-        </button>
+        />
       </div>
 
       {/* API Key Card */}
@@ -130,7 +119,7 @@ export default function DashboardClient({
             className="tabular-nums text-[24px]"
             style={{
               fontWeight: "var(--font-weight-bold)" as unknown as number,
-              color: credits > 20 ? "var(--text-primary)" : credits > 0 ? "#eab308" : "#ef4444",
+              color: credits > 1500 ? "var(--text-primary)" : credits > 0 ? "#eab308" : "#ef4444",
             }}
           >
             {credits}
@@ -147,7 +136,7 @@ export default function DashboardClient({
             style={{
               width: `${creditsPercent}%`,
               background:
-                credits > 20 ? "var(--accent)" : credits > 0 ? "#eab308" : "#ef4444",
+                credits > 1500 ? "var(--accent)" : credits > 0 ? "#eab308" : "#ef4444",
               transition: "width 500ms cubic-bezier(0.23, 1, 0.32, 1)",
             }}
           />
@@ -155,7 +144,7 @@ export default function DashboardClient({
 
         <p className="mt-3 text-[13px]" style={{ color: "var(--text-secondary)" }}>
           {credits > 0
-            ? `${credits} simulation${credits !== 1 ? "s" : ""} remaining on your free trial.`
+            ? `${credits} message credits remaining (${simulationsRemaining} full ${STANDARD_AUDIENCE_SIZE}-agent simulation${simulationsRemaining !== 1 ? "s" : ""} at ${STANDARD_AUDIENCE_SIZE * CREDITS_PER_MESSAGE} credits each).`
             : "You\u2019ve used all your free credits."}
         </p>
 

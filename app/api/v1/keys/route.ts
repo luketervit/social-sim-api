@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { randomBytes } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { getOperatorAccountByUserId } from "@/lib/operator-accounts";
+import { TRIAL_CREDITS } from "@/lib/credits";
 
 export async function POST(request: NextRequest) {
   // Authenticate via session cookie
@@ -21,6 +23,22 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const operatorAccount = await getOperatorAccountByUserId(user.id);
+
+  if (!operatorAccount) {
+    return Response.json(
+      { error: "Operator account not provisioned" },
+      { status: 412 }
+    );
+  }
+
+  if (operatorAccount.waitlist) {
+    return Response.json(
+      { error: "Closed beta access is still pending approval" },
+      { status: 403 }
+    );
   }
 
   const db = supabaseAdmin();
@@ -43,13 +61,13 @@ export async function POST(request: NextRequest) {
 
   const { error } = await db
     .from("api_keys")
-    .insert({ key, email: user.email!, credits: 100, user_id: user.id });
+    .insert({ key, email: user.email!, credits: TRIAL_CREDITS, user_id: user.id });
 
   if (error) {
     return Response.json({ error: "Failed to create API key" }, { status: 500 });
   }
 
-  return Response.json({ key, credits: 100 });
+  return Response.json({ key, credits: TRIAL_CREDITS });
 }
 
 // GET: return current user's key info
@@ -70,6 +88,22 @@ export async function GET(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const operatorAccount = await getOperatorAccountByUserId(user.id);
+
+  if (!operatorAccount) {
+    return Response.json(
+      { error: "Operator account not provisioned" },
+      { status: 412 }
+    );
+  }
+
+  if (operatorAccount.waitlist) {
+    return Response.json(
+      { error: "Closed beta access is still pending approval" },
+      { status: 403 }
+    );
   }
 
   const db = supabaseAdmin();

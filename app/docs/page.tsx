@@ -10,17 +10,17 @@ export default function DocsPage() {
       <h1
         className="text-[28px]"
         style={{
-          fontWeight: "var(--font-weight-bold)" as unknown as number,
+          fontWeight: "var(--font-weight-medium)" as unknown as number,
           letterSpacing: "-0.03em",
         }}
       >
-        Documentation
+        Atharias Docs
       </h1>
       <p
         className="mt-2 text-[14px] leading-[1.6]"
         style={{ color: "var(--text-secondary)" }}
       >
-        Everything you need to integrate Atharias into your workflow.
+        Integration notes for the current simulation and key-management routes in this repo.
       </p>
 
       {/* Quick start */}
@@ -28,28 +28,42 @@ export default function DocsPage() {
         <h2
           className="text-[18px]"
           style={{
-            fontWeight: "var(--font-weight-semibold)" as unknown as number,
-            letterSpacing: "-0.02em",
+            fontWeight: "var(--font-weight-medium)" as unknown as number,
+            letterSpacing: "-0.03em",
           }}
         >
           Quick Start
         </h2>
 
         <div className="mt-5 flex flex-col gap-6">
-          <Step number={1} title="Get an API key">
+          <Step number={1} title="Sign in or create an account">
+            <p
+              className="text-[13px] leading-[1.6]"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              Atharias is currently running as a closed beta. Open `/login` to
+              sign in or manage an existing account, or visit `/waitlist` to
+              request access.
+              Once approved, `/dashboard` auto-provisions your first
+              trial key on access.
+            </p>
+          </Step>
+
+          <Step number={2} title="Inspect or create a key with your session">
             <div className="code-block">
               <pre>
-                <code>{`POST /api/v1/keys
-Content-Type: application/json
+                <code>{`await fetch("/api/v1/keys", {
+  method: "GET",
+  credentials: "include",
+  cache: "no-store"
+})
 
-{ "email": "you@company.com" }
-
-→ { "key": "ssim_...", "credits": 100 }`}</code>
+→ { "key": "ssim_...", "email": "you@company.com", "credits": 7500, "created_at": "..." }`}</code>
               </pre>
             </div>
           </Step>
 
-          <Step number={2} title="Run a simulation">
+          <Step number={3} title="Run a simulation">
             <div className="code-block">
               <pre>
                 <code>{`curl -N -X POST http://localhost:3000/api/v1/simulate \\
@@ -64,14 +78,15 @@ Content-Type: application/json
             </div>
           </Step>
 
-          <Step number={3} title="Process the stream">
+          <Step number={4} title="Process the stream">
             <p
               className="text-[13px] leading-[1.6]"
               style={{ color: "var(--text-secondary)" }}
             >
               The response is streamed as NDJSON. Each line is a JSON object
-              representing one agent&rsquo;s response. The final line contains an
-              aggression score summary.
+              representing one of the 100 agent responses in the audience. The
+              final line is a summary object with `aggression_score` and
+              `total_messages`.
             </p>
           </Step>
         </div>
@@ -82,8 +97,8 @@ Content-Type: application/json
         <h2
           className="text-[18px]"
           style={{
-            fontWeight: "var(--font-weight-semibold)" as unknown as number,
-            letterSpacing: "-0.02em",
+            fontWeight: "var(--font-weight-medium)" as unknown as number,
+            letterSpacing: "-0.03em",
           }}
         >
           Reference
@@ -139,8 +154,8 @@ Content-Type: application/json
         <h2
           className="text-[18px]"
           style={{
-            fontWeight: "var(--font-weight-semibold)" as unknown as number,
-            letterSpacing: "-0.02em",
+            fontWeight: "var(--font-weight-medium)" as unknown as number,
+            letterSpacing: "-0.03em",
           }}
         >
           Architecture
