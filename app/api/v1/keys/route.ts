@@ -3,7 +3,52 @@ import { randomBytes } from "crypto";
 import { CreateKeySchema } from "@/lib/schemas";
 import { supabaseAdmin } from "@/lib/supabase/server";
 
+// In-memory rate limit: max 3 key creations per IP per hour
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_MAX = 3;
+const RATE_LIMIT_WINDOW = 60 * 60 * 1000; // 1 hour
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
+    return true;
+  }
+
+  if (entry.count >= RATE_LIMIT_MAX) {
+    return false;
+  }
+
+  entry.count++;
+  return true;
+}
+
+function normalizeEmail(email: string): string {
+  const [local, domain] = email.toLowerCase().trim().split("@");
+  // Strip +aliases (user+tag@gmail.com → user@gmail.com)
+  const cleanLocal = local.split("+")[0];
+  // Strip dots for gmail/googlemail (u.s.e.r@gmail.com → user@gmail.com)
+  const gmailDomains = ["gmail.com", "googlemail.com"];
+  const finalLocal = gmailDomains.includes(domain)
+    ? cleanLocal.replace(/\./g, "")
+    : cleanLocal;
+  return `${finalLocal}@${domain}`;
+}
+
 export async function POST(request: NextRequest) {
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+    || request.headers.get("x-real-ip")
+    || "unknown";
+
+  if (!checkRateLimit(ip)) {
+    return Response.json(
+      { error: "Too many key requests. Try again later." },
+      { status: 429 }
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -19,9 +64,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { email } = parsed.data;
+  const email = normalizeEmail(parsed.data.email);
   const db = supabaseAdmin();
 
+  // Check by normalized email
   const { data: existing } = await db
     .from("api_keys")
     .select("key")
