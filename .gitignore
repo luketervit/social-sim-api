@@ -24,3 +24,4 @@ coverage/
 node_modules/
 *.tsbuildinfo
 supabase/.temp/
+.vercel

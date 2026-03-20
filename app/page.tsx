@@ -47,8 +47,8 @@ export default function Home() {
         </p>
 
         <div className="mt-8 flex gap-3">
-          <Link href="/keys" className="btn-primary">
-            Get API Key
+          <Link href="/login" className="btn-primary">
+            Get Started
           </Link>
           <Link href="/docs" className="btn-secondary">
             Documentation

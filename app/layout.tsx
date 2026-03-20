@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
+import NavAuth from "./nav-auth";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -21,8 +22,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               Atharias
             </Link>
             <div className="flex items-center gap-1">
-              <Link href="/keys" className="nav-link">API Keys</Link>
               <Link href="/docs" className="nav-link">Docs</Link>
+              <NavAuth />
             </div>
           </nav>
         </header>
