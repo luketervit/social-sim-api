@@ -1,0 +1,307 @@
+@import "tailwindcss";
+
+:root {
+  /* Gray scale (dark-first) */
+  --gray-1: #0a0a0b;
+  --gray-2: #111113;
+  --gray-3: #19191d;
+  --gray-4: #222225;
+  --gray-5: #2c2c30;
+  --gray-6: #37373d;
+  --gray-7: #46464f;
+  --gray-8: #5c5c66;
+  --gray-9: #6f6f7b;
+  --gray-10: #8b8b97;
+  --gray-11: #ababb3;
+  --gray-12: #eeeef0;
+
+  /* Accent */
+  --accent: #6366f1;
+  --accent-hover: #818cf8;
+  --accent-muted: rgba(99, 102, 241, 0.12);
+
+  /* Semantic */
+  --bg: var(--gray-1);
+  --bg-subtle: var(--gray-2);
+  --bg-element: var(--gray-3);
+  --border: var(--gray-4);
+  --border-hover: var(--gray-6);
+  --text-primary: var(--gray-12);
+  --text-secondary: var(--gray-10);
+  --text-tertiary: var(--gray-8);
+
+  /* Font weights */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Easing */
+  --ease-out-quint: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-out-cubic: cubic-bezier(0.215, 0.61, 0.355, 1);
+
+  /* Z-index scale */
+  --z-dropdown: 100;
+  --z-sticky: 50;
+
+  /* Hairline border */
+  --border-hairline: 1px;
+
+  @media only screen and (min-device-pixel-ratio: 2),
+    only screen and (min-resolution: 192dpi) {
+    --border-hairline: 0.5px;
+  }
+}
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+}
+
+::selection {
+  background: var(--accent);
+  color: white;
+}
+
+code {
+  font-family: var(--font-geist-mono), "SF Mono", "Fira Code", monospace;
+}
+
+h1, h2, h3 {
+  text-wrap: balance;
+  letter-spacing: -0.02em;
+}
+
+/* Prevent iOS zoom on inputs */
+input, textarea, select {
+  font-size: 16px;
+}
+
+/* Button press feel */
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* Touch-friendly controls */
+button, a, input {
+  touch-action: manipulation;
+}
+
+/* Hover only for pointer devices */
+@media (hover: hover) and (pointer: fine) {
+  .hover-lift:hover {
+    transform: translateY(-1px);
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Tabular numbers for dynamic values */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Header */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  background: rgba(10, 10, 11, 0.8);
+  border-bottom: var(--border-hairline) solid var(--border);
+}
+
+.logo {
+  font-size: 15px;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.nav-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color 150ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .nav-link:hover {
+    color: var(--text-primary);
+  }
+}
+
+/* Shared button styles */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: var(--font-weight-medium);
+  color: white;
+  background: var(--accent);
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 150ms ease;
+  min-height: 44px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn-primary:hover {
+    background: var(--accent-hover);
+  }
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: var(--font-weight-medium);
+  color: var(--text-secondary);
+  background: transparent;
+  text-decoration: none;
+  cursor: pointer;
+  min-height: 44px;
+  box-shadow: 0 0 0 1px var(--border);
+  transition: box-shadow 150ms ease, color 150ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn-secondary:hover {
+    box-shadow: 0 0 0 1px var(--border-hover);
+    color: var(--text-primary);
+  }
+}
+
+/* Card / panel */
+.panel {
+  background: var(--bg-subtle);
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+/* Code blocks in panels */
+.code-block {
+  background: var(--gray-2);
+  border-radius: 8px;
+  padding: 16px 20px;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--gray-11);
+}
+
+.code-block::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.code-block::-webkit-scrollbar-thumb {
+  background: var(--gray-5);
+  border-radius: 4px;
+}
+
+/* Input */
+.input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--bg-element);
+  box-shadow: 0 0 0 1px var(--border);
+  outline: none;
+  min-height: 44px;
+  transition: box-shadow 200ms var(--ease-out-cubic);
+}
+
+.input:focus {
+  box-shadow: 0 0 0 1px var(--accent), 0 0 0 3px var(--accent-muted);
+}
+
+.input::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* Docs prose */
+.docs-prose h1, .docs-prose h2, .docs-prose h3 {
+  color: var(--text-primary);
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+.docs-prose h1 { font-size: 20px; }
+.docs-prose h2 { font-size: 16px; }
+.docs-prose h3 { font-size: 14px; }
+
+.docs-prose p {
+  margin-bottom: 0.75em;
+}
+
+.docs-prose ul, .docs-prose ol {
+  padding-left: 1.25em;
+  margin-bottom: 0.75em;
+}
+
+.docs-prose li {
+  margin-bottom: 0.25em;
+}
+
+.docs-prose code {
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg-element);
+  color: var(--accent-hover);
+}
+
+.docs-prose pre {
+  padding: 16px 20px;
+  border-radius: 8px;
+  background: var(--gray-2);
+  overflow-x: auto;
+  margin: 0.75em 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.docs-prose pre code {
+  padding: 0;
+  background: none;
+  color: var(--gray-11);
+}
+
+.docs-prose strong {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-semibold);
+}

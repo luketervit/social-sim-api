@@ -20,3 +20,7 @@ yarn-error.log*
 dist/
 build/
 coverage/
+.next/
+node_modules/
+*.tsbuildinfo
+supabase/.temp/
