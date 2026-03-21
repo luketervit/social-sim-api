@@ -38,7 +38,7 @@ export default function NavAuth() {
 
   return (
     <Link href="/login" className="nav-link">
-      Sign in/up
+      Sign in
     </Link>
   );
 }

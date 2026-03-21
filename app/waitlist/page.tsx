@@ -256,7 +256,7 @@ export default function WaitlistPage() {
                       href="/login"
                       style={{ color: "var(--text-primary)", textDecoration: "underline", textUnderlineOffset: "3px" }}
                     >
-                      Go to sign in/up
+                      Go to sign in
                     </Link>
                   </p>
                 </div>

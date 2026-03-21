@@ -74,7 +74,7 @@ export default function HeroSection() {
               Request access
             </Link>
             <Link href="/login" className="btn-secondary">
-              Sign in/up
+              Sign in
             </Link>
           </div>
         </div>
