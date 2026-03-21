@@ -1,12 +1,8 @@
-import { readFileSync } from "fs";
-import { join } from "path";
-import ReactMarkdown from "react-markdown";
+const BASE_URL = "https://social-sim-api.vercel.app";
 
 export default function DocsPage() {
-  const agentsMd = readFileSync(join(process.cwd(), "AGENTS.md"), "utf-8");
-
   return (
-    <div className="mx-auto max-w-[640px] pt-16 pb-24">
+    <div className="mx-auto max-w-[760px] pt-16 pb-24">
       <h1
         className="text-[28px]"
         style={{
@@ -14,16 +10,17 @@ export default function DocsPage() {
           letterSpacing: "-0.03em",
         }}
       >
-        Atharias Docs
+        Atharias API Docs
       </h1>
       <p
         className="mt-2 text-[14px] leading-[1.6]"
         style={{ color: "var(--text-secondary)" }}
       >
-        Integration notes for the current simulation and key-management routes in this repo.
+        Use Atharias to run audience simulations, monitor queued jobs, and
+        integrate backlash forecasting into internal workflows or product
+        features.
       </p>
 
-      {/* Quick start */}
       <section className="mt-12">
         <h2
           className="text-[18px]"
@@ -36,26 +33,23 @@ export default function DocsPage() {
         </h2>
 
         <div className="mt-5 flex flex-col gap-6">
-          <Step number={1} title="Sign in or create an account">
-            <p
-              className="text-[13px] leading-[1.6]"
-              style={{ color: "var(--text-secondary)" }}
-            >
-              Atharias is currently running as a closed beta. Open `/login` to
-              sign in or manage an existing account, or visit `/waitlist` to
-              request access. Once approved, open `/dashboard` to create and
-              manage your trial keys.
+          <Step number={1} title="Create an account and get approved">
+            <p className="text-[13px] leading-[1.6]" style={{ color: "var(--text-secondary)" }}>
+              Sign in, or request access from the waitlist if your account has not
+              been approved yet. Once approved, open the dashboard to create your
+              first API key.
             </p>
           </Step>
 
-          <Step number={2} title="Inspect or create a key with your session">
-            <div className="code-block">
+          <Step number={2} title="Create or list API keys">
+            <p className="text-[13px] leading-[1.6]" style={{ color: "var(--text-secondary)" }}>
+              API key management uses your authenticated browser session. These
+              routes are for the dashboard or your own internal tools.
+            </p>
+            <div className="code-block mt-3">
               <pre>
-                <code>{`await fetch("/api/v1/keys", {
-  method: "GET",
-  credentials: "include",
-  cache: "no-store"
-})
+                <code>{`curl -X GET "${BASE_URL}/api/v1/keys" \\
+  -H "Cookie: your_session_cookie"
 
 → {
   "keys": [
@@ -72,16 +66,20 @@ export default function DocsPage() {
             </div>
           </Step>
 
-          <Step number={3} title="Run a simulation">
-            <div className="code-block">
+          <Step number={3} title="Queue a simulation">
+            <p className="text-[13px] leading-[1.6]" style={{ color: "var(--text-secondary)" }}>
+              Simulations are queued immediately and processed asynchronously.
+              Send your API key in `x-api-key`.
+            </p>
+            <div className="code-block mt-3">
               <pre>
-                <code>{`curl -X POST http://localhost:3000/api/v1/simulate \\
-  -H "x-api-key: ssim_your_key" \\
+                <code>{`curl -X POST "${BASE_URL}/api/v1/simulate" \\
+  -H "x-api-key: ssim_your_key_here" \\
   -H "Content-Type: application/json" \\
   -d '{
     "audience_id": "toxic_gamers",
     "platform": "twitter",
-    "input": "We are proud to announce NFTs in our next game!"
+    "input": "We are proud to announce NFTs in our next game."
   }'
 
 → {
@@ -97,50 +95,105 @@ export default function DocsPage() {
             </div>
           </Step>
 
-          <Step number={4} title="Poll for progress">
-            <p
-              className="text-[13px] leading-[1.6]"
-              style={{ color: "var(--text-secondary)" }}
-            >
-              Simulations now run through the queue and return immediately.
-              Each run can span multiple rounds, with every persona getting a
-              chance to post in every round. Poll the same route with the
-              `simulation_id` until the status becomes `completed` or `failed`.
+          <Step number={4} title="Poll job status">
+            <p className="text-[13px] leading-[1.6]" style={{ color: "var(--text-secondary)" }}>
+              Use the returned `simulation_id` to track progress. Completed and
+              failed jobs include the final thread.
             </p>
             <div className="code-block mt-3">
               <pre>
-                <code>{`curl http://localhost:3000/api/v1/simulate?id=uuid \\
-  -H "x-api-key: ssim_your_key"
+                <code>{`curl "${BASE_URL}/api/v1/simulate?id=uuid" \\
+  -H "x-api-key: ssim_your_key_here"
 
 → {
   "simulation_id": "uuid",
   "status": "running",
-  "progress_messages": 25,
-  "expected_messages": 1000
+  "progress_messages": 123,
+  "expected_messages": 1000,
+  "simulation_rounds": 10
 }`}</code>
-              </pre>
-            </div>
-          </Step>
-
-          <Step number={5} title="Run a worker">
-            <p
-              className="text-[13px] leading-[1.6]"
-              style={{ color: "var(--text-secondary)" }}
-            >
-              The API now enqueues jobs quickly, but they only execute when a
-              worker is running. In development or self-hosted environments,
-              start at least one hot worker process.
-            </p>
-            <div className="code-block mt-3">
-              <pre>
-                <code>{`npm run worker`}</code>
               </pre>
             </div>
           </Step>
         </div>
       </section>
 
-      {/* Reference tables */}
+      <section className="mt-14">
+        <h2
+          className="text-[18px]"
+          style={{
+            fontWeight: "var(--font-weight-medium)" as unknown as number,
+            letterSpacing: "-0.03em",
+          }}
+        >
+          Endpoints
+        </h2>
+
+        <div className="mt-5 flex flex-col gap-4">
+          <EndpointCard
+            method="GET"
+            path="/api/v1/keys"
+            detail="List API keys for the signed-in user. Requires a valid browser session."
+          />
+          <EndpointCard
+            method="POST"
+            path="/api/v1/keys"
+            detail="Create a new API key for the signed-in user. Requires approval and a valid browser session."
+          />
+          <EndpointCard
+            method="DELETE"
+            path="/api/v1/keys"
+            detail="Delete one API key belonging to the signed-in user."
+          />
+          <EndpointCard
+            method="POST"
+            path="/api/v1/simulate"
+            detail="Queue a new simulation job using `x-api-key`."
+          />
+          <EndpointCard
+            method="GET"
+            path="/api/v1/simulate?id=..."
+            detail="Fetch status, progress, and final output for a queued job using `x-api-key`."
+          />
+        </div>
+      </section>
+
+      <section className="mt-14">
+        <h2
+          className="text-[18px]"
+          style={{
+            fontWeight: "var(--font-weight-medium)" as unknown as number,
+            letterSpacing: "-0.03em",
+          }}
+        >
+          Request Format
+        </h2>
+
+        <div className="panel mt-5 overflow-hidden">
+          <div
+            className="px-4 py-2.5 text-[12px]"
+            style={{
+              fontWeight: "var(--font-weight-medium)" as unknown as number,
+              color: "var(--text-tertiary)",
+              borderBottom: "var(--border-hairline) solid var(--border)",
+              textTransform: "uppercase" as const,
+              letterSpacing: "0.05em",
+            }}
+          >
+            POST /api/v1/simulate
+          </div>
+          <div className="code-block rounded-none border-0">
+            <pre>
+              <code>{`{
+  "audience_id": "toxic_gamers",
+  "platform": "twitter",
+  "input": "We are proud to announce NFTs in our next game."
+}`}</code>
+            </pre>
+          </div>
+        </div>
+      </section>
+
       <section className="mt-14">
         <h2
           className="text-[18px]"
@@ -168,10 +221,10 @@ export default function DocsPage() {
             </div>
             <div className="flex flex-col">
               <RefRow code="toxic_gamers" label="Hardcore gaming community" />
-              <RefRow code="genz" label="Gen Z social media users" />
+              <RefRow code="genz" label="Gen Z social users" />
               <RefRow code="engineers" label="Software engineering community" />
-              <RefRow code="small_town" label="Small town community" />
-              <RefRow code="company_internal" label="Corporate internal comms" />
+              <RefRow code="small_town" label="Small-town community sentiment" />
+              <RefRow code="company_internal" label="Internal workplace discussion" />
             </div>
           </div>
 
@@ -189,15 +242,35 @@ export default function DocsPage() {
               Platforms
             </div>
             <div className="flex flex-col">
-              <RefRow code="twitter" label="Short-form, hostile, 280 char limit" />
-              <RefRow code="slack" label="Corporate, passive-aggressive" />
-              <RefRow code="reddit" label="Long-form, anonymous" />
+              <RefRow code="twitter" label="Short-form, hostile, high-velocity discussion" />
+              <RefRow code="slack" label="Workplace tone, passive-aggressive discussion" />
+              <RefRow code="reddit" label="Longer-form anonymous discussion" />
+            </div>
+          </div>
+
+          <div className="panel overflow-hidden">
+            <div
+              className="px-4 py-2.5 text-[12px]"
+              style={{
+                fontWeight: "var(--font-weight-medium)" as unknown as number,
+                color: "var(--text-tertiary)",
+                borderBottom: "var(--border-hairline) solid var(--border)",
+                textTransform: "uppercase" as const,
+                letterSpacing: "0.05em",
+              }}
+            >
+              Job statuses
+            </div>
+            <div className="flex flex-col">
+              <RefRow code="queued" label="Accepted and waiting for worker capacity" />
+              <RefRow code="running" label="Currently generating simulation messages" />
+              <RefRow code="completed" label="Finished successfully with a final thread" />
+              <RefRow code="failed" label="Stopped early and may include refunded credits" />
             </div>
           </div>
         </div>
       </section>
 
-      {/* AGENTS.md */}
       <section className="mt-14">
         <h2
           className="text-[18px]"
@@ -206,13 +279,26 @@ export default function DocsPage() {
             letterSpacing: "-0.03em",
           }}
         >
-          Architecture
+          Common Errors
         </h2>
-        <div
-          className="docs-prose mt-5 text-[14px] leading-[1.7]"
-          style={{ color: "var(--text-secondary)" }}
-        >
-          <ReactMarkdown>{agentsMd}</ReactMarkdown>
+
+        <div className="mt-5 flex flex-col gap-4">
+          <ErrorCard
+            code="401 Unauthorized"
+            detail="Your browser session is missing for `/api/v1/keys`, or your `x-api-key` header is missing for `/api/v1/simulate`."
+          />
+          <ErrorCard
+            code="403 Closed beta access is still pending approval"
+            detail="Your account exists, but it is still on the waitlist."
+          />
+          <ErrorCard
+            code="404 Audience not found"
+            detail="The provided `audience_id` does not match one of the seeded audiences."
+          />
+          <ErrorCard
+            code="400 Validation failed"
+            detail="The request body is missing required fields or includes invalid values."
+          />
         </div>
       </section>
     </div>
@@ -254,6 +340,40 @@ function Step({
         </h3>
         {children}
       </div>
+    </div>
+  );
+}
+
+function EndpointCard({ method, path, detail }: { method: string; path: string; detail: string }) {
+  return (
+    <div className="panel p-4">
+      <div className="flex items-center gap-3">
+        <code
+          className="rounded px-2 py-0.5 text-[12px]"
+          style={{ background: "var(--bg-element)", color: "var(--accent-hover)" }}
+        >
+          {method}
+        </code>
+        <code className="text-[13px]" style={{ color: "var(--text-primary)" }}>
+          {path}
+        </code>
+      </div>
+      <p className="mt-2 text-[13px] leading-[1.6]" style={{ color: "var(--text-secondary)" }}>
+        {detail}
+      </p>
+    </div>
+  );
+}
+
+function ErrorCard({ code, detail }: { code: string; detail: string }) {
+  return (
+    <div className="panel p-4">
+      <div className="text-[13px]" style={{ color: "var(--text-primary)" }}>
+        {code}
+      </div>
+      <p className="mt-2 text-[13px] leading-[1.6]" style={{ color: "var(--text-secondary)" }}>
+        {detail}
+      </p>
     </div>
   );
 }
