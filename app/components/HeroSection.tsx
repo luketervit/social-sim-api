@@ -56,11 +56,11 @@ export default function HeroSection() {
               maxWidth: 620,
             }}
           >
-            Start with seeded test audiences in developer mode, then map your
-            own customer segments into synthetic agents for production
-            simulations. Atharias turns audience data into many distinct voices
-            so you can model how sentiment spreads instead of guessing from one
-            example user.
+            Atharias turns audience data into many distinct voices so you can
+            model how sentiment spreads instead of guessing from one example
+            user. Start with seeded test audiences in developer mode, then map
+            your own customer segments into synthetic agents for production
+            simulations.
           </p>
 
           <div
