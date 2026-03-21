@@ -33,11 +33,11 @@ export default function DocsPage() {
         </h2>
 
         <div className="mt-5 flex flex-col gap-6">
-          <Step number={1} title="Create an account and get approved">
+          <Step number={1} title="Create an account, then request API access">
             <p className="text-[13px] leading-[1.6]" style={{ color: "var(--text-secondary)" }}>
-              Sign in, or request access from the waitlist if your account has not
-              been approved yet. Once approved, open the dashboard to create your
-              first API key.
+              The free dashboard and playground are instant. Direct API keys are
+              still gated behind the API waitlist. Once approved, open the
+              dashboard to create your first production key.
             </p>
           </Step>
 
@@ -56,7 +56,7 @@ export default function DocsPage() {
     {
       "key": "ssim_...",
       "email": "you@company.com",
-      "credits": 7500,
+      "credits": 0,
       "total_tokens_used": 0,
       "created_at": "..."
     }
@@ -183,7 +183,7 @@ export default function DocsPage() {
           <EndpointCard
             method="POST"
             path="/api/v1/keys"
-            detail="Create a new API key for the signed-in user. Requires approval and a valid browser session."
+            detail="Create a new direct API key for the signed-in user. Requires API approval and a valid browser session."
           />
           <EndpointCard
             method="DELETE"
@@ -333,8 +333,8 @@ export default function DocsPage() {
             detail="Your browser session is missing for `/api/v1/keys`, or your `x-api-key` header is missing for `/api/v1/simulate`."
           />
           <ErrorCard
-            code="403 Closed beta access is still pending approval"
-            detail="Your account exists, but it is still on the waitlist."
+            code="403 Direct API access is still pending approval"
+            detail="Your account exists and can use the product, but direct API access is still on the waitlist."
           />
           <ErrorCard
             code="404 Audience not found"

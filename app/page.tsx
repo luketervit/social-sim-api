@@ -1,12 +1,42 @@
-import HeroSection from "./components/HeroSection";
 import AudienceDNA from "./components/AudienceDNA";
 import GhostShift from "./components/GhostShift";
+import GraphDemo from "./components/GraphDemo";
+import HeroSection from "./components/HeroSection";
+import JourneySection from "./components/JourneySection";
+import PlaygroundSection from "./components/PlaygroundSection";
 import PricingSection from "./components/PricingSection";
+import { supabaseAdmin } from "@/lib/supabase/admin";
+import { createSupabaseServer } from "@/lib/supabase/server";
 
-export default function Home() {
+const FALLBACK_AUDIENCES = [
+  { id: "genz", name: "Gen Z" },
+  { id: "toxic_gamers", name: "Toxic Gamers" },
+  { id: "engineers", name: "Engineers" },
+  { id: "small_town", name: "Small Town" },
+  { id: "company_internal", name: "Company Internal" },
+];
+
+export default async function Home() {
+  const supabase = await createSupabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const db = supabaseAdmin();
+  const { data: audiences } = await db
+    .from("audiences")
+    .select("id, name")
+    .order("name", { ascending: true });
+
   return (
     <div style={{ overflowX: "clip" }}>
       <HeroSection />
+      <JourneySection />
+      <PlaygroundSection
+        audiences={audiences?.length ? audiences : FALLBACK_AUDIENCES}
+        isSignedIn={!!user}
+      />
+      <GraphDemo />
       <AudienceDNA />
       <GhostShift />
       <PricingSection />

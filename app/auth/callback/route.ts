@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import type { EmailOtpType } from "@supabase/supabase-js";
+import { sanitizeNextPath } from "@/lib/navigation";
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl;
   const code = searchParams.get("code");
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type");
-  const next = searchParams.get("next") ?? "/dashboard";
+  const next = sanitizeNextPath(searchParams.get("next"));
 
   const response = NextResponse.redirect(`${origin}${next}`);
   const supabase = createServerClient(
@@ -28,8 +29,21 @@ export async function GET(request: NextRequest) {
   );
 
   if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
+      // If no explicit next was provided and this is a recovery session,
+      // route to the password reset page instead of the dashboard.
+      if (!searchParams.has("next") && data.session?.user?.recovery_sent_at) {
+        const recoverySentAt = new Date(data.session.user.recovery_sent_at).getTime();
+        const isRecentRecovery = Date.now() - recoverySentAt < 10 * 60 * 1000;
+        if (isRecentRecovery) {
+          const resetResponse = NextResponse.redirect(`${origin}/reset-password`);
+          response.cookies.getAll().forEach((cookie) => {
+            resetResponse.cookies.set(cookie.name, cookie.value);
+          });
+          return resetResponse;
+        }
+      }
       return response;
     }
   }

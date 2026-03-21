@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { sanitizeNextPath } from "@/lib/navigation";
 import { createSupabaseBrowser } from "@/lib/supabase/browser";
 
 export default function LoginPage() {
@@ -21,6 +22,7 @@ function LoginPageContent() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const nextPath = sanitizeNextPath(searchParams.get("next"));
 
   useEffect(() => {
     const requestedMode = searchParams.get("mode");
@@ -86,13 +88,13 @@ function LoginPageContent() {
 
       if (!data.session) {
         setNotice(
-          "Your account has been created for the closed beta. Confirm your email if prompted, then sign in to check access status."
+          "Your account has been created. Confirm your email if prompted, then sign in to open the playground and dashboard."
         );
         setMode("signin");
         return;
       }
 
-      router.push("/dashboard");
+      router.push(nextPath);
       router.refresh();
     } else {
       const { error } = await supabase.auth.signInWithPassword({
@@ -111,7 +113,7 @@ function LoginPageContent() {
         return;
       }
 
-      router.push("/dashboard");
+      router.push(nextPath);
       router.refresh();
     }
   }
@@ -120,13 +122,13 @@ function LoginPageContent() {
     mode === "signin" ? "Sign in" : mode === "signup" ? "Sign up" : "Reset password";
   const description =
     mode === "signin"
-      ? "Access your account, manage API keys, and run simulations."
+      ? "Sign in to open the playground immediately. Approved accounts also unlock direct API keys."
       : mode === "signup"
-        ? "Create an account with email and password to request access to the closed beta."
+        ? "Create an account with email and password to open the free playground immediately."
         : "Enter your email and we’ll send you a secure recovery link.";
   const modeLabel =
     mode === "signin" ? "ACCOUNT_ACCESS" :
-    mode === "signup" ? "CLOSED_BETA" :
+    mode === "signup" ? "FREE_TIER" :
     "PASSWORD_RESET";
 
   return (
@@ -172,9 +174,9 @@ function LoginPageContent() {
               </div>
               <p style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.7 }}>
                 {mode === "signin"
-                  ? "Approved accounts are redirected to the dashboard immediately. Accounts pending review can still sign in, but access stays paused until approval."
+                  ? "Any signed-in account can use the dashboard and playground right away. Direct API key access still stays behind the approval step."
                   : mode === "signup"
-                    ? "New accounts are added to the closed beta queue automatically after sign up."
+                    ? "New accounts can use the dashboard and playground immediately after sign up. Approval is only required for direct API key management."
                     : "Recovery emails route back through the app callback and open the password reset screen."}
               </p>
             </div>

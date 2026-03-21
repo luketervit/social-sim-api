@@ -7,6 +7,7 @@ export interface SimulationJob {
   id: string;
   api_key: string;
   audience_id: string;
+  persona_cap: number | null;
   platform: string;
   input: string;
   thread: AgentMessage[];
@@ -26,6 +27,7 @@ export interface SimulationJob {
 interface CreateSimulationJobInput {
   apiKey: string;
   audienceId: string;
+  personaCap?: number | null;
   platform: string;
   input: string;
   reservedCredits: number;
@@ -34,6 +36,7 @@ interface CreateSimulationJobInput {
 export async function createSimulationJob({
   apiKey,
   audienceId,
+  personaCap,
   platform,
   input,
   reservedCredits,
@@ -44,6 +47,7 @@ export async function createSimulationJob({
     .insert({
       api_key: apiKey,
       audience_id: audienceId,
+      persona_cap: personaCap ?? null,
       platform,
       input,
       status: "queued",
@@ -53,7 +57,7 @@ export async function createSimulationJob({
       thread: [],
     })
     .select(
-      "id, api_key, audience_id, platform, input, thread, aggression_score, status, progress_messages, reserved_credits, refunded_credits, error_message, started_at, completed_at, claimed_by, lease_expires_at, created_at"
+      "id, api_key, audience_id, persona_cap, platform, input, thread, aggression_score, status, progress_messages, reserved_credits, refunded_credits, error_message, started_at, completed_at, claimed_by, lease_expires_at, created_at"
     )
     .single();
 
@@ -69,7 +73,7 @@ export async function getSimulationJob(id: string, apiKey: string): Promise<Simu
   const { data, error } = await db
     .from("simulations")
     .select(
-      "id, api_key, audience_id, platform, input, thread, aggression_score, status, progress_messages, reserved_credits, refunded_credits, error_message, started_at, completed_at, claimed_by, lease_expires_at, created_at"
+      "id, api_key, audience_id, persona_cap, platform, input, thread, aggression_score, status, progress_messages, reserved_credits, refunded_credits, error_message, started_at, completed_at, claimed_by, lease_expires_at, created_at"
     )
     .eq("id", id)
     .eq("api_key", apiKey)
@@ -103,6 +107,7 @@ export async function claimNextSimulationJob(workerId: string, leaseSeconds: num
 export async function heartbeatSimulationJob(
   id: string,
   workerId: string,
+  thread: AgentMessage[],
   progressMessages: number,
   leaseSeconds: number
 ): Promise<void> {
@@ -110,6 +115,7 @@ export async function heartbeatSimulationJob(
   const { error } = await db
     .from("simulations")
     .update({
+      thread,
       progress_messages: progressMessages,
       lease_expires_at: new Date(Date.now() + leaseSeconds * 1000).toISOString(),
     })

@@ -1,3 +1,9 @@
+import {
+  PLAYGROUND_PERSONA_CAP,
+  PLAYGROUND_RUNS_INCLUDED,
+  SIMULATION_ROUNDS,
+} from "@/lib/credits";
+
 type PlanName = "Developer" | "Growth" | "Enterprise";
 
 type Plan = {
@@ -15,16 +21,29 @@ type ComparisonRow = {
   values: Record<PlanName, string | boolean>;
 };
 
+const PLAYGROUND_LAYER = {
+  name: "Free Playground",
+  price: "Free",
+  summary:
+    "A separate evaluation layer for testing seeded audiences before you move into paid API usage.",
+  highlights: [
+    `${PLAYGROUND_RUNS_INCLUDED} free sandbox runs per day`,
+    `Up to ${PLAYGROUND_PERSONA_CAP} agents across ${SIMULATION_ROUNDS} rounds`,
+    "Good for demos, validation, and early prompt testing",
+  ],
+  note: "Paid plans begin when you need API keys, larger workloads, top-ups, or product integration.",
+};
+
 const PLANS: Plan[] = [
   {
     name: "Developer",
     price: "$19/mo",
     credits: "50,000 included",
     summary:
-      "For developers and small teams testing Atharias, validating prompts, and proving out whether the API fits their workflow.",
+      "For developers moving beyond the free playground and starting to integrate Atharias through the API.",
     cta: "Build with the API",
     highlights: [
-      "Best for evaluation and early testing",
+      "First paid API tier",
       "~50 standard runs included",
       "100 max agents per simulation",
     ],
@@ -180,7 +199,7 @@ export default function PricingSection() {
     <section style={{ padding: "96px 0 72px" }}>
       <div className="mx-auto max-w-[1180px] px-6">
         <div style={{ marginBottom: 56, maxWidth: 760 }}>
-          <span className="mono-label">API_PRICING :: CREDIT_ECONOMICS_COMPARISON</span>
+          <span className="mono-label">ACCESS_LAYERS :: FREE_PLAYGROUND_PLUS_API_ACCESS</span>
           <h2
             style={{
               fontSize: 36,
@@ -188,7 +207,7 @@ export default function PricingSection() {
               marginTop: 12,
             }}
           >
-            Pricing
+            API Access
           </h2>
           <p
             style={{
@@ -198,11 +217,162 @@ export default function PricingSection() {
               lineHeight: 1.75,
             }}
           >
-            Pricing is built for API integrations, not seats. Credits are tied
-            to generated messages, and a full 100-agent, 10-round simulation
-            uses up to 1,000 credits. The base plans stay cheap enough for
-            developers to build with, and heavier usage can expand through
-            credit top-ups instead of forcing an immediate enterprise contract.
+            The playground is the free evaluation layer. Paid pricing starts
+            when you need API keys, larger simulations, and production-grade
+            throughput. Credits are tied to generated messages, and a full
+            100-agent, 10-round simulation uses up to 1,000 credits, so the
+            paid plans scale with usage instead of seats.
+          </p>
+        </div>
+
+        <div
+          style={{
+            marginBottom: 32,
+            borderRadius: 28,
+            border: "1px solid rgba(39,39,42,0.8)",
+            background:
+              "linear-gradient(180deg, rgba(236,253,245,0.06), rgba(24,24,27,0.32) 40%, rgba(9,9,11,0.96) 100%)",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            className="grid gap-0 md:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]"
+            style={{ alignItems: "stretch" }}
+          >
+            <article style={{ padding: 28 }}>
+              <span className="mono-label">FREE_LAYER :: PLAYGROUND</span>
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "baseline",
+                  gap: 14,
+                  marginTop: 18,
+                }}
+              >
+                <h3
+                  style={{
+                    fontSize: 30,
+                    color: "var(--text-primary)",
+                  }}
+                >
+                  {PLAYGROUND_LAYER.name}
+                </h3>
+                <span
+                  className="tabular-nums"
+                  style={{
+                    fontFamily: "var(--font-data)",
+                    fontSize: 20,
+                    color: "var(--accent)",
+                    letterSpacing: "-0.04em",
+                  }}
+                >
+                  {PLAYGROUND_LAYER.price}
+                </span>
+              </div>
+
+              <p
+                style={{
+                  color: "var(--text-secondary)",
+                  fontSize: 14,
+                  lineHeight: 1.75,
+                  marginTop: 14,
+                  maxWidth: 560,
+                }}
+              >
+                {PLAYGROUND_LAYER.summary}
+              </p>
+
+              <div className="grid gap-3 sm:grid-cols-3" style={{ marginTop: 20 }}>
+                {PLAYGROUND_LAYER.highlights.map((highlight) => (
+                  <div
+                    key={highlight}
+                    style={{
+                      padding: "14px 16px",
+                      borderRadius: 18,
+                      border: "1px solid rgba(63,63,70,0.65)",
+                      background: "rgba(9,9,11,0.35)",
+                    }}
+                  >
+                    <span
+                      style={{
+                        color: "var(--text-secondary)",
+                        fontSize: 13,
+                        lineHeight: 1.65,
+                      }}
+                    >
+                      {highlight}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </article>
+
+            <aside
+              style={{
+                padding: 28,
+                borderTop: "1px solid rgba(39,39,42,0.8)",
+                borderColor: "rgba(39,39,42,0.8)",
+              }}
+              className="md:border-t-0 md:border-l"
+            >
+              <span className="mono-label">WHEN_PAID_STARTS</span>
+              <p
+                style={{
+                  color: "var(--text-primary)",
+                  fontSize: 18,
+                  lineHeight: 1.5,
+                  marginTop: 18,
+                  maxWidth: 300,
+                }}
+              >
+                {PLAYGROUND_LAYER.note}
+              </p>
+              <div
+                style={{
+                  marginTop: 20,
+                  paddingTop: 18,
+                  borderTop: "1px solid rgba(63,63,70,0.6)",
+                  display: "grid",
+                  gap: 12,
+                }}
+              >
+                <div style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.65 }}>
+                  API keys for backend or product workflows
+                </div>
+                <div style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.65 }}>
+                  Larger agent counts and more monthly simulation volume
+                </div>
+                <div style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.65 }}>
+                  Priority queueing, top-ups, and commercial support
+                </div>
+              </div>
+            </aside>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 24, maxWidth: 620 }}>
+          <span className="mono-label">PAID_LAYER :: API_ACCESS</span>
+          <h3
+            style={{
+              fontSize: 24,
+              color: "var(--text-primary)",
+              marginTop: 12,
+            }}
+          >
+            Paid API Access
+          </h3>
+          <p
+            style={{
+              color: "var(--text-secondary)",
+              fontSize: 14,
+              lineHeight: 1.75,
+              marginTop: 10,
+            }}
+          >
+            Developer, Growth, and Enterprise are usage-based API tiers for
+            teams embedding simulations into internal tooling, workflows, or
+            customer-facing products.
           </p>
         </div>
 
@@ -395,7 +565,7 @@ export default function PricingSection() {
             }}
           >
             <div style={{ padding: "28px 24px" }}>
-              <span className="mono-label">Comparison chart</span>
+              <span className="mono-label">Paid access matrix</span>
               <p
                 style={{
                   color: "var(--text-tertiary)",
@@ -405,8 +575,8 @@ export default function PricingSection() {
                   maxWidth: 220,
                 }}
               >
-                Compare credits, model access, and simulation capacity side by
-                side.
+                Compare paid API access tiers by credits, model access, and
+                simulation capacity.
               </p>
             </div>
 

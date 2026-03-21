@@ -34,7 +34,7 @@ function describeError(error: unknown) {
   return inspect(error, { depth: 4, breakLength: 120 });
 }
 
-async function loadPersonas(audienceId: string) {
+async function loadPersonas(audienceId: string, personaCap?: number | null) {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("audiences")
@@ -51,7 +51,12 @@ async function loadPersonas(audienceId: string) {
     throw new Error("Audience has no personas");
   }
 
-  return personas as any[];
+  const cappedPersonas =
+    typeof personaCap === "number" && personaCap > 0
+      ? personas.slice(0, Math.min(personaCap, personas.length))
+      : personas;
+
+  return cappedPersonas as any[];
 }
 
 async function processJob(job: SimulationJob, claimId: string) {
@@ -60,7 +65,7 @@ async function processJob(job: SimulationJob, claimId: string) {
   let totalTokensUsed = 0;
 
   try {
-    const personas = await loadPersonas(job.audience_id);
+    const personas = await loadPersonas(job.audience_id, job.persona_cap);
 
     for await (const message of runSimulation(
       personas as any,
@@ -76,7 +81,7 @@ async function processJob(job: SimulationJob, claimId: string) {
       messages.push(message);
 
       if (messages.length === 1 || messages.length % heartbeatEveryMessages === 0) {
-        await heartbeatSimulationJob(job.id, claimId, messages.length, leaseSeconds);
+        await heartbeatSimulationJob(job.id, claimId, messages, messages.length, leaseSeconds);
       }
     }
 

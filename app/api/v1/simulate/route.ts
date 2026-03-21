@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
     const job = await createSimulationJob({
       apiKey,
       audienceId: audience_id,
+      personaCap: null,
       platform,
       input,
       reservedCredits,
@@ -114,6 +115,7 @@ export async function GET(request: NextRequest) {
       simulation_id: job.id,
       status: job.status,
       audience_id: job.audience_id,
+      persona_cap: job.persona_cap,
       platform: job.platform,
       input: job.input,
       progress_messages: job.progress_messages,
@@ -124,7 +126,7 @@ export async function GET(request: NextRequest) {
       started_at: job.started_at,
       completed_at: job.completed_at,
       refunded_credits: job.refunded_credits,
-      thread: job.status === "completed" || job.status === "failed" ? job.thread : [],
+      thread: job.thread ?? [],
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load simulation";

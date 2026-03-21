@@ -3,7 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import { randomBytes } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getOperatorAccountByUserId } from "@/lib/operator-accounts";
-import { TRIAL_CREDITS } from "@/lib/credits";
+import { PLAYGROUND_KEY_PREFIX, displayCredits } from "@/lib/credits";
 
 async function getAuthenticatedUser(request: NextRequest) {
   const supabase = createServerClient(
@@ -41,7 +41,7 @@ async function getAuthenticatedUser(request: NextRequest) {
   if (operatorAccount.waitlist) {
     return {
       errorResponse: Response.json(
-        { error: "Closed beta access is still pending approval" },
+        { error: "Direct API access is still pending approval" },
         { status: 403 }
       ),
     };
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     .insert({
       key,
       email: auth.user.email!,
-      credits: TRIAL_CREDITS,
+      credits: 0,
       user_id: auth.user.id,
     })
     .select("key, email, credits, total_tokens_used, created_at")
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Failed to create API key" }, { status: 500 });
   }
 
-  return Response.json(keyRow, { status: 201 });
+  return Response.json({ ...keyRow, credits: displayCredits(keyRow.credits) }, { status: 201 });
 }
 
 export async function GET(request: NextRequest) {
@@ -88,13 +88,19 @@ export async function GET(request: NextRequest) {
     .from("api_keys")
     .select("key, email, credits, total_tokens_used, created_at")
     .eq("user_id", auth.user.id)
+    .not("key", "like", `${PLAYGROUND_KEY_PREFIX}%`)
     .order("created_at", { ascending: false });
 
   if (error) {
     return Response.json({ error: "Failed to load API keys" }, { status: 500 });
   }
 
-  return Response.json({ keys: keyRows ?? [] });
+  return Response.json({
+    keys: (keyRows ?? []).map((keyRow) => ({
+      ...keyRow,
+      credits: displayCredits(keyRow.credits),
+    })),
+  });
 }
 
 export async function DELETE(request: NextRequest) {

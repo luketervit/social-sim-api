@@ -1,9 +1,15 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabase/server";
+import { ensureOperatorAccount } from "@/lib/operator-accounts";
+import {
+  getDailyPlaygroundQuotaForUser,
+  listAudienceOptions,
+  listSimulationsForUser,
+  type SimulationShareEventRecord,
+} from "@/lib/playground";
+import { FREE_PLAYGROUND_SIMULATIONS_PER_DAY } from "@/lib/quotas";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { getOperatorAccountByUserId } from "@/lib/operator-accounts";
 import DashboardClient from "./client";
-import WaitlistState from "./waitlist-state";
 
 export default async function DashboardPage() {
   const supabase = await createSupabaseServer();
@@ -11,56 +17,55 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/login");
-
-  const operatorAccount = await getOperatorAccountByUserId(user.id);
-
-  if (!operatorAccount) {
-    return (
-      <div className="mx-auto max-w-[640px] px-6 pt-16 pb-24">
-        <div className="panel" style={{ padding: 28 }}>
-          <div className="mono-label">ACCOUNT_RECORD</div>
-          <h1 style={{ fontSize: 32, marginTop: 14, color: "var(--text-primary)" }}>
-            Account record missing
-          </h1>
-          <p
-            style={{
-              marginTop: 14,
-              color: "var(--text-secondary)",
-              lineHeight: 1.7,
-            }}
-          >
-            This account does not have an `operator_accounts` record yet. Run
-            the latest Supabase migration, then refresh this page.
-          </p>
-        </div>
-      </div>
-    );
+  if (!user || !user.email) {
+    redirect("/login");
   }
 
-  if (operatorAccount.waitlist) {
-    return (
-      <WaitlistState
-        email={operatorAccount.email || user.email || ""}
-        joinedAt={operatorAccount.waitlist_joined_at}
-      />
-    );
+  await ensureOperatorAccount(user.id, user.email);
+  const [playgroundQuota, simulations, audiences] = await Promise.all([
+    getDailyPlaygroundQuotaForUser(user.id),
+    listSimulationsForUser(user.id),
+    listAudienceOptions(),
+  ]);
+
+  const simulationIds = simulations.map((s) => s.id);
+  let shareEvents: SimulationShareEventRecord[] = [];
+
+  if (simulationIds.length > 0) {
+    const db = supabaseAdmin();
+    const { data } = await db
+      .from("simulation_share_events")
+      .select("simulation_id, channel, share_text, destination, created_at")
+      .in("simulation_id", simulationIds)
+      .order("created_at", { ascending: false })
+      .limit(500);
+
+    shareEvents = (data ?? []) as SimulationShareEventRecord[];
   }
 
-  const db = supabaseAdmin();
-  const { data: apiKeys, error } = await db
-    .from("api_keys")
-    .select("key, email, credits, total_tokens_used, created_at")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    return (
-      <div className="pt-16">
-        <p style={{ color: "#f87171" }}>Failed to load API keys. Please try again.</p>
-      </div>
-    );
+  const shareEventsBySimulation = new Map<string, SimulationShareEventRecord[]>();
+  for (const event of shareEvents) {
+    const existing = shareEventsBySimulation.get(event.simulation_id) ?? [];
+    existing.push(event);
+    shareEventsBySimulation.set(event.simulation_id, existing);
   }
 
-  return <DashboardClient apiKeys={apiKeys ?? []} userEmail={user.email!} />;
+  const hydratedSimulations = simulations.map((simulation) => {
+    const simulationShareEvents = shareEventsBySimulation.get(simulation.id) ?? [];
+    return {
+      ...simulation,
+      share_event_count: simulationShareEvents.length,
+      recent_share_events: simulationShareEvents.slice(0, 4),
+    };
+  });
+
+  return (
+    <DashboardClient
+      audiences={audiences}
+      simulations={hydratedSimulations}
+      dailyRunsLimit={FREE_PLAYGROUND_SIMULATIONS_PER_DAY}
+      dailyRunsRemaining={playgroundQuota.remaining}
+      userEmail={user.email}
+    />
+  );
 }

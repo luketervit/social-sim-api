@@ -60,6 +60,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               Atharias
             </Link>
             <div className="flex items-center gap-1">
+              <Link href="/#playground" className="nav-link">Playground</Link>
+              <Link href="/explore" className="nav-link">Explore</Link>
               <Link href="/docs" className="nav-link">Docs</Link>
               <NavAuth />
             </div>

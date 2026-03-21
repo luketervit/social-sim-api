@@ -1,10 +1,37 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { CREDITS_PER_MESSAGE } from "@/lib/credits";
+import {
+  CREDITS_PER_MESSAGE,
+  DEV_UNLIMITED_CREDITS,
+  DEV_UNLIMITED_CREDITS_ENABLED,
+} from "@/lib/credits";
+
+async function apiKeyExists(key: string) {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("api_keys")
+    .select("key")
+    .eq("key", key)
+    .maybeSingle();
+
+  if (error) {
+    return false;
+  }
+
+  return Boolean(data);
+}
 
 export async function getApiKeyStatus(
   key: string,
   requiredCredits: number = CREDITS_PER_MESSAGE
 ): Promise<{ valid: boolean; error?: string; credits?: number }> {
+  if (DEV_UNLIMITED_CREDITS_ENABLED) {
+    const exists = await apiKeyExists(key);
+    if (!exists) {
+      return { valid: false, error: "Invalid API key" };
+    }
+    return { valid: true, credits: DEV_UNLIMITED_CREDITS };
+  }
+
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("api_keys")
@@ -27,6 +54,11 @@ export async function consumeApiCredits(
   key: string,
   amount: number = CREDITS_PER_MESSAGE
 ): Promise<{ valid: boolean; error?: string }> {
+  if (DEV_UNLIMITED_CREDITS_ENABLED) {
+    const exists = await apiKeyExists(key);
+    return exists ? { valid: true } : { valid: false, error: "Invalid API key" };
+  }
+
   const db = supabaseAdmin();
 
   // Atomic decrement: only succeeds if enough credits remain for the requested amount
@@ -44,10 +76,6 @@ export async function consumeApiCredits(
       details: error.details,
     });
 
-    // If the RPC doesn't exist yet, fall back to the non-atomic path
-    if (error.code === "42883" || error.code === "PGRST202") {
-      return consumeApiCreditsFallback(key, amount);
-    }
     return { valid: false, error: "Failed to debit credits" };
   }
 
@@ -71,39 +99,28 @@ export async function refundApiCredits(
   key: string,
   amount: number
 ): Promise<{ ok: boolean; error?: string }> {
+  if (DEV_UNLIMITED_CREDITS_ENABLED) {
+    const exists = await apiKeyExists(key);
+    return exists ? { ok: true } : { ok: false, error: "Invalid API key" };
+  }
+
   if (amount <= 0) {
     return { ok: true };
   }
 
   const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("api_keys")
-    .select("credits")
-    .eq("key", key)
-    .single();
+  const { error } = await db.rpc("adjust_api_key_credits", {
+    p_api_key: key,
+    p_credit_delta: amount,
+  });
 
-  if (error || !data) {
-    console.error("Failed to load API key for refund:", {
-      keyPrefix: key.slice(0, 12),
-      amount,
-      code: error?.code,
-      message: error?.message,
-    });
-    return { ok: false, error: "Failed to load API key for refund" };
-  }
-
-  const { error: updateError } = await db
-    .from("api_keys")
-    .update({ credits: data.credits + amount })
-    .eq("key", key);
-
-  if (updateError) {
+  if (error) {
     console.error("Failed to refund API credits:", {
       keyPrefix: key.slice(0, 12),
       amount,
-      code: updateError.code,
-      message: updateError.message,
-      details: updateError.details,
+      code: error.code,
+      message: error.message,
+      details: error.details,
     });
     return { ok: false, error: "Failed to refund credits" };
   }
@@ -139,34 +156,6 @@ export async function incrementApiKeyTokensUsed(
 
   return { ok: true };
 }
-
-async function consumeApiCreditsFallback(
-  key: string,
-  amount: number
-): Promise<{ valid: boolean; error?: string }> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("api_keys")
-    .select("key, credits")
-    .eq("key", key)
-    .single();
-
-  if (error || !data) {
-    return { valid: false, error: "Invalid API key" };
-  }
-
-  if (data.credits < amount) {
-    return { valid: false, error: "No credits remaining" };
-  }
-
-  await db
-    .from("api_keys")
-    .update({ credits: data.credits - amount })
-    .eq("key", key);
-
-  return { valid: true };
-}
-
 async function incrementApiKeyTokensUsedFallback(
   key: string,
   amount: number

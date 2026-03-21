@@ -9,6 +9,7 @@ export default function WaitlistPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
+  const [signedInAfterSubmit, setSignedInAfterSubmit] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
@@ -36,6 +37,7 @@ export default function WaitlistPage() {
       return;
     }
 
+    setSignedInAfterSubmit(!!data.session);
     setSubmittedEmail(data.user?.email ?? email);
   }
 
@@ -44,7 +46,7 @@ export default function WaitlistPage() {
       <div className="mx-auto max-w-[1180px] px-6">
         <div className="grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,0.85fr)]">
           <div className="section-shell border border-[rgba(39,39,42,0.55)]">
-            <span className="mono-label">WAITLIST</span>
+            <span className="mono-label">API_WAITLIST</span>
             <h1
               style={{
                 fontSize: 44,
@@ -54,7 +56,7 @@ export default function WaitlistPage() {
                 maxWidth: 420,
               }}
             >
-              Request access
+              Join the API waitlist
             </h1>
             <p
               style={{
@@ -65,8 +67,9 @@ export default function WaitlistPage() {
                 maxWidth: 460,
               }}
             >
-              Create an account with your work email and password to join the
-              Atharias closed beta waitlist.
+              The free playground is live immediately. This page is only for
+              joining the queue for direct API keys and production integration
+              access.
             </p>
 
             <div
@@ -82,9 +85,9 @@ export default function WaitlistPage() {
                 ACCESS POLICY
               </div>
               <p style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.7 }}>
-                Accounts submitted here are added to the closed beta queue.
-                Once approved, you can sign in with the same credentials and
-                access the dashboard immediately.
+                Accounts submitted here can use the dashboard and playground
+                immediately, but direct API key access remains pending approval
+                until the waitlist is cleared.
               </p>
             </div>
           </div>
@@ -109,7 +112,7 @@ export default function WaitlistPage() {
                     letterSpacing: "-0.03em",
                   }}
                 >
-                  Waitlist sign up
+                  API waitlist sign up
                 </div>
               </div>
               <span
@@ -123,7 +126,7 @@ export default function WaitlistPage() {
                   whiteSpace: "nowrap",
                 }}
               >
-                CLOSED BETA
+                API ACCESS
               </span>
             </div>
 
@@ -146,7 +149,7 @@ export default function WaitlistPage() {
                     marginTop: 14,
                   }}
                 >
-                  Request submitted.
+                  API waitlist joined.
                 </div>
                 <p
                   style={{
@@ -157,16 +160,18 @@ export default function WaitlistPage() {
                     maxWidth: 420,
                   }}
                 >
-                  <span style={{ color: "var(--text-primary)" }}>{submittedEmail}</span> is on the
-                  closed beta queue now. Sign in with the same credentials after approval to access
-                  the dashboard.
+                  <span style={{ color: "var(--text-primary)" }}>{submittedEmail}</span> can use the
+                  free dashboard now. Direct API access is queued separately and will unlock after
+                  approval.
                 </p>
 
                 <div className="waitlist-success-band">
                   <span className="mono-label" style={{ color: "#86efac" }}>
                     STATUS
                   </span>
-                  <span style={{ color: "#dcfce7", fontSize: 13 }}>Added to waitlist successfully.</span>
+                  <span style={{ color: "#dcfce7", fontSize: 13 }}>
+                    Playground unlocked. API waitlist recorded.
+                  </span>
                 </div>
 
                 <div
@@ -182,14 +187,15 @@ export default function WaitlistPage() {
                     className="btn-primary"
                     onClick={() => {
                       setSubmittedEmail(null);
+                      setSignedInAfterSubmit(false);
                       setEmail("");
                       setPassword("");
                     }}
                   >
                     Add another email
                   </button>
-                  <Link href="/login" className="btn-secondary">
-                    Go to sign in
+                  <Link href={signedInAfterSubmit ? "/dashboard" : "/login"} className="btn-secondary">
+                    {signedInAfterSubmit ? "Open dashboard" : "Go to sign in"}
                   </Link>
                 </div>
               </div>
@@ -231,7 +237,7 @@ export default function WaitlistPage() {
                   </div>
 
                   <button type="submit" disabled={loading} className="btn-primary" style={{ marginTop: 6 }}>
-                    {loading ? "Submitting request…" : "Join waitlist"}
+                    {loading ? "Joining API waitlist…" : "Join API waitlist"}
                   </button>
                 </form>
 
@@ -251,12 +257,12 @@ export default function WaitlistPage() {
 
                 <div className="mt-6" style={{ color: "var(--text-secondary)", fontSize: 13 }}>
                   <p>
-                    Already have an account?{" "}
+                    Already have an account and just want the product?{" "}
                     <Link
                       href="/login"
                       style={{ color: "var(--text-primary)", textDecoration: "underline", textUnderlineOffset: "3px" }}
                     >
-                      Go to sign in
+                      Sign in to the dashboard
                     </Link>
                   </p>
                 </div>

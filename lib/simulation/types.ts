@@ -1,11 +1,14 @@
 import type { Persona } from "@/lib/schemas";
 
 export interface AgentMessage {
+  id?: string;
   round: number;
   agent_id: string;
   archetype: string;
   message: string;
   sentiment: "positive" | "neutral" | "negative" | "hostile";
+  reply_to: string | null;
+  reply_to_agent_id?: string | null;
   timestamp: string;
 }
 
