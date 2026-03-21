@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { getEnv } from "@/lib/env";
+import { getOpenRouterEnv } from "@/lib/env";
 import type { TokenUsage } from "./types";
 
 const MODEL = "meta-llama/llama-3.1-8b-instruct";
@@ -27,7 +27,7 @@ function getClient(): OpenAI {
   if (_client) return _client;
   _client = new OpenAI({
     baseURL: "https://openrouter.ai/api/v1",
-    apiKey: getEnv().OPENROUTER_API_KEY,
+    apiKey: getOpenRouterEnv().OPENROUTER_API_KEY,
   });
   return _client;
 }

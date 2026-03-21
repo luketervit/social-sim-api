@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { getEnv } from "@/lib/env";
+import { getDeepSeekEnv } from "@/lib/env";
 import type { AgentMessage } from "./types";
 
 let _client: OpenAI | null = null;
@@ -8,7 +8,7 @@ function getClient(): OpenAI {
   if (_client) return _client;
   _client = new OpenAI({
     baseURL: "https://api.deepseek.com",
-    apiKey: getEnv().DEEPSEEK_API_KEY,
+    apiKey: getDeepSeekEnv().DEEPSEEK_API_KEY,
   });
   return _client;
 }
