@@ -56,9 +56,11 @@ export default function HeroSection() {
               maxWidth: 620,
             }}
           >
-            Multi-agent discourse simulations powered by psychographic
-            archetypes. 12,480 personas across five platform models. Closed
-            beta access is available for selected teams.
+            Start with seeded test audiences in developer mode, then map your
+            own customer segments into synthetic agents for production
+            simulations. Atharias turns audience data into many distinct voices
+            so you can model how sentiment spreads instead of guessing from one
+            example user.
           </p>
 
           <div

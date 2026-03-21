@@ -143,8 +143,57 @@ export default function AudienceDNA() {
             Audience DNA
           </h2>
           <p style={{ color: "var(--text-secondary)", fontSize: 15, marginTop: 12, maxWidth: 560, lineHeight: 1.75 }}>
-            Every archetype is a psychographic fingerprint. Reactivity baselines, hostility thresholds, platform fluency scores.
+            Developer mode ships with seeded benchmark audiences so teams can
+            test the API immediately. In production, Atharias turns real
+            customer segments into many synthetic agents with different
+            reactivity, loyalty, hostility, and platform behavior.
           </p>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: 16,
+              marginBottom: 28,
+            }}
+          >
+            {[
+              {
+                label: "Developer Mode",
+                text: "Use seeded audiences like toxic gamers or engineers to test the API without uploading your own data first.",
+              },
+              {
+                label: "Production Mode",
+                text: "Map real user or customer segment data into many distinct agents instead of pretending one record represents the whole audience.",
+              },
+              {
+                label: "Why 100+ Agents",
+                text: "The point is disagreement, spread, and clustering. You need many voices to see which reactions stay isolated and which turn into a pile-on.",
+              },
+            ].map((item) => (
+              <div
+                key={item.label}
+                className="panel"
+                style={{
+                  padding: 18,
+                  background:
+                    "linear-gradient(180deg, rgba(39,39,42,0.24), rgba(24,24,27,0.1) 58%, transparent 100%)",
+                }}
+              >
+                <div className="mono-label">{item.label}</div>
+                <p
+                  style={{
+                    marginTop: 10,
+                    color: "var(--text-secondary)",
+                    fontSize: 13,
+                    lineHeight: 1.7,
+                  }}
+                >
+                  {item.text}
+                </p>
+              </div>
+            ))}
           </div>
 
           <div

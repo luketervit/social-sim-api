@@ -126,6 +126,51 @@ export default function DocsPage() {
             letterSpacing: "-0.03em",
           }}
         >
+          How Atharias Works
+        </h2>
+
+        <div className="mt-5 flex flex-col gap-4">
+          <div className="panel p-4">
+            <div className="mono-label">1. Seeded Developer Audiences</div>
+            <p className="mt-2 text-[13px] leading-[1.7]" style={{ color: "var(--text-secondary)" }}>
+              In developer mode, Atharias includes prebuilt test audiences such
+              as `toxic_gamers`, `genz`, and `engineers`. These are seeded
+              benchmark audiences so you can test the API immediately without
+              uploading your own data.
+            </p>
+          </div>
+
+          <div className="panel p-4">
+            <div className="mono-label">2. Real Data Becomes Many Agents</div>
+            <p className="mt-2 text-[13px] leading-[1.7]" style={{ color: "var(--text-secondary)" }}>
+              In production, the goal is not to upload one user and call that
+              the audience. The goal is to take real customer or segment data
+              and turn it into many synthetic agents with different
+              psychographic traits, loyalties, hostility thresholds, and
+              reaction styles.
+            </p>
+          </div>
+
+          <div className="panel p-4">
+            <div className="mono-label">3. Simulations Need Many Voices</div>
+            <p className="mt-2 text-[13px] leading-[1.7]" style={{ color: "var(--text-secondary)" }}>
+              The point of generating 100 or more agents is to model spread,
+              disagreement, escalation, and clustering. A single example user
+              cannot tell you whether a reaction stays isolated, gets corrected,
+              or turns into a broader backlash.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="mt-14">
+        <h2
+          className="text-[18px]"
+          style={{
+            fontWeight: "var(--font-weight-medium)" as unknown as number,
+            letterSpacing: "-0.03em",
+          }}
+        >
           Endpoints
         </h2>
 
