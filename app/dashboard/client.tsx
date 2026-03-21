@@ -376,12 +376,12 @@ export default function DashboardClient({ apiKeys, userEmail }: DashboardProps) 
             Quick start
           </h2>
           <p className="mt-2 text-[13px]" style={{ color: "var(--text-secondary)" }}>
-            Uses your most recently created key.
+            Copy your API key from the card above and paste it into the request header.
           </p>
           <div className="code-block mt-3">
             <pre className="whitespace-pre-wrap text-[12px]">
               <code>{`curl -N -X POST https://social-sim-api.vercel.app/api/v1/simulate \\
-  -H "x-api-key: ${quickStartKey}" \\
+  -H "x-api-key: ssim_your_key_here" \\
   -H "Content-Type: application/json" \\
   -d '{
     "audience_id": "toxic_gamers",
