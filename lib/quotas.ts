@@ -18,6 +18,24 @@ interface ConsumedQuotaState extends QuotaState {
   allowed: boolean;
 }
 
+function isMissingQuotaRpc(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const code = "code" in error ? error.code : null;
+  const message = "message" in error && typeof error.message === "string" ? error.message : "";
+  return code === "PGRST202" || message.includes("operator_daily_quota");
+}
+
+function fallbackQuotaState(dailyLimit: number): QuotaState {
+  return {
+    used_count: 0,
+    remaining: dailyLimit,
+    usage_date: new Date().toISOString().slice(0, 10),
+  };
+}
+
 export async function getDailyQuotaState(
   userId: string,
   bucket: string,
@@ -31,15 +49,16 @@ export async function getDailyQuotaState(
   });
 
   if (error) {
+    if (process.env.NODE_ENV !== "production" && isMissingQuotaRpc(error)) {
+      return fallbackQuotaState(dailyLimit);
+    }
     throw error;
   }
 
   const row = Array.isArray(data) ? data[0] : data;
   if (!row) {
     return {
-      used_count: 0,
-      remaining: dailyLimit,
-      usage_date: new Date().toISOString().slice(0, 10),
+      ...fallbackQuotaState(dailyLimit),
     };
   }
 
@@ -61,6 +80,12 @@ export async function consumeDailyQuota(
   });
 
   if (error) {
+    if (process.env.NODE_ENV !== "production" && isMissingQuotaRpc(error)) {
+      return {
+        allowed: true,
+        ...fallbackQuotaState(dailyLimit),
+      };
+    }
     throw error;
   }
 
@@ -94,6 +119,9 @@ export async function refundDailyQuota(
   });
 
   if (error) {
+    if (process.env.NODE_ENV !== "production" && isMissingQuotaRpc(error)) {
+      return;
+    }
     throw error;
   }
 }

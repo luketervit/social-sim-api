@@ -69,6 +69,19 @@ function formatAudienceLabel(audienceId: string, audiences: AudienceOption[]) {
   return audiences.find((audience) => audience.id === audienceId)?.name ?? audienceId.replace(/_/g, " ");
 }
 
+async function parseJsonPayload<T>(response: Response): Promise<(T & { error?: string }) | null> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    return null;
+  }
+
+  try {
+    return (await response.json()) as T & { error?: string };
+  } catch {
+    return null;
+  }
+}
+
 export default function PlaygroundSection({
   audiences,
   isSignedIn,
@@ -94,14 +107,23 @@ export default function PlaygroundSection({
         const response = await fetch(`/api/v1/playground?id=${activeSimulationId}`, {
           cache: "no-store",
         });
-        const payload = (await response.json()) as PlaygroundSimulation & { error?: string };
+        const payload = await parseJsonPayload<PlaygroundSimulation>(response);
+
+        if (response.status === 401) {
+          window.location.assign("/login?mode=signin&next=%2Fdashboard");
+          return;
+        }
 
         if (!response.ok) {
-          throw new Error(payload.error || "Failed to load playground simulation");
+          throw new Error(payload?.error || "Failed to load playground simulation");
         }
 
         if (cancelled) {
           return;
+        }
+
+        if (!payload) {
+          throw new Error("Failed to load playground simulation");
         }
 
         setSimulation(payload);
@@ -137,6 +159,12 @@ export default function PlaygroundSection({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+
+    if (!isSignedIn) {
+      window.location.assign(authHref);
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -152,10 +180,19 @@ export default function PlaygroundSection({
         }),
       });
 
-      const payload = (await response.json()) as PlaygroundSimulation & { error?: string };
+      const payload = await parseJsonPayload<PlaygroundSimulation>(response);
+
+      if (response.status === 401) {
+        window.location.assign(authHref);
+        return;
+      }
 
       if (!response.ok) {
-        throw new Error(payload.error || "Failed to start playground simulation");
+        throw new Error(payload?.error || "Failed to start playground simulation");
+      }
+
+      if (!payload) {
+        throw new Error("Failed to start playground simulation");
       }
 
       setSimulation(payload);

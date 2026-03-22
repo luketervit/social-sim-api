@@ -29,7 +29,7 @@ export default function HeroSection() {
           }}
         >
           <div>
-            <span className="hero-kicker">Atharias / Instant playground, gated API</span>
+            <span className="hero-kicker">Atharias / Closed beta</span>
           </div>
 
           <h1
@@ -38,12 +38,12 @@ export default function HeroSection() {
               fontSize: "clamp(3.25rem, 8vw, 5.6rem)",
               color: "var(--text-primary)",
               marginTop: 24,
-              maxWidth: 900,
+              maxWidth: 820,
             }}
           >
-            <span className="hero-line hero-line-strong">Landing to Simulation</span>
+            <span className="hero-line hero-line-strong">Predict the Backlash</span>
             <span className="hero-line hero-line-strong" style={{ color: "var(--accent)" }}>
-              in One Sign-Up
+              Before You Ship
             </span>
           </h1>
 
@@ -53,52 +53,13 @@ export default function HeroSection() {
               fontSize: 17,
               color: "var(--text-secondary)",
               marginTop: 24,
-              maxWidth: 720,
+              maxWidth: 620,
             }}
           >
-            Sign up and run the free playground immediately. Test a launch,
-            pricing change, or product announcement against seeded audiences,
-            then publish the result as a shareable simulation page. Raw API
-            access still stays on a separate waitlist for production teams.
+            Atharias turns audience data into many distinct voices so you can
+            model how sentiment spreads. Map your own customer data into
+            synthetic agents for more accurate predictions.
           </p>
-
-          <div
-            className="panel"
-            style={{
-              marginTop: 30,
-              padding: 18,
-              maxWidth: 780,
-              width: "100%",
-              background:
-                "linear-gradient(180deg, rgba(236, 253, 245, 0.06), rgba(24, 24, 27, 0.22) 55%, transparent 100%)",
-            }}
-          >
-            <div
-              style={{
-                display: "grid",
-                gap: 12,
-                gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-                textAlign: "left",
-              }}
-            >
-              {[
-                ["01", "Sign up", "No waitlist on the free tier."],
-                ["02", "Playground", "Run the first simulation instantly."],
-                ["03", "Share", "Turn the result into a public link."],
-                ["04", "API", "Apply separately for direct integration."],
-              ].map(([index, title, detail]) => (
-                <div key={index}>
-                  <div className="mono-label">{index}</div>
-                  <div style={{ marginTop: 8, color: "var(--text-primary)", fontSize: 16 }}>
-                    {title}
-                  </div>
-                  <div style={{ marginTop: 6, color: "var(--text-secondary)", fontSize: 13 }}>
-                    {detail}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
 
           <div
             style={{
@@ -109,11 +70,8 @@ export default function HeroSection() {
               marginTop: 44,
             }}
           >
-            <Link href="/login?mode=signup" className="btn-primary">
-              Start free
-            </Link>
-            <Link href="/waitlist" className="btn-secondary">
-              Join API waitlist
+            <Link href="/waitlist" className="btn-primary">
+              Request access
             </Link>
             <Link href="/login" className="btn-secondary">
               Sign in
