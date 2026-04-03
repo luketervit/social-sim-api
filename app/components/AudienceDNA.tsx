@@ -1,9 +1,5 @@
 "use client";
 
-import { motion, type Variants } from "framer-motion";
-
-const smoothEase = [0.22, 1, 0.36, 1] as const;
-
 interface AudienceProfile {
   name: string;
   codename: string;
@@ -20,19 +16,19 @@ interface AudienceProfile {
 const AUDIENCES: AudienceProfile[] = [
   {
     name: "Tech Bros",
-    codename: "ARCHETYPE::SILICON_VALLEY",
+    codename: "Silicon Valley",
     traits: { reactivity: 0.72, sophistication: 0.81, virality: 0.65, loyalty: 0.34, hostility: 0.48 },
     description: "VC-adjacent optimists who will ratio you for questioning the narrative, then pivot to agreement when the wind shifts.",
   },
   {
     name: "Angry Gamers",
-    codename: "ARCHETYPE::HOSTILE_GAMER",
+    codename: "Hostile Gamer",
     traits: { reactivity: 0.94, sophistication: 0.31, virality: 0.89, loyalty: 0.15, hostility: 0.92 },
     description: "Hair-trigger reactors with deep platform fluency. Will organize boycotts over font changes. Meme-first communication.",
   },
   {
     name: "Finance Twitter",
-    codename: "ARCHETYPE::FINTWIT",
+    codename: "FinTwit",
     traits: { reactivity: 0.58, sophistication: 0.88, virality: 0.71, loyalty: 0.42, hostility: 0.39 },
     description: "Data-driven contrarians. Will dissect your quarterly report before the ink dries. Thread-maximizers.",
   },
@@ -46,10 +42,8 @@ function RadarChart({ traits }: { traits: AudienceProfile["traits"] }) {
   const radius = 52;
   const angles = TRAIT_LABELS.map((_, i) => (i * 2 * Math.PI) / TRAIT_LABELS.length - Math.PI / 2);
 
-  // Grid rings
   const rings = [0.25, 0.5, 0.75, 1.0];
 
-  // Data points
   const points = TRAIT_LABELS.map((key, i) => {
     const value = traits[key];
     const x = center + radius * value * Math.cos(angles[i]);
@@ -61,7 +55,6 @@ function RadarChart({ traits }: { traits: AudienceProfile["traits"] }) {
 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      {/* Grid rings */}
       {rings.map((r) => (
         <polygon
           key={r}
@@ -69,11 +62,10 @@ function RadarChart({ traits }: { traits: AudienceProfile["traits"] }) {
             .map((a) => `${center + radius * r * Math.cos(a)},${center + radius * r * Math.sin(a)}`)
             .join(" ")}
           fill="none"
-          stroke="rgba(255,255,255,0.06)"
+          stroke="rgba(0,0,0,0.06)"
           strokeWidth={0.5}
         />
       ))}
-      {/* Axes */}
       {angles.map((a, i) => (
         <line
           key={i}
@@ -81,13 +73,11 @@ function RadarChart({ traits }: { traits: AudienceProfile["traits"] }) {
           y1={center}
           x2={center + radius * Math.cos(a)}
           y2={center + radius * Math.sin(a)}
-          stroke="rgba(255,255,255,0.04)"
+          stroke="rgba(0,0,0,0.04)"
           strokeWidth={0.5}
         />
       ))}
-      {/* Data shape */}
       <path d={pathData} fill="var(--accent-muted)" stroke="var(--accent)" strokeWidth={1.5} />
-      {/* Data points */}
       {points.map((p, i) => (
         <circle key={i} cx={p.x} cy={p.y} r={2.5} fill="var(--accent)" />
       ))}
@@ -95,134 +85,50 @@ function RadarChart({ traits }: { traits: AudienceProfile["traits"] }) {
   );
 }
 
-const sectionReveal: Variants = {
-  hidden: { opacity: 0, y: 24 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.55,
-      ease: smoothEase,
-      staggerChildren: 0.08,
-    },
-  },
-};
-
-const cardReveal: Variants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.5,
-      ease: smoothEase,
-    },
-  },
-};
-
 export default function AudienceDNA() {
   return (
     <section style={{ padding: "96px 0" }}>
-      <div className="mx-auto max-w-[1180px] px-6">
-        <motion.div
-          className="section-shell"
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, amount: 0.2 }}
-          variants={sectionReveal}
-        >
-          <div style={{ marginBottom: 56 }}>
-          <span className="mono-label">AUDIENCE_MATRIX :: 12,480 ARCHETYPES LOADED</span>
+      <div className="mx-auto max-w-[1200px] px-6">
+        <div style={{ marginBottom: 56, maxWidth: 560 }}>
+          <span className="mono-label">Audience Archetypes</span>
           <h2
             style={{
-              fontSize: 36,
-              color: "var(--text-primary)",
-              marginTop: 12,
+              fontSize: "clamp(1.75rem, 3.5vw, 2.5rem)",
+              marginTop: 14,
             }}
           >
             Audience DNA
           </h2>
-          <p style={{ color: "var(--text-secondary)", fontSize: 15, marginTop: 12, maxWidth: 560, lineHeight: 1.75 }}>
-            Developer mode ships with seeded benchmark audiences so teams can
-            test the API immediately. In production, Atharias turns real
-            customer segments into many synthetic agents with different
-            reactivity, loyalty, hostility, and platform behavior.
+          <p style={{ color: "var(--text-secondary)", fontSize: 16, marginTop: 14, lineHeight: 1.7 }}>
+            Ship with seeded benchmark audiences or map your own customer data
+            into synthetic agents with distinct reactivity, loyalty, and platform behavior.
           </p>
-          </div>
+        </div>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: 16,
-              marginBottom: 28,
-            }}
-          >
-            {[
-              {
-                label: "Developer Mode",
-                text: "Use seeded audiences like toxic gamers or engineers to test the API without uploading your own data first.",
-              },
-              {
-                label: "Production Mode",
-                text: "Map real user or customer segment data into many distinct agents instead of pretending one record represents the whole audience.",
-              },
-              {
-                label: "Why 100+ Agents",
-                text: "The point is disagreement, spread, and clustering. You need many voices to see which reactions stay isolated and which turn into a pile-on.",
-              },
-            ].map((item) => (
-              <div
-                key={item.label}
-                className="panel"
-                style={{
-                  padding: 18,
-                  background:
-                    "linear-gradient(180deg, rgba(39,39,42,0.24), rgba(24,24,27,0.1) 58%, transparent 100%)",
-                }}
-              >
-                <div className="mono-label">{item.label}</div>
-                <p
-                  style={{
-                    marginTop: 10,
-                    color: "var(--text-secondary)",
-                    fontSize: 13,
-                    lineHeight: 1.7,
-                  }}
-                >
-                  {item.text}
-                </p>
-              </div>
-            ))}
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-              gap: 28,
-            }}
-          >
-          {AUDIENCES.map((audience, i) => (
-            <motion.div
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+            gap: 20,
+          }}
+        >
+          {AUDIENCES.map((audience) => (
+            <article
               key={audience.codename}
-              variants={cardReveal}
-              style={{
-                padding: 40,
-                borderRadius: 24,
-                background:
-                  "linear-gradient(180deg, rgba(39,39,42,0.26), rgba(24,24,27,0.08) 52%, transparent 100%)",
-              }}
+              className="panel"
+              style={{ padding: "36px 32px" }}
             >
-              <span className="mono-label">
+              <span className="mono-label" style={{ color: "var(--text-tertiary)" }}>
                 {audience.codename}
               </span>
               <h3
                 style={{
                   fontSize: 24,
-                  color: "var(--text-primary)",
-                  marginTop: 18,
+                  marginTop: 14,
                   marginBottom: 28,
+                  fontFamily: "var(--font-display), Georgia, serif",
+                  letterSpacing: "-0.02em",
+                  lineHeight: 1.2,
                 }}
               >
                 {audience.name}
@@ -250,7 +156,8 @@ export default function AudienceDNA() {
                     <span
                       className="tabular-nums"
                       style={{
-                        color: audience.traits[trait] > 0.8 ? "var(--text-primary)" : "var(--text-secondary)",
+                        color: audience.traits[trait] > 0.8 ? "var(--accent)" : "var(--text-secondary)",
+                        fontWeight: audience.traits[trait] > 0.8 ? 600 : 400,
                       }}
                     >
                       {audience.traits[trait].toFixed(2)}
@@ -259,13 +166,12 @@ export default function AudienceDNA() {
                 ))}
               </div>
 
-              <p style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.8, marginTop: 28 }}>
+              <p style={{ color: "var(--text-secondary)", fontSize: 14, lineHeight: 1.75, marginTop: 24 }}>
                 {audience.description}
               </p>
-            </motion.div>
+            </article>
           ))}
-          </div>
-        </motion.div>
+        </div>
       </div>
     </section>
   );

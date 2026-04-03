@@ -48,7 +48,15 @@ async function getAuthenticatedUser(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const user = await getAuthenticatedUser(request);
+  let user: { id: string; email: string } | null = null;
+
+  try {
+    user = await getAuthenticatedUser(request);
+  } catch (authError) {
+    console.error("Playground auth error:", authError);
+    return Response.json({ error: "Authentication failed" }, { status: 500 });
+  }
+
   if (!user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -85,11 +93,23 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Audience has no personas" }, { status: 400 });
   }
 
-  const quota = await consumeDailyQuota(
-    user.id,
-    QUOTA_BUCKETS.playgroundSimulation,
-    FREE_PLAYGROUND_SIMULATIONS_PER_DAY
-  );
+  let quota: Awaited<ReturnType<typeof consumeDailyQuota>>;
+  try {
+    quota = await consumeDailyQuota(
+      user.id,
+      QUOTA_BUCKETS.playgroundSimulation,
+      FREE_PLAYGROUND_SIMULATIONS_PER_DAY
+    );
+  } catch (quotaError) {
+    console.error("Playground quota error:", JSON.stringify(quotaError, null, 2));
+    const detail =
+      quotaError instanceof Error
+        ? quotaError.message
+        : typeof quotaError === "object" && quotaError !== null && "message" in quotaError
+          ? (quotaError as { message: string }).message
+          : JSON.stringify(quotaError);
+    return Response.json({ error: `Failed to check simulation quota: ${detail}` }, { status: 500 });
+  }
 
   if (!quota.allowed) {
     return Response.json(
@@ -154,12 +174,21 @@ export async function POST(request: NextRequest) {
 
     const message =
       error instanceof Error ? error.message : "Failed to enqueue playground simulation";
+    console.error("Playground enqueue error:", error);
     return Response.json({ error: message }, { status: 500 });
   }
 }
 
 export async function GET(request: NextRequest) {
-  const user = await getAuthenticatedUser(request);
+  let user: { id: string; email: string } | null = null;
+
+  try {
+    user = await getAuthenticatedUser(request);
+  } catch (authError) {
+    console.error("Playground GET auth error:", authError);
+    return Response.json({ error: "Authentication failed" }, { status: 500 });
+  }
+
   if (!user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }

@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
-import { Azeret_Mono } from "next/font/google";
+import { Azeret_Mono, Fraunces } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
 import NavAuth from "./nav-auth";
 
 const brandFont = localFont({
-  variable: "--font-brand",
+  variable: "--font-body",
   display: "swap",
   fallback: ["system-ui", "sans-serif"],
   src: [
@@ -38,24 +38,29 @@ const brandFont = localFont({
   ],
 });
 
+const displayFont = Fraunces({
+  variable: "--font-display",
+  subsets: ["latin"],
+  display: "swap",
+});
+
 const tacticalFont = Azeret_Mono({
-  variable: "--font-tactical",
+  variable: "--font-data",
   subsets: ["latin"],
   display: "swap",
 });
 
 export const metadata: Metadata = {
   title: "Atharias",
-  description: "Predict social backlash before launch. Multi-agent discourse simulations powered by psychographic personas.",
+  description: "Understand your audience before you ship. Multi-agent discourse simulations powered by psychographic personas.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
-      <body className={`${brandFont.className} ${brandFont.variable} ${tacticalFont.variable}`}>
-        <div className="noise-overlay" aria-hidden="true" />
+    <html lang="en">
+      <body className={`${brandFont.className} ${brandFont.variable} ${displayFont.variable} ${tacticalFont.variable}`}>
         <header className="header">
-          <nav className="mx-auto flex max-w-[1280px] items-center justify-between px-6 py-3">
+          <nav className="mx-auto flex max-w-[1200px] items-center justify-between px-6 py-4">
             <Link href="/" className="logo">
               Atharias
             </Link>

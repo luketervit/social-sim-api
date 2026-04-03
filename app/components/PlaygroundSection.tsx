@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { AgentMessage } from "@/lib/simulation/types";
 import {
   PLAYGROUND_PERSONA_CAP,
@@ -37,32 +37,32 @@ const PLATFORM_OPTIONS = [
   {
     value: "twitter",
     label: "Twitter / X",
-    description: "Short-form, hostile, fast spread",
+    description: "Short-form, fast spread, high signal",
   },
   {
     value: "reddit",
     label: "Reddit",
-    description: "Long-form, anonymous, pile-on heavy",
+    description: "Long-form, anonymous, high depth",
   },
   {
     value: "slack",
     label: "Slack",
-    description: "Corporate, passive-aggressive, internal",
+    description: "Corporate, internal, team dynamics",
   },
 ] as const;
 
 const AGGRESSION_COLORS: Record<string, string> = {
-  low: "#22c55e",
-  moderate: "#eab308",
-  high: "#f97316",
-  critical: "#ef4444",
+  low: "#34D399",
+  moderate: "#F59E0B",
+  high: "#F97066",
+  critical: "#EF4444",
 };
 
 const SENTIMENT_COLORS: Record<AgentMessage["sentiment"], string> = {
-  positive: "#22c55e",
-  neutral: "#a1a1aa",
-  negative: "#f97316",
-  hostile: "#ef4444",
+  positive: "#34D399",
+  neutral: "#9E9E9E",
+  negative: "#F97066",
+  hostile: "#EF4444",
 };
 
 function formatAudienceLabel(audienceId: string, audiences: AudienceOption[]) {
@@ -80,6 +80,140 @@ async function parseJsonPayload<T>(response: Response): Promise<(T & { error?: s
   } catch {
     return null;
   }
+}
+
+function CustomSelect({
+  id,
+  value,
+  onChange,
+  options,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [open]);
+
+  const selected = options.find((o) => o.value === value);
+
+  return (
+    <div ref={ref} style={{ position: "relative" }} suppressHydrationWarning>
+      <button
+        id={id}
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="input"
+        style={{
+          width: "100%",
+          textAlign: "left",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+        }}
+      >
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {selected?.label ?? value}
+        </span>
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          style={{
+            flexShrink: 0,
+            transform: open ? "rotate(180deg)" : "rotate(0deg)",
+            transition: "transform 200ms ease",
+          }}
+        >
+          <path
+            d="M4 6l4 4 4-4"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            top: "calc(100% + 4px)",
+            left: 0,
+            right: 0,
+            zIndex: 50,
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            borderRadius: 10,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)",
+            padding: "4px 0",
+            maxHeight: 220,
+            overflowY: "auto",
+          }}
+        >
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+              style={{
+                width: "100%",
+                textAlign: "left",
+                padding: "8px 14px",
+                fontSize: 14,
+                color:
+                  option.value === value
+                    ? "var(--accent)"
+                    : "var(--text-primary)",
+                fontWeight: option.value === value ? 500 : 400,
+                background:
+                  option.value === value
+                    ? "rgba(124, 92, 252, 0.06)"
+                    : "transparent",
+                border: "none",
+                cursor: "pointer",
+                display: "block",
+                transition: "background 120ms ease",
+              }}
+              onMouseEnter={(e) => {
+                if (option.value !== value) {
+                  e.currentTarget.style.background = "var(--bg-subtle)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background =
+                  option.value === value
+                    ? "rgba(124, 92, 252, 0.06)"
+                    : "transparent";
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function PlaygroundSection({
@@ -232,79 +366,44 @@ export default function PlaygroundSection({
   const authHref = "/login?mode=signup&next=%2Fdashboard";
 
   return (
-    <section id="playground" style={{ padding: "36px 0 96px", scrollMarginTop: 96 }}>
-      <div className="mx-auto max-w-[1180px] px-6">
-        <div className="section-shell border border-[rgba(39,39,42,0.58)]">
-          <div className="grid gap-7 lg:grid-cols-[minmax(0,1.04fr)_minmax(320px,0.96fr)]">
+    <section
+      id="playground"
+      style={{
+        padding: "48px 0 96px",
+        scrollMarginTop: 96,
+        background: "linear-gradient(180deg, rgba(124, 92, 252, 0.02) 0%, transparent 100%)",
+      }}
+    >
+      <div className="mx-auto max-w-[1200px] px-6">
+        <div style={{ marginBottom: 48, maxWidth: 560 }}>
+          <span className="mono-label">Interactive Playground</span>
+          <h2
+            style={{
+              fontSize: "clamp(1.75rem, 3.5vw, 2.5rem)",
+              marginTop: 14,
+            }}
+          >
+            Try it yourself.
+          </h2>
+          <p
+            style={{
+              color: "var(--text-secondary)",
+              fontSize: 16,
+              lineHeight: 1.7,
+              marginTop: 14,
+            }}
+          >
+            {PLAYGROUND_RUNS_INCLUDED} free runs per day with a {PLAYGROUND_PERSONA_CAP}-agent cap.
+            The full simulation engine, just a smaller audience slice.
+          </p>
+        </div>
+
+        <div className="section-shell" style={{ border: "1px solid var(--border)" }}>
+          <div className="grid gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
+            {/* Left: Form */}
             <div>
-              <span className="mono-label">PLAYGROUND :: CAPPED_FREE_SIM</span>
-              <h2
-                style={{
-                  fontSize: "clamp(30px, 4vw, 44px)",
-                  color: "var(--text-primary)",
-                  marginTop: 14,
-                  maxWidth: 620,
-                }}
-              >
-                Run a live sample before you ever touch the API.
-              </h2>
-              <p
-                style={{
-                  color: "var(--text-secondary)",
-                  fontSize: 15,
-                  lineHeight: 1.72,
-                  marginTop: 16,
-                  maxWidth: 620,
-                }}
-              >
-                Signed-in accounts can launch {PLAYGROUND_RUNS_INCLUDED} free sample runs with a{" "}
-                {PLAYGROUND_PERSONA_CAP}-agent cap each day. The product flow is open immediately, while
-                direct API access still stays on a separate approval queue.
-              </p>
-
-              <div
-                className="mt-6 grid gap-3 sm:grid-cols-3"
-                style={{ maxWidth: 700 }}
-              >
-                {[
-                  {
-                    label: "Audience cap",
-                    value: `${PLAYGROUND_PERSONA_CAP} agents`,
-                  },
-                  {
-                    label: "Simulation depth",
-                    value: `${SIMULATION_ROUNDS} rounds`,
-                  },
-                  {
-                    label: "Account policy",
-                    value: "Free sign-up, instant access",
-                  },
-                ].map((item) => (
-                  <div
-                    key={item.label}
-                    className="panel"
-                    style={{
-                      padding: 18,
-                      background:
-                        "linear-gradient(180deg, rgba(39,39,42,0.24), rgba(24,24,27,0.08) 58%, transparent 100%)",
-                    }}
-                  >
-                    <div className="mono-label">{item.label}</div>
-                    <p
-                      style={{
-                        color: "var(--text-primary)",
-                        fontSize: 14,
-                        marginTop: 10,
-                      }}
-                    >
-                      {item.value}
-                    </p>
-                  </div>
-                ))}
-              </div>
-
-              <form onSubmit={handleSubmit} className="mt-8">
-                <div className="grid gap-4">
+              <form onSubmit={handleSubmit}>
+                <div className="grid gap-5">
                   <div>
                     <label
                       htmlFor="playground-input"
@@ -321,11 +420,11 @@ export default function PlaygroundSection({
                       maxLength={2000}
                       className="input"
                       placeholder="Paste the announcement, launch post, or internal message you want to pressure test."
-                      style={{ resize: "vertical", minHeight: 140 }}
+                      style={{ resize: "vertical", minHeight: 140, borderRadius: 12 }}
                     />
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-5 md:grid-cols-2">
                     <div>
                       <label
                         htmlFor="playground-audience"
@@ -334,18 +433,12 @@ export default function PlaygroundSection({
                       >
                         Audience
                       </label>
-                      <select
+                      <CustomSelect
                         id="playground-audience"
                         value={audienceId}
-                        onChange={(event) => setAudienceId(event.target.value)}
-                        className="input"
-                      >
-                        {audiences.map((audience) => (
-                          <option key={audience.id} value={audience.id}>
-                            {audience.name}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={setAudienceId}
+                        options={audiences.map((a) => ({ value: a.id, label: a.name }))}
+                      />
                     </div>
 
                     <div>
@@ -356,32 +449,24 @@ export default function PlaygroundSection({
                       >
                         Environment
                       </label>
-                      <select
+                      <CustomSelect
                         id="playground-platform"
                         value={platform}
-                        onChange={(event) =>
-                          setPlatform(event.target.value as (typeof PLATFORM_OPTIONS)[number]["value"])
-                        }
-                        className="input"
-                      >
-                        {PLATFORM_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(v) => setPlatform(v as (typeof PLATFORM_OPTIONS)[number]["value"])}
+                        options={PLATFORM_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                      />
                     </div>
                   </div>
                 </div>
 
                 <div
-                  className="mt-5 flex flex-wrap items-center gap-3"
-                  style={{ fontSize: 12, color: "var(--text-tertiary)" }}
+                  className="mt-4 flex flex-wrap items-center gap-3"
+                  style={{ fontSize: 13, color: "var(--text-tertiary)" }}
                 >
                   <span>Instant queueing</span>
-                  <span style={{ opacity: 0.35 }}>|</span>
+                  <span style={{ opacity: 0.4 }}>/</span>
                   <span>{PLAYGROUND_PERSONA_CAP}-agent sample</span>
-                  <span style={{ opacity: 0.35 }}>|</span>
+                  <span style={{ opacity: 0.4 }}>/</span>
                   <span>
                     {
                       PLATFORM_OPTIONS.find((option) => option.value === platform)?.description
@@ -390,7 +475,7 @@ export default function PlaygroundSection({
                 </div>
 
                 {error ? (
-                  <p className="mt-4 text-[13px]" style={{ color: "#f87171" }}>
+                  <p className="mt-4 text-[13px]" style={{ color: "var(--coral)" }}>
                     {error}
                   </p>
                 ) : null}
@@ -402,7 +487,7 @@ export default function PlaygroundSection({
                       className="btn-primary"
                       disabled={isRunning || input.trim().length === 0}
                     >
-                      {isRunning ? "Running sample..." : "Run playground simulation"}
+                      {isRunning ? "Running..." : "Run simulation"}
                     </button>
                   ) : (
                     <>
@@ -418,67 +503,69 @@ export default function PlaygroundSection({
               </form>
             </div>
 
+            {/* Right: Output */}
             <div
-              className="panel"
               style={{
-                padding: 24,
-                minHeight: 560,
-                background:
-                  "linear-gradient(180deg, rgba(39,39,42,0.32), rgba(24,24,27,0.16) 42%, rgba(9,9,11,0.3) 100%)",
+                padding: 28,
+                minHeight: 480,
+                background: "var(--bg-subtle)",
+                borderRadius: 14,
+                border: "1px solid var(--border)",
               }}
             >
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <div className="mono-label">LIVE_OUTPUT</div>
-                  <p
-                    style={{
-                      color: "var(--text-primary)",
-                      fontSize: 20,
-                      marginTop: 8,
-                      letterSpacing: "-0.03em",
-                    }}
-                  >
-                    {simulation
-                      ? formatAudienceLabel(simulation.audience_id, audiences)
-                      : "Run a sample to inspect the thread."}
-                  </p>
-                </div>
-                <span
-                  className="rounded-full px-3 py-1"
-                  style={{
-                    border: "1px solid var(--border)",
-                    background: "rgba(24,24,27,0.72)",
-                    color:
-                      simulation?.aggression_score
-                        ? AGGRESSION_COLORS[simulation.aggression_score] ?? "var(--text-primary)"
-                        : "var(--text-tertiary)",
-                    fontSize: 12,
-                  }}
-                >
-                  {simulation?.aggression_score
-                    ? `${simulation.aggression_score} aggression`
-                    : simulation?.status === "queued" || simulation?.status === "running"
-                      ? simulation.status
-                      : "sample pending"}
-                </span>
-              </div>
-
               {simulation ? (
                 <>
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <div className="mono-label">Live Output</div>
+                      <p
+                        style={{
+                          color: "var(--text-primary)",
+                          fontSize: 18,
+                          marginTop: 8,
+                          letterSpacing: "-0.02em",
+                          fontFamily: "var(--font-display), Georgia, serif",
+                        }}
+                      >
+                        {formatAudienceLabel(simulation.audience_id, audiences)}
+                      </p>
+                    </div>
+                    <span
+                      className="rounded-full px-3 py-1"
+                      style={{
+                        border: "1px solid var(--border)",
+                        background: "var(--surface)",
+                        color:
+                          simulation.aggression_score
+                            ? AGGRESSION_COLORS[simulation.aggression_score] ?? "var(--text-primary)"
+                            : "var(--text-tertiary)",
+                        fontSize: 12,
+                        fontWeight: 500,
+                      }}
+                    >
+                      {simulation.aggression_score
+                        ? `${simulation.aggression_score} aggression`
+                        : simulation.status === "queued" || simulation.status === "running"
+                          ? simulation.status
+                          : "complete"}
+                    </span>
+                  </div>
                   <div
-                    className="mt-5 rounded-2xl p-4"
+                    className="mt-5"
                     style={{
+                      padding: 16,
+                      borderRadius: 10,
                       border: "1px solid var(--border)",
-                      background: "rgba(9,9,11,0.42)",
+                      background: "var(--surface)",
                     }}
                   >
-                    <p className="mono-label">PROMPT</p>
+                    <p className="mono-label" style={{ fontSize: 10 }}>Prompt</p>
                     <p
                       style={{
                         color: "var(--text-primary)",
                         fontSize: 14,
                         lineHeight: 1.65,
-                        marginTop: 10,
+                        marginTop: 8,
                       }}
                     >
                       {simulation.input}
@@ -488,7 +575,7 @@ export default function PlaygroundSection({
                   {simulation.status === "queued" || simulation.status === "running" ? (
                     <div className="mt-5">
                       <div className="flex items-center justify-between gap-3">
-                        <span className="mono-label">QUEUE_PROGRESS</span>
+                        <span className="mono-label" style={{ fontSize: 10 }}>Progress</span>
                         <span
                           className="tabular-nums"
                           style={{ color: "var(--text-secondary)", fontSize: 12 }}
@@ -498,14 +585,14 @@ export default function PlaygroundSection({
                       </div>
                       <div
                         className="mt-3 h-2 overflow-hidden rounded-full"
-                        style={{ background: "rgba(63,63,70,0.4)" }}
+                        style={{ background: "var(--border)" }}
                       >
                         <div
                           style={{
                             width: `${progressPercent}%`,
                             height: "100%",
-                            background:
-                              "linear-gradient(90deg, rgba(228,228,231,0.34), rgba(228,228,231,0.92))",
+                            background: "var(--accent)",
+                            borderRadius: "999px",
                             transition: "width 180ms linear",
                           }}
                         />
@@ -521,34 +608,27 @@ export default function PlaygroundSection({
                     <>
                       <div className="mt-5 grid gap-3 sm:grid-cols-3">
                         {[
-                          {
-                            label: "Messages",
-                            value: `${simulation.thread.length}`,
-                          },
-                          {
-                            label: "Hostile",
-                            value: `${sentimentBreakdown.hostile}`,
-                          },
-                          {
-                            label: "Positive",
-                            value: `${sentimentBreakdown.positive}`,
-                          },
+                          { label: "Messages", value: `${simulation.thread.length}`, color: "var(--accent)" },
+                          { label: "Hostile", value: `${sentimentBreakdown.hostile}`, color: "var(--coral)" },
+                          { label: "Positive", value: `${sentimentBreakdown.positive}`, color: "var(--mint)" },
                         ].map((item) => (
                           <div
                             key={item.label}
-                            className="rounded-2xl p-4"
                             style={{
+                              padding: 14,
+                              borderRadius: 10,
                               border: "1px solid var(--border)",
-                              background: "rgba(9,9,11,0.4)",
+                              background: "var(--surface)",
                             }}
                           >
-                            <div className="mono-label">{item.label}</div>
+                            <div className="mono-label" style={{ fontSize: 10 }}>{item.label}</div>
                             <p
                               className="tabular-nums"
                               style={{
-                                marginTop: 10,
+                                marginTop: 8,
                                 fontSize: 22,
-                                color: "var(--text-primary)",
+                                color: item.color,
+                                fontWeight: 600,
                               }}
                             >
                               {item.value}
@@ -559,7 +639,7 @@ export default function PlaygroundSection({
 
                       <div className="mt-5">
                         <div className="flex items-center justify-between gap-3">
-                          <span className="mono-label">THREAD_EXCERPT</span>
+                          <span className="mono-label" style={{ fontSize: 10 }}>Thread Excerpt</span>
                           <span style={{ color: "var(--text-tertiary)", fontSize: 12 }}>
                             first {visibleMessages.length} messages
                           </span>
@@ -568,10 +648,11 @@ export default function PlaygroundSection({
                           {visibleMessages.map((message, index) => (
                             <div
                               key={`${message.agent_id}-${index}`}
-                              className="rounded-2xl p-4"
                               style={{
-                                border: "1px solid rgba(39,39,42,0.7)",
-                                background: "rgba(9,9,11,0.38)",
+                                padding: 14,
+                                borderRadius: 10,
+                                border: "1px solid var(--border)",
+                                background: "var(--surface)",
                               }}
                             >
                               <div className="flex items-center gap-2">
@@ -582,7 +663,7 @@ export default function PlaygroundSection({
                                 <span
                                   style={{
                                     color: "var(--text-primary)",
-                                    fontSize: 12,
+                                    fontSize: 13,
                                     fontWeight: 600,
                                   }}
                                 >
@@ -594,7 +675,7 @@ export default function PlaygroundSection({
                               </div>
                               <p
                                 style={{
-                                  marginTop: 10,
+                                  marginTop: 8,
                                   color: "var(--text-secondary)",
                                   fontSize: 13,
                                   lineHeight: 1.65,
@@ -609,7 +690,7 @@ export default function PlaygroundSection({
 
                       <div className="mt-5 flex flex-wrap gap-3">
                         <Link href="/dashboard" className="btn-primary">
-                          Open dashboard to share
+                          Open dashboard
                         </Link>
                         <Link href="/waitlist" className="btn-secondary">
                           Join API waitlist
@@ -619,24 +700,44 @@ export default function PlaygroundSection({
                   ) : null}
 
                   {simulation.status === "failed" ? (
-                    <p className="mt-5 text-[13px]" style={{ color: "#f87171" }}>
+                    <p className="mt-5 text-[13px]" style={{ color: "var(--coral)" }}>
                       {simulation.error || "The simulation failed before completion."}
                     </p>
                   ) : null}
                 </>
               ) : (
                 <div
-                  className="mt-6 rounded-2xl p-5"
                   style={{
-                    border: "1px solid var(--border)",
-                    background: "rgba(9,9,11,0.4)",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    textAlign: "center",
+                    height: "100%",
+                    minHeight: 380,
+                    padding: 32,
                   }}
                 >
-                  <p style={{ color: "var(--text-primary)", fontSize: 15 }}>
-                    Choose an audience, pick a platform, and watch the sample thread build in place.
+                  <div
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: "50%",
+                      background: "var(--accent-muted)",
+                      display: "grid",
+                      placeItems: "center",
+                      marginBottom: 20,
+                    }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                      <path d="M10 4v12M4 10h12" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" />
+                    </svg>
+                  </div>
+                  <p style={{ color: "var(--text-primary)", fontSize: 16, fontWeight: 500 }}>
+                    Run a simulation to see results
                   </p>
-                  <p className="mt-2 text-[13px]" style={{ color: "var(--text-secondary)" }}>
-                    The preview uses the same simulation engine as paid runs, just on a smaller audience slice.
+                  <p className="mt-2" style={{ color: "var(--text-tertiary)", fontSize: 14, maxWidth: 280 }}>
+                    Fill in the form and hit run. The output will appear here in real time.
                   </p>
                 </div>
               )}

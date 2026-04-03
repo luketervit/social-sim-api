@@ -93,7 +93,7 @@ export default function GraphDemo() {
               marginTop: 12,
             }}
           >
-            Watch sentiment cascade through your audience
+            See how ideas move through your audience
           </h2>
           <p
             style={{
@@ -107,8 +107,8 @@ export default function GraphDemo() {
             }}
           >
             Every node is a synthetic agent. Edges form when agents
-            interact in the same round. Watch how hostile sentiment
-            clusters and spreads.
+            interact in the same round. Watch how sentiment
+            clusters, shifts, and finds consensus.
           </p>
         </div>
 

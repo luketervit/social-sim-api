@@ -30,7 +30,7 @@ export default async function OpenGraphImage({ params }: RouteProps) {
 
   const title = simulation?.title ?? "Public Simulation";
   const summary =
-    simulation?.summary ?? "Inspect the thread, sentiment shift, and backlash profile.";
+    simulation?.summary ?? "Inspect the thread, sentiment shift, and audience response.";
   const tags = [
     simulation?.platform ?? "platform",
     simulation?.audience_id?.replace(/_/g, " ") ?? "audience",

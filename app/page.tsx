@@ -1,10 +1,9 @@
 import AudienceDNA from "./components/AudienceDNA";
-import GhostShift from "./components/GhostShift";
-import GraphDemo from "./components/GraphDemo";
 import HeroSection from "./components/HeroSection";
-import JourneySection from "./components/JourneySection";
+import HowItWorks from "./components/HowItWorks";
 import PlaygroundSection from "./components/PlaygroundSection";
 import PricingSection from "./components/PricingSection";
+import SocialProofStrip from "./components/SocialProofStrip";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createSupabaseServer } from "@/lib/supabase/server";
 
@@ -31,14 +30,13 @@ export default async function Home() {
   return (
     <div style={{ overflowX: "clip" }}>
       <HeroSection />
-      <JourneySection />
+      <SocialProofStrip />
+      <HowItWorks />
       <PlaygroundSection
         audiences={audiences?.length ? audiences : FALLBACK_AUDIENCES}
         isSignedIn={!!user}
       />
-      <GraphDemo />
       <AudienceDNA />
-      <GhostShift />
       <PricingSection />
       <Footer />
     </div>
@@ -47,27 +45,22 @@ export default async function Home() {
 
 function Footer() {
   return (
-    <footer
-      style={{
-        padding: "56px 0 40px",
-      }}
-    >
+    <footer style={{ padding: "56px 0 40px" }}>
       <div
-        className="mx-auto max-w-[1180px] px-6"
+        className="mx-auto max-w-[1200px] px-6"
         style={{
           display: "flex",
           flexWrap: "wrap",
           gap: 12,
           justifyContent: "space-between",
           alignItems: "center",
-          borderTop: "1px solid rgba(39,39,42,0.65)",
+          borderTop: "var(--border-hairline) solid var(--border)",
           paddingTop: 24,
         }}
       >
         <span
           style={{
-            fontFamily: "var(--font-body)",
-            fontSize: 12,
+            fontSize: 13,
             fontWeight: 500,
             letterSpacing: "-0.01em",
             color: "var(--text-tertiary)",

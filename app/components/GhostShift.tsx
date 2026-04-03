@@ -95,7 +95,7 @@ export default function GhostShift() {
           </h2>
           <p style={{ color: "var(--text-secondary)", fontSize: 15, marginTop: 12, maxWidth: 620, lineHeight: 1.75 }}>
             The gap between what brands expect and what the crowd actually feels.
-            We call this divergence the Ghost Shift — the invisible force that kills launches.
+            We call this divergence the Ghost Shift — and closing it is how teams make decisions that land.
           </p>
         </motion.div>
 
@@ -271,9 +271,9 @@ export default function GhostShift() {
           >
             {[
               { label: "Peak Divergence", value: "0.83", round: "R7" },
-              { label: "Cascade Risk", value: "SEVERE", round: null },
-              { label: "Recovery Window", value: "NONE", round: null },
-              { label: "Recommended Action", value: "ABORT", round: null },
+              { label: "Audience Alignment", value: "LOW", round: null },
+              { label: "Opportunity Window", value: "R3–R5", round: null },
+              { label: "Recommended Action", value: "REFINE", round: null },
             ].map((stat, i) => (
               <div
                 key={stat.label}
@@ -298,7 +298,7 @@ export default function GhostShift() {
                   style={{
                     fontFamily: "var(--font-data)",
                     fontSize: 16,
-                    color: stat.value === "ABORT" || stat.value === "SEVERE" ? "var(--text-primary)" : "var(--text-secondary)",
+                    color: stat.value === "REFINE" || stat.value === "LOW" ? "var(--text-primary)" : "var(--text-secondary)",
                     marginTop: 8,
                     display: "block",
                   }}

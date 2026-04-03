@@ -9,8 +9,9 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        brand: ["var(--font-brand)", "system-ui", "sans-serif"],
-        tactical: ["var(--font-tactical)", "SFMono-Regular", "monospace"],
+        body: ["var(--font-body)", "system-ui", "sans-serif"],
+        display: ["var(--font-display)", "Georgia", "serif"],
+        data: ["var(--font-data)", "SFMono-Regular", "monospace"],
       },
     },
   },

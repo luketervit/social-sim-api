@@ -1,80 +1,106 @@
 "use client";
 
 import Link from "next/link";
+import ParticleHero from "./ParticleHero";
 
 export default function HeroSection() {
   return (
     <section
-      style={{ padding: "80px 0 96px", position: "relative", overflow: "hidden" }}
+      style={{
+        padding: "clamp(80px, 12vh, 140px) 0 clamp(80px, 12vh, 140px)",
+        position: "relative",
+        overflow: "hidden",
+        minHeight: "min(90vh, 800px)",
+        display: "flex",
+        alignItems: "center",
+      }}
     >
-      <div className="hero-backdrop" aria-hidden="true">
-        <div className="hero-globe">
-          <div className="hero-globe-grid" />
-          <div className="hero-globe-arc hero-globe-arc-one" />
-          <div className="hero-globe-arc hero-globe-arc-two" />
-          <div className="hero-globe-haze" />
+      {/* Subtle warm gradient background */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background:
+            "radial-gradient(ellipse 80% 60% at 70% 40%, rgba(124, 92, 252, 0.04), transparent 70%), radial-gradient(ellipse 60% 50% at 30% 60%, rgba(52, 211, 153, 0.03), transparent 60%)",
+          pointerEvents: "none",
+        }}
+        aria-hidden="true"
+      />
+
+      {/* Particle simulation */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width: "55%",
+          overflow: "hidden",
+        }}
+        aria-hidden="true"
+      >
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            maskImage: "radial-gradient(ellipse 100% 80% at 60% 50%, black 30%, transparent 70%)",
+            WebkitMaskImage: "radial-gradient(ellipse 100% 80% at 60% 50%, black 30%, transparent 70%)",
+          }}
+        >
+          <ParticleHero />
         </div>
       </div>
 
       <div
-        className="mx-auto max-w-[1180px] px-6"
-        style={{ position: "relative", zIndex: 1 }}
+        className="mx-auto max-w-[1200px] px-6"
+        style={{ position: "relative", zIndex: 1, width: "100%" }}
       >
         <div
           style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            textAlign: "center",
+            maxWidth: 620,
           }}
         >
-          <div>
-            <span className="hero-kicker">Atharias / Closed beta</span>
-          </div>
+          <span className="hero-kicker">Social Simulation Engine</span>
 
           <h1
             className="hero-headline"
             style={{
-              fontSize: "clamp(3.25rem, 8vw, 5.6rem)",
-              color: "var(--text-primary)",
-              marginTop: 24,
-              maxWidth: 820,
+              fontSize: "clamp(2.8rem, 6vw, 4.5rem)",
+              marginTop: 20,
             }}
           >
-            <span className="hero-line hero-line-strong">Predict the Backlash</span>
-            <span className="hero-line hero-line-strong" style={{ color: "var(--accent)" }}>
-              Before You Ship
+            <span className="hero-line">Know your audience</span>
+            <span className="hero-line" style={{ color: "var(--accent)" }}>
+              before you ship.
             </span>
           </h1>
 
           <p
             className="hero-copy"
             style={{
-              fontSize: 17,
-              color: "var(--text-secondary)",
-              marginTop: 24,
-              maxWidth: 620,
+              fontSize: 18,
+              marginTop: 28,
+              maxWidth: 520,
             }}
           >
-            Atharias turns audience data into many distinct voices so you can
-            model how sentiment spreads. Map your own customer data into
-            synthetic agents for more accurate predictions.
+            Simulate how real communities react to your content before it goes
+            live. Map audience data into synthetic agents and see what actually
+            resonates.
           </p>
 
           <div
             style={{
               display: "flex",
               flexWrap: "wrap",
-              justifyContent: "center",
-              gap: 16,
+              gap: 14,
               marginTop: 44,
             }}
           >
             <Link href="/waitlist" className="btn-primary">
-              Request access
+              Get started
             </Link>
-            <Link href="/login" className="btn-secondary">
-              Sign in
+            <Link href="/#playground" className="btn-secondary">
+              Try the playground
             </Link>
           </div>
         </div>

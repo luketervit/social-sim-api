@@ -17,7 +17,7 @@ export default function DocsPage() {
         style={{ color: "var(--text-secondary)" }}
       >
         Use Atharias to run audience simulations, monitor queued jobs, and
-        integrate backlash forecasting into internal workflows or product
+        integrate sentiment intelligence into internal workflows or product
         features.
       </p>
 
@@ -146,7 +146,7 @@ export default function DocsPage() {
               In production, the goal is not to upload one user and call that
               the audience. The goal is to take real customer or segment data
               and turn it into many synthetic agents with different
-              psychographic traits, loyalties, hostility thresholds, and
+              psychographic traits, loyalties, conviction levels, and
               reaction styles.
             </p>
           </div>
@@ -155,9 +155,9 @@ export default function DocsPage() {
             <div className="mono-label">3. Simulations Need Many Voices</div>
             <p className="mt-2 text-[13px] leading-[1.7]" style={{ color: "var(--text-secondary)" }}>
               The point of generating 100 or more agents is to model spread,
-              disagreement, escalation, and clustering. A single example user
-              cannot tell you whether a reaction stays isolated, gets corrected,
-              or turns into a broader backlash.
+              diversity, momentum, and clustering. A single example user
+              cannot tell you whether an idea gains traction, gets challenged,
+              or evolves into a broader consensus.
             </p>
           </div>
         </div>
@@ -287,8 +287,8 @@ export default function DocsPage() {
               Platforms
             </div>
             <div className="flex flex-col">
-              <RefRow code="twitter" label="Short-form, hostile, high-velocity discussion" />
-              <RefRow code="slack" label="Workplace tone, passive-aggressive discussion" />
+              <RefRow code="twitter" label="Short-form, high-velocity discussion" />
+              <RefRow code="slack" label="Workplace tone, internal team discussion" />
               <RefRow code="reddit" label="Longer-form anonymous discussion" />
             </div>
           </div>

@@ -90,12 +90,11 @@ begin
     returning operator_daily_usage.used_count into v_used_count;
 
     if found then
-      return query
-      select
-        true,
-        v_used_count,
-        greatest(p_daily_limit - v_used_count, 0),
-        v_usage_date;
+      allowed := true;
+      used_count := v_used_count;
+      remaining := greatest(p_daily_limit - v_used_count, 0);
+      usage_date := v_usage_date;
+      return next;
       return;
     end if;
 
@@ -107,12 +106,11 @@ begin
        and odu.usage_date = v_usage_date;
 
     if found then
-      return query
-      select
-        false,
-        v_used_count,
-        greatest(p_daily_limit - v_used_count, 0),
-        v_usage_date;
+      allowed := false;
+      used_count := v_used_count;
+      remaining := greatest(p_daily_limit - v_used_count, 0);
+      usage_date := v_usage_date;
+      return next;
       return;
     end if;
   end loop;

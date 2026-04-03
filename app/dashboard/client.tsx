@@ -200,7 +200,18 @@ export default function DashboardClient({
 
       try {
         const res = await fetch(url, { headers });
-        const payload = await res.json();
+        if (res.status === 401) {
+          window.location.assign("/login?mode=signin&next=%2Fdashboard");
+          return;
+        }
+        const text = await res.text();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let payload: any;
+        try {
+          payload = JSON.parse(text);
+        } catch {
+          throw new Error("Server returned an invalid response");
+        }
         if (!res.ok) throw new Error(payload.error || "Failed to load simulation");
 
         updateSimulation(simId, {
@@ -259,7 +270,18 @@ export default function DashboardClient({
           input: playgroundInput,
         }),
       });
-      const payload = await res.json();
+      if (res.status === 401) {
+        window.location.assign("/login?mode=signin&next=%2Fdashboard");
+        return;
+      }
+      const text = await res.text();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let payload: any;
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        throw new Error("Server returned an invalid response");
+      }
       if (!res.ok) {
         if (typeof payload.remaining_today === "number") {
           setRunsRemainingToday(payload.remaining_today);
@@ -613,7 +635,7 @@ export default function DashboardClient({
                   value={selectedPlatform}
                   onChange={(v) => setSelectedPlatform(v as "twitter" | "slack" | "reddit")}
                   options={[
-                    { value: "twitter", label: "Twitter / hostile short-form" },
+                    { value: "twitter", label: "Twitter / fast short-form" },
                     { value: "reddit", label: "Reddit / long-form anonymous" },
                     { value: "slack", label: "Slack / internal corporate" },
                   ]}

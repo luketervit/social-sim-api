@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const metadata = {
   title: "Explore Simulations - Atharias",
-  description: "Browse public Atharias simulations shared by other operators.",
+  description: "Browse public Atharias audience simulations shared by other teams.",
 };
 
 function formatRelativeDate(date: string | null) {
@@ -78,7 +78,7 @@ export default async function ExplorePage() {
             color: "var(--text-primary)",
           }}
         >
-          Browse live social blowback simulations from other teams.
+          Browse live audience simulations from other teams.
         </h1>
         <p
           style={{
@@ -90,7 +90,7 @@ export default async function ExplorePage() {
           }}
         >
           These are publicly shared runs from the Atharias network. Open any report to inspect
-          the full thread, sentiment mix, and the original post that triggered it.
+          the full thread, sentiment breakdown, and the original prompt behind it.
         </p>
       </div>
 
