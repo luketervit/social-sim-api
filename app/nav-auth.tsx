@@ -31,7 +31,7 @@ export default function NavAuth() {
   if (isLoggedIn) {
     return (
       <Link href="/dashboard" className="nav-link">
-        Dashboard
+        Playground
       </Link>
     );
   }

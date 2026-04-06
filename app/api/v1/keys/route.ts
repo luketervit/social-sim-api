@@ -56,6 +56,17 @@ export async function POST(request: NextRequest) {
     return auth.errorResponse;
   }
 
+  let body: Record<string, unknown> = {};
+  try {
+    body = (await request.json()) as Record<string, unknown>;
+  } catch {
+    // No body is fine — name is optional
+  }
+
+  const name = typeof body.name === "string" && body.name.trim().length > 0
+    ? body.name.trim().slice(0, 64)
+    : null;
+
   const db = supabaseAdmin();
   const key = `ssim_${randomBytes(24).toString("hex")}`;
 
@@ -66,8 +77,9 @@ export async function POST(request: NextRequest) {
       email: auth.user.email!,
       credits: 0,
       user_id: auth.user.id,
+      name,
     })
-    .select("key, email, credits, total_tokens_used, created_at")
+    .select("key, email, name, credits, total_tokens_used, created_at")
     .single();
 
   if (error || !keyRow) {
@@ -86,7 +98,7 @@ export async function GET(request: NextRequest) {
   const db = supabaseAdmin();
   const { data: keyRows, error } = await db
     .from("api_keys")
-    .select("key, email, credits, total_tokens_used, created_at")
+    .select("key, email, name, credits, total_tokens_used, created_at")
     .eq("user_id", auth.user.id)
     .not("key", "like", `${PLAYGROUND_KEY_PREFIX}%`)
     .order("created_at", { ascending: false });

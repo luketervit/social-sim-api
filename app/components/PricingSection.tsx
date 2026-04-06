@@ -142,7 +142,7 @@ export default function PricingSection() {
                 }}
               >
                 {PLAYGROUND_RUNS_INCLUDED} sandbox runs per day, up to {PLAYGROUND_PERSONA_CAP} agents
-                across {SIMULATION_ROUNDS} rounds. Good for demos, validation, and early prompt testing.
+                across {SIMULATION_ROUNDS} rounds.
               </p>
             </div>
             <div>

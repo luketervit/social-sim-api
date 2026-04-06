@@ -1,7 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import type { AgentMessage } from "@/lib/simulation/types";
 import {
   PLAYGROUND_PERSONA_CAP,
@@ -80,6 +87,176 @@ async function parseJsonPayload<T>(response: Response): Promise<(T & { error?: s
   } catch {
     return null;
   }
+}
+
+const LOADER_COLORS = ["#7C5CFC", "#F97066", "#34D399", "#F59E0B"];
+
+interface LoaderNode {
+  x: number;
+  y: number;
+  radius: number;
+  color: string;
+  phase: number;
+  speed: number;
+  orbitRadius: number;
+  orbitAngle: number;
+  opacity: number;
+  born: number;
+}
+
+function SimulationLoader({ progress }: { progress: number }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animRef = useRef<number>(0);
+  const nodesRef = useRef<LoaderNode[]>([]);
+  const edgesRef = useRef<[number, number][]>([]);
+  const startRef = useRef<number>(0);
+
+  const spawnNodes = useCallback((count: number, now: number) => {
+    const nodes = nodesRef.current;
+    const cx = 140;
+    const cy = 90;
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const orbit = 25 + Math.random() * 55;
+      nodes.push({
+        x: cx + Math.cos(angle) * orbit,
+        y: cy + Math.sin(angle) * orbit,
+        radius: 2 + Math.random() * 2.5,
+        color: LOADER_COLORS[Math.floor(Math.random() * LOADER_COLORS.length)],
+        phase: Math.random() * Math.PI * 2,
+        speed: 0.3 + Math.random() * 0.5,
+        orbitRadius: orbit,
+        orbitAngle: angle,
+        opacity: 0,
+        born: now,
+      });
+    }
+
+    // Add edges for new nodes connecting to nearby existing ones
+    const startIdx = nodes.length - count;
+    for (let i = startIdx; i < nodes.length; i++) {
+      // Connect to 1-2 random existing nodes
+      const connections = 1 + Math.floor(Math.random() * 2);
+      for (let c = 0; c < connections; c++) {
+        const target = Math.floor(Math.random() * nodes.length);
+        if (target !== i) {
+          edgesRef.current.push([i, target]);
+        }
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = 280 * dpr;
+    canvas.height = 180 * dpr;
+    ctx.scale(dpr, dpr);
+
+    startRef.current = performance.now();
+    // Seed initial nodes
+    spawnNodes(6, startRef.current);
+
+    let lastSpawnProgress = 0;
+
+    function draw(now: number) {
+      ctx!.clearRect(0, 0, 280, 180);
+      const elapsed = now - startRef.current;
+      const nodes = nodesRef.current;
+      const edges = edgesRef.current;
+
+      // Spawn new nodes as progress increases
+      if (progress - lastSpawnProgress > 5 && nodes.length < 40) {
+        spawnNodes(1 + Math.floor(Math.random() * 2), now);
+        lastSpawnProgress = progress;
+      }
+
+      // Draw edges
+      for (const [i, j] of edges) {
+        if (i >= nodes.length || j >= nodes.length) continue;
+        const a = nodes[i];
+        const b = nodes[j];
+        const edgeAge = Math.min(1, (now - Math.max(a.born, b.born)) / 1200);
+        const pulse = 0.5 + 0.5 * Math.sin(now * 0.002 + i * 0.5);
+        const alpha = edgeAge * 0.12 * pulse;
+        if (alpha < 0.01) continue;
+
+        ctx!.beginPath();
+        ctx!.moveTo(a.x, a.y);
+        ctx!.lineTo(b.x, b.y);
+        ctx!.strokeStyle = `rgba(124, 92, 252, ${alpha})`;
+        ctx!.lineWidth = 0.6;
+        ctx!.stroke();
+      }
+
+      // Draw + update nodes
+      for (const node of nodes) {
+        const age = now - node.born;
+        // Fade in
+        node.opacity = Math.min(1, age / 600);
+
+        // Gentle orbit drift
+        node.orbitAngle += node.speed * 0.003;
+        const breathe = Math.sin(now * 0.0015 + node.phase) * 3;
+        const cx = 140;
+        const cy = 90;
+        node.x = cx + Math.cos(node.orbitAngle) * (node.orbitRadius + breathe);
+        node.y = cy + Math.sin(node.orbitAngle) * (node.orbitRadius + breathe);
+
+        // Pulse radius
+        const rPulse = 1 + 0.2 * Math.sin(now * 0.003 + node.phase);
+        const r = node.radius * rPulse;
+
+        // Glow
+        const grad = ctx!.createRadialGradient(
+          node.x, node.y, r * 0.3,
+          node.x, node.y, r * 3
+        );
+        grad.addColorStop(0, node.color);
+        grad.addColorStop(1, "transparent");
+        ctx!.beginPath();
+        ctx!.arc(node.x, node.y, r * 3, 0, Math.PI * 2);
+        ctx!.fillStyle = grad;
+        ctx!.globalAlpha = 0.06 * node.opacity;
+        ctx!.fill();
+
+        // Node
+        ctx!.beginPath();
+        ctx!.arc(node.x, node.y, r, 0, Math.PI * 2);
+        ctx!.fillStyle = node.color;
+        ctx!.globalAlpha = node.opacity * 0.8;
+        ctx!.fill();
+        ctx!.globalAlpha = 1;
+      }
+
+      // Center ripple pulse
+      const ripplePhase = (elapsed % 3000) / 3000;
+      const rippleR = 15 + ripplePhase * 60;
+      const rippleAlpha = (1 - ripplePhase) * 0.06;
+      ctx!.beginPath();
+      ctx!.arc(140, 90, rippleR, 0, Math.PI * 2);
+      ctx!.strokeStyle = `rgba(124, 92, 252, ${rippleAlpha})`;
+      ctx!.lineWidth = 1;
+      ctx!.stroke();
+
+      animRef.current = requestAnimationFrame(draw);
+    }
+
+    animRef.current = requestAnimationFrame(draw);
+
+    return () => cancelAnimationFrame(animRef.current);
+  }, [progress, spawnNodes]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{ width: 280, height: 180, display: "block", margin: "0 auto" }}
+    />
+  );
 }
 
 function CustomSelect({
@@ -220,13 +397,18 @@ export default function PlaygroundSection({
   audiences,
   isSignedIn,
 }: PlaygroundSectionProps) {
-  const [input, setInput] = useState("We're rolling out paid verification for every creator account next month.");
-  const [audienceId, setAudienceId] = useState(audiences[0]?.id ?? "genz");
+  const [input, setInput] = useState("We're launching a free tier for all new users starting next week.");
+  const [audienceId, setAudienceId] = useState(
+    audiences.find((a) => a.id === "genz")?.id ?? audiences[0]?.id ?? "genz"
+  );
   const [platform, setPlatform] = useState<(typeof PLATFORM_OPTIONS)[number]["value"]>("twitter");
   const [error, setError] = useState<string | null>(null);
   const [activeSimulationId, setActiveSimulationId] = useState<string | null>(null);
   const [simulation, setSimulation] = useState<PlaygroundSimulation | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     if (!activeSimulationId) {
@@ -505,6 +687,7 @@ export default function PlaygroundSection({
 
             {/* Right: Output */}
             <div
+              suppressHydrationWarning
               style={{
                 padding: 28,
                 minHeight: 480,
@@ -513,7 +696,7 @@ export default function PlaygroundSection({
                 border: "1px solid var(--border)",
               }}
             >
-              {simulation ? (
+              {!mounted ? null : simulation ? (
                 <>
                   <div className="flex items-center justify-between gap-4">
                     <div>
@@ -550,149 +733,54 @@ export default function PlaygroundSection({
                           : "complete"}
                     </span>
                   </div>
-                  <div
-                    className="mt-5"
-                    style={{
-                      padding: 16,
-                      borderRadius: 10,
-                      border: "1px solid var(--border)",
-                      background: "var(--surface)",
-                    }}
-                  >
-                    <p className="mono-label" style={{ fontSize: 10 }}>Prompt</p>
-                    <p
-                      style={{
-                        color: "var(--text-primary)",
-                        fontSize: 14,
-                        lineHeight: 1.65,
-                        marginTop: 8,
-                      }}
-                    >
-                      {simulation.input}
-                    </p>
-                  </div>
-
                   {simulation.status === "queued" || simulation.status === "running" ? (
                     <div className="mt-5">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="mono-label" style={{ fontSize: 10 }}>Progress</span>
-                        <span
-                          className="tabular-nums"
-                          style={{ color: "var(--text-secondary)", fontSize: 12 }}
-                        >
-                          {simulation.progress_messages}/{simulation.expected_messages}
-                        </span>
-                      </div>
+                      <SimulationLoader progress={progressPercent} />
                       <div
-                        className="mt-3 h-2 overflow-hidden rounded-full"
-                        style={{ background: "var(--border)" }}
+                        className="mt-3 flex items-center gap-3"
+                        style={{ maxWidth: 280, margin: "0 auto" }}
                       >
                         <div
-                          style={{
-                            width: `${progressPercent}%`,
-                            height: "100%",
-                            background: "var(--accent)",
-                            borderRadius: "999px",
-                            transition: "width 180ms linear",
-                          }}
-                        />
+                          className="h-1 flex-1 overflow-hidden rounded-full"
+                          style={{ background: "var(--border)" }}
+                        >
+                          <div
+                            style={{
+                              width: `${progressPercent}%`,
+                              height: "100%",
+                              background: "var(--accent)",
+                              borderRadius: "999px",
+                              transition: "width 300ms ease-out",
+                            }}
+                          />
+                        </div>
+                        <span
+                          className="tabular-nums text-[11px]"
+                          style={{ color: "var(--text-tertiary)" }}
+                        >
+                          {progressPercent}%
+                        </span>
                       </div>
-                      <p className="mt-3 text-[13px]" style={{ color: "var(--text-secondary)" }}>
-                        Simulating a {simulation.persona_cap ?? PLAYGROUND_PERSONA_CAP}-agent slice
-                        across {SIMULATION_ROUNDS} rounds.
+                      <p
+                        className="mt-2 text-center text-[12px]"
+                        style={{ color: "var(--text-tertiary)" }}
+                      >
+                        Generating responses...
                       </p>
                     </div>
                   ) : null}
 
                   {simulation.status === "completed" ? (
                     <>
-                      <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                        {[
-                          { label: "Messages", value: `${simulation.thread.length}`, color: "var(--accent)" },
-                          { label: "Hostile", value: `${sentimentBreakdown.hostile}`, color: "var(--coral)" },
-                          { label: "Positive", value: `${sentimentBreakdown.positive}`, color: "var(--mint)" },
-                        ].map((item) => (
-                          <div
-                            key={item.label}
-                            style={{
-                              padding: 14,
-                              borderRadius: 10,
-                              border: "1px solid var(--border)",
-                              background: "var(--surface)",
-                            }}
-                          >
-                            <div className="mono-label" style={{ fontSize: 10 }}>{item.label}</div>
-                            <p
-                              className="tabular-nums"
-                              style={{
-                                marginTop: 8,
-                                fontSize: 22,
-                                color: item.color,
-                                fontWeight: 600,
-                              }}
-                            >
-                              {item.value}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="mt-5">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="mono-label" style={{ fontSize: 10 }}>Thread Excerpt</span>
-                          <span style={{ color: "var(--text-tertiary)", fontSize: 12 }}>
-                            first {visibleMessages.length} messages
-                          </span>
-                        </div>
-                        <div className="mt-3 space-y-2">
-                          {visibleMessages.map((message, index) => (
-                            <div
-                              key={`${message.agent_id}-${index}`}
-                              style={{
-                                padding: 14,
-                                borderRadius: 10,
-                                border: "1px solid var(--border)",
-                                background: "var(--surface)",
-                              }}
-                            >
-                              <div className="flex items-center gap-2">
-                                <div
-                                  className="h-2 w-2 rounded-full"
-                                  style={{ background: SENTIMENT_COLORS[message.sentiment] }}
-                                />
-                                <span
-                                  style={{
-                                    color: "var(--text-primary)",
-                                    fontSize: 13,
-                                    fontWeight: 600,
-                                  }}
-                                >
-                                  {message.archetype}
-                                </span>
-                                <span style={{ color: "var(--text-tertiary)", fontSize: 11 }}>
-                                  round {message.round}
-                                </span>
-                              </div>
-                              <p
-                                style={{
-                                  marginTop: 8,
-                                  color: "var(--text-secondary)",
-                                  fontSize: 13,
-                                  lineHeight: 1.65,
-                                }}
-                              >
-                                {message.message}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
+                      <SimulationResults
+                        simulation={simulation}
+                        sentimentBreakdown={sentimentBreakdown}
+                      />
                       <div className="mt-5 flex flex-wrap gap-3">
-                        <Link href="/dashboard" className="btn-primary">
-                          Open dashboard
+                        <Link href={`/sim/${simulation.simulation_id}`} className="btn-primary" style={{ flex: 1, justifyContent: "center" }}>
+                          View full results
                         </Link>
-                        <Link href="/waitlist" className="btn-secondary">
+                        <Link href="/waitlist" className="btn-secondary" style={{ flex: 1, justifyContent: "center" }}>
                           Join API waitlist
                         </Link>
                       </div>
@@ -727,11 +815,13 @@ export default function PlaygroundSection({
                       display: "grid",
                       placeItems: "center",
                       marginBottom: 20,
+                      fontSize: 22,
+                      color: "var(--accent)",
+                      fontWeight: 300,
                     }}
+                    aria-hidden="true"
                   >
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                      <path d="M10 4v12M4 10h12" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" />
-                    </svg>
+                    +
                   </div>
                   <p style={{ color: "var(--text-primary)", fontSize: 16, fontWeight: 500 }}>
                     Run a simulation to see results
@@ -745,6 +835,89 @@ export default function PlaygroundSection({
           </div>
         </div>
       </div>
+
     </section>
+  );
+}
+
+function SimulationResults({
+  simulation,
+  sentimentBreakdown,
+}: {
+  simulation: PlaygroundSimulation;
+  sentimentBreakdown: { hostile: number; negative: number; neutral: number; positive: number };
+}) {
+  return (
+    <>
+      <div className="mt-5 grid gap-3" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+        {[
+          { label: "Messages", value: `${simulation.thread.length}`, color: "var(--accent)" },
+          { label: "Positive", value: `${sentimentBreakdown.positive}`, color: "var(--mint)" },
+          { label: "Negative", value: `${sentimentBreakdown.negative}`, color: "var(--coral)" },
+          { label: "Hostile", value: `${sentimentBreakdown.hostile}`, color: "#EF4444" },
+        ].map((item) => (
+          <div
+            key={item.label}
+            style={{
+              padding: 14,
+              borderRadius: 10,
+              border: "1px solid var(--border)",
+              background: "var(--surface)",
+              textAlign: "center",
+            }}
+          >
+            <p
+              className="tabular-nums"
+              style={{
+                fontSize: 24,
+                color: item.color,
+                fontWeight: 600,
+              }}
+            >
+              {item.value}
+            </p>
+            <div
+              style={{
+                fontSize: 11,
+                color: "var(--text-tertiary)",
+                marginTop: 4,
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+                fontFamily: "var(--font-data), monospace",
+              }}
+            >
+              {item.label}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {simulation.aggression_score ? (
+        <div
+          className="mt-4"
+          style={{
+            padding: "12px 16px",
+            borderRadius: 10,
+            border: "1px solid var(--border)",
+            background: "var(--surface)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <span style={{ fontSize: 14, color: "var(--text-secondary)" }}>Aggression level</span>
+          <span
+            style={{
+              fontSize: 14,
+              fontWeight: 600,
+              color: AGGRESSION_COLORS[simulation.aggression_score] ?? "var(--text-primary)",
+              textTransform: "capitalize",
+            }}
+          >
+            {simulation.aggression_score}
+          </span>
+        </div>
+      ) : null}
+    </>
   );
 }

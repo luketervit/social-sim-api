@@ -99,7 +99,13 @@ export async function consumeDailyQuota(
     };
   }
 
-  return row as ConsumedQuotaState;
+  // Map prefixed column names from RPC to our interface
+  return {
+    allowed: row.out_allowed ?? row.allowed,
+    used_count: row.out_used_count ?? row.used_count,
+    remaining: row.out_remaining ?? row.remaining,
+    usage_date: row.out_usage_date ?? row.usage_date,
+  } as ConsumedQuotaState;
 }
 
 export async function refundDailyQuota(
