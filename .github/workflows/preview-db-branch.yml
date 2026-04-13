@@ -1,0 +1,144 @@
+name: Preview DB Branch
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+    paths:
+      - 'supabase/migrations/**'
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  preview-branch:
+    if: github.event.pull_request.base.ref == 'main'
+    runs-on: ["self-hosted", "linux", "superoptimizers", "staging-db-migration"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Build preview branch payload
+        id: payload
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          MIGRATION_FILES=$(find supabase/migrations -type f -name '*.sql')
+          echo "Migration files:"
+          printf '%s\n' "$MIGRATION_FILES"
+
+          # Sort migrations by version prefix (before first underscore), then filename
+          # This matches backend sorting: sorted(migrations, key=lambda m: (_extract_version(m.filename), m.filename))
+          SORTED_FILES=$(echo "$MIGRATION_FILES" | while read -r file; do
+            # Extract version prefix (everything before first underscore in basename)
+            basename=$(basename "$file")
+            version="${basename%%_*}"
+            echo "$version|$file"
+          done | sort -t'|' -k1,1 -k2,2 | cut -d'|' -f2-)
+
+          # Compute hash matching backend: sha256("|".join(f"{filename}:{content}" for filename, content in sorted_items))
+          HASH_INPUT=""
+          FIRST=true
+          while IFS= read -r file; do
+            [ -n "$file" ] || continue
+            if [ "$FIRST" = true ]; then
+              FIRST=false
+            else
+              HASH_INPUT="${HASH_INPUT}|"
+            fi
+            CONTENT=$(cat "$file")
+            HASH_INPUT="${HASH_INPUT}${file}:${CONTENT}"
+          done <<< "$SORTED_FILES"
+          HASH=$(echo -n "$HASH_INPUT" | sha256sum | awk '{print $1}')
+
+          migrations_json='[]'
+          while IFS= read -r file; do
+            [ -n "$file" ] || continue
+            migration_json=$(jq -Rs --arg filename "$file" '{filename: $filename, content: .}' < "$file")
+            migrations_json=$(jq -c --argjson migration "$migration_json" '. + [$migration]' <<< "$migrations_json")
+          done <<< "$SORTED_FILES"
+
+          payload=$(jq -cn \
+            --argjson migrations "$migrations_json" \
+            --arg hash "$HASH" \
+            --argjson pr_number "${{ github.event.pull_request.number }}" \
+            --arg commit_sha "${{ github.event.pull_request.head.sha }}" \
+            '{migrations: $migrations, hash: $hash, pr_number: $pr_number, commit_sha: $commit_sha}')
+
+          {
+            echo 'payload<<EOF'
+            echo "$payload"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Request OIDC token
+        id: oidc
+        env:
+          BACKEND_URL: ${{ vars.BACKEND_URL || 'https://api.superoptimizers.cofounder.co' }}
+        run: |
+          # Derive OIDC audience from BACKEND_URL (remove protocol prefix and trailing slash)
+          NORMALIZED_URL="${BACKEND_URL%/}"
+          AUDIENCE="${NORMALIZED_URL#https://}"
+          TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${AUDIENCE}" | jq -r '.value')
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Request preview branch
+        id: preview
+        env:
+          OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+          PREVIEW_PAYLOAD: ${{ steps.payload.outputs.payload }}
+          BACKEND_URL: ${{ vars.BACKEND_URL || 'https://api.superoptimizers.cofounder.co' }}
+        run: |
+          set -euo pipefail
+
+          curl -sS -f -X POST "${BACKEND_URL}/migrations/v1/preview-branch" \
+            -H "Authorization: Bearer $OIDC_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$PREVIEW_PAYLOAD" \
+            | tee preview-branch-response.json
+
+      - name: Handle response
+        if: always()
+        run: |
+          if [ ! -f preview-branch-response.json ]; then
+            echo "Preview branch request did not produce a response file."
+            exit 1
+          fi
+
+          branch_id=$(jq -r '.branch_id' preview-branch-response.json)
+          branch_url=$(jq -r '.branch_url' preview-branch-response.json)
+          status=$(jq -r '.status' preview-branch-response.json)
+          is_reset=$(jq -r '.is_reset' preview-branch-response.json)
+          results=$(jq -r '
+            if (.migration_results | length) == 0 then
+              "- none"
+            else
+              .migration_results[]
+              | "- `" + (.filename // "unknown") + "`: `" + (.status // "unknown") + "`"
+            end
+          ' preview-branch-response.json)
+
+          {
+            echo "## Preview DB Branch"
+            echo "- Branch ID: \`$branch_id\`"
+            echo "- Branch URL: $branch_url"
+            echo "- Status: \`$status\`"
+            echo "- Commit: \`${{ github.event.pull_request.head.sha }}\`"
+            echo "- Reset applied: \`$is_reset\`"
+            echo
+            echo "### Migration Results"
+            echo "$results"
+            echo
+            echo "The backend endpoint posts the PR comment after processing this request."
+          } >> "$GITHUB_STEP_SUMMARY"
