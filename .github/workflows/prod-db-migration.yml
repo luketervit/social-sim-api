@@ -1,0 +1,32 @@
+name: Prod DB Migration
+
+on:
+  push:
+    branches:
+      - prod
+    paths:
+      - 'supabase/migrations/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ["self-hosted", "linux", "superoptimizers", "prod-db-migration"]
+    permissions:
+      id-token: write
+    steps:
+      - name: Request OIDC token
+        id: oidc
+        run: |
+          TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=api.superoptimizers.cofounder.co" | jq -r '.value')
+          echo "token=$TOKEN" >> $GITHUB_OUTPUT
+
+      - name: Run migrations
+        env:
+          OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+        run: |
+          curl -sS -f -X POST https://api.superoptimizers.cofounder.co/migrations/v1/run \
+            -H "Authorization: Bearer $OIDC_TOKEN"
