@@ -71,9 +71,9 @@ export default function WaitlistPage() {
                 maxWidth: 480,
               }}
             >
-              The free playground is live the moment you sign up. This page is
-              for queueing direct API access — you&apos;ll hear back when keys
-              open up.
+              Once you sign up, you&apos;ll be able to upload any CSV of your
+              customer data and run simulations on it for accurate results.
+              We&apos;ll email you when access opens up.
             </p>
 
             <div
@@ -97,9 +97,9 @@ export default function WaitlistPage() {
                 }}
               >
                 {[
-                  "Dashboard + playground unlocked instantly",
-                  "5 free runs / day, 100-agent cap",
-                  "Direct API keys queued separately",
+                  "Upload any CSV of your customer data",
+                  "Run simulations on your real audience",
+                  "We'll email you when access opens up",
                 ].map((item) => (
                   <li
                     key={item}
@@ -175,8 +175,9 @@ export default function WaitlistPage() {
                   <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>
                     {submittedEmail}
                   </span>{" "}
-                  can use the dashboard and playground now. We&apos;ll email you
-                  when API keys open up.
+                  is on the waitlist. Once access opens up, you&apos;ll be able
+                  to upload any CSV of your customer data and run simulations on
+                  it for accurate results.
                 </p>
 
                 <div
@@ -200,12 +201,6 @@ export default function WaitlistPage() {
                   >
                     Add another email
                   </button>
-                  <Link
-                    href={signedInAfterSubmit ? "/dashboard" : "/login"}
-                    className="btn-secondary"
-                  >
-                    {signedInAfterSubmit ? "Open dashboard" : "Go to sign in"}
-                  </Link>
                 </div>
               </div>
             ) : (

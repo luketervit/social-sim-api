@@ -300,7 +300,7 @@ const STEPS: Step[] = [
       </>
     ),
     description:
-      "Drop in your CSVs, your Slack archive, your support tickets — Atharias synthesizes a population of agents that argue, dunk, and praise like the people behind your data. Seeded audiences (Toxic Gamers, Gen Z, Engineers) are bundled in for the playground.",
+      "Drop in your CSVs, your Slack archive, your support tickets — Atharias synthesizes a population of agents that argue, dunk, and praise like the people behind your data.",
     background: "var(--butter)",
     numberColor: "var(--tomato)",
     align: "right",

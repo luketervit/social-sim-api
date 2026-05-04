@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { sanitizeNextPath } from "@/lib/navigation";
 import { createSupabaseBrowser } from "@/lib/supabase/browser";
@@ -13,10 +14,12 @@ export default function LoginPage() {
   );
 }
 
+type Mode = "signin" | "signup" | "reset";
+
 function LoginPageContent() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [mode, setMode] = useState<"signin" | "signup" | "reset">("signin");
+  const [mode, setMode] = useState<Mode>("signin");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -25,14 +28,9 @@ function LoginPageContent() {
   const nextPath = sanitizeNextPath(searchParams.get("next"));
 
   useEffect(() => {
-    const requestedMode = searchParams.get("mode");
-
-    if (
-      requestedMode === "signin" ||
-      requestedMode === "signup" ||
-      requestedMode === "reset"
-    ) {
-      setMode(requestedMode);
+    const requested = searchParams.get("mode");
+    if (requested === "signin" || requested === "signup" || requested === "reset") {
+      setMode(requested);
       setError(null);
       setNotice(null);
     }
@@ -52,18 +50,17 @@ function LoginPageContent() {
         window.location.origin
       ).toString();
 
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo,
       });
-
       setLoading(false);
-
-      if (error) {
-        setError(error.message);
+      if (resetError) {
+        setError(resetError.message);
         return;
       }
-
-      setNotice("Password reset email sent. Open the link in your inbox to choose a new password.");
+      setNotice(
+        "Password reset email sent. Open the link in your inbox to choose a new password."
+      );
       return;
     }
 
@@ -73,300 +70,411 @@ function LoginPageContent() {
         setLoading(false);
         return;
       }
-
-      const { data, error } = await supabase.auth.signUp({
+      const { data, error: signupError } = await supabase.auth.signUp({
         email,
         password,
       });
-
       setLoading(false);
-
-      if (error) {
-        setError(error.message);
+      if (signupError) {
+        setError(signupError.message);
         return;
       }
-
       if (!data.session) {
         setNotice(
-          "Your account has been created. Confirm your email if prompted, then sign in to open the playground and dashboard."
+          "Account created. Confirm your email if prompted, then sign in to open the playground."
         );
         setMode("signin");
         return;
       }
-
       router.push(nextPath);
       router.refresh();
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      setLoading(false);
-
-      if (error) {
-        if (error.message === "Invalid login credentials") {
-          setError("Invalid email or password.");
-        } else {
-          setError(error.message);
-        }
-        return;
-      }
-
-      router.push(nextPath);
-      router.refresh();
+      return;
     }
+
+    const { error: signinError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    setLoading(false);
+    if (signinError) {
+      setError(
+        signinError.message === "Invalid login credentials"
+          ? "Invalid email or password."
+          : signinError.message
+      );
+      return;
+    }
+    router.push(nextPath);
+    router.refresh();
+  }
+
+  function switchMode(target: Mode) {
+    setMode(target);
+    setError(null);
+    setNotice(null);
   }
 
   const heading =
-    mode === "signin" ? "Sign in" : mode === "signup" ? "Sign up" : "Reset password";
+    mode === "signin"
+      ? "Sign in"
+      : mode === "signup"
+        ? "Open the playground."
+        : "Reset password";
+
+  const italic =
+    mode === "signin" ? "Sign in" : mode === "signup" ? "playground." : "Reset password";
+
   const description =
     mode === "signin"
-      ? "Sign in to open the playground immediately. Approved accounts also unlock direct API keys."
+      ? "Welcome back. The dashboard, your audiences, and the playground are one click in."
       : mode === "signup"
-        ? "Create an account with email and password to open the free playground immediately."
-        : "Enter your email and we’ll send you a secure recovery link.";
-  const modeLabel =
-    mode === "signin" ? "ACCOUNT_ACCESS" :
-    mode === "signup" ? "FREE_TIER" :
-    "PASSWORD_RESET";
+        ? "Create an account in 10 seconds. Free playground, free custom audiences, no card."
+        : "We'll email you a secure link to set a new password.";
+
+  const submitLabel =
+    loading
+      ? mode === "signin"
+        ? "Signing in…"
+        : mode === "signup"
+          ? "Creating…"
+          : "Sending…"
+      : mode === "signin"
+        ? "Sign in"
+        : mode === "signup"
+          ? "Create account"
+          : "Send reset link";
 
   return (
-    <section style={{ padding: "72px 0 120px" }}>
-      <div className="mx-auto max-w-[1180px] px-6">
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,0.85fr)]">
-          <div className="section-shell border border-[rgba(39,39,42,0.55)]">
-            <span className="mono-label">{modeLabel}</span>
-            <h1
-              style={{
-                fontSize: 44,
-                lineHeight: 1,
-                color: "var(--text-primary)",
-                marginTop: 14,
-                maxWidth: 420,
-              }}
-            >
-              {heading}
-            </h1>
-            <p
-              style={{
-                color: "var(--text-secondary)",
-                fontSize: 15,
-                lineHeight: 1.7,
-                marginTop: 18,
-                maxWidth: 440,
-              }}
-            >
-              {description}
-            </p>
-
-            <div
-              className="panel"
-              style={{
-                marginTop: 28,
-                padding: 20,
-                background:
-                  "linear-gradient(180deg, rgba(39, 39, 42, 0.28), rgba(24, 24, 27, 0.12) 55%, transparent 100%)",
-              }}
-            >
-              <div className="mono-label" style={{ marginBottom: 10 }}>
-                ACCESS POLICY
-              </div>
-              <p style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.7 }}>
-                {mode === "signin"
-                  ? "Any signed-in account can use the dashboard and playground right away. Direct API key access still stays behind the approval step."
-                  : mode === "signup"
-                    ? "New accounts can use the dashboard and playground immediately after sign up. Approval is only required for direct API key management."
-                    : "Recovery emails route back through the app callback and open the password reset screen."}
-              </p>
-            </div>
-          </div>
-
-          <div className="panel" style={{ padding: 28 }}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: 16,
-                marginBottom: 22,
-              }}
-            >
-              <div>
-                <div className="mono-label">ACCOUNT</div>
-                <div
-                  style={{
-                    color: "var(--text-primary)",
-                    fontSize: 22,
-                    marginTop: 8,
-                    letterSpacing: "-0.03em",
-                  }}
-                >
-                  {heading}
-                </div>
-              </div>
-              <span
-                className="mono-label"
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 999,
-                  border: "1px solid rgba(39, 39, 42, 0.75)",
-                  background: "rgba(24, 24, 27, 0.72)",
-                  color: mode === "reset" ? "#86efac" : "var(--text-tertiary)",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {mode === "reset" ? "RESET" : "SECURE"}
-              </span>
-            </div>
-
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-              <div>
-                <label htmlFor="email" className="mono-label" style={{ display: "block", marginBottom: 10 }}>
-                  Email Address
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@company.com"
-                  required
-                  spellCheck={false}
-                  autoComplete="email"
-                  className="input"
-                />
-              </div>
-
-              {mode !== "reset" && (
-                <div>
-                  <label htmlFor="password" className="mono-label" style={{ display: "block", marginBottom: 10 }}>
-                    Password
-                  </label>
-                  <input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder={mode === "signup" ? "Password (min 8 characters)" : "Password"}
-                    required
-                    minLength={mode === "signup" ? 8 : undefined}
-                    autoComplete={mode === "signup" ? "new-password" : "current-password"}
-                    className="input"
-                  />
-                </div>
-              )}
-
-              <button type="submit" disabled={loading} className="btn-primary" style={{ marginTop: 6 }}>
-                {loading
-                  ? (mode === "signin"
-                      ? "Signing in\u2026"
-                      : mode === "signup"
-                        ? "Creating account\u2026"
-                        : "Sending reset link\u2026")
-                  : (mode === "signin"
-                      ? "Sign in"
-                      : mode === "signup"
-                        ? "Sign up"
-                        : "Send reset link")}
-              </button>
-            </form>
-
-            {error && (
-              <div
-                className="mt-5 px-4 py-3 text-[13px]"
-                style={{
-                  background: "rgba(239, 68, 68, 0.08)",
-                  color: "#fca5a5",
-                  border: "1px solid rgba(239, 68, 68, 0.15)",
-                  borderRadius: 20,
-                }}
-              >
-                {error}
-              </div>
-            )}
-
-            {notice && (
-              <div
-                className="mt-5 px-4 py-3 text-[13px]"
-                style={{
-                  background: "rgba(34, 197, 94, 0.08)",
-                  color: "#86efac",
-                  border: "1px solid rgba(34, 197, 94, 0.15)",
-                  borderRadius: 20,
-                }}
-              >
-                {notice}
-              </div>
-            )}
-
-            <div className="mt-6" style={{ color: "var(--text-secondary)", fontSize: 13 }}>
-              {mode === "signin" ? (
-                <p>
-                  Need an account?{" "}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMode("signup");
-                      setError(null);
-                      setNotice(null);
-                    }}
-                    style={{ color: "var(--text-primary)", textDecoration: "underline", textUnderlineOffset: "3px" }}
-                  >
-                    Sign up
-                  </button>
-                </p>
-              ) : mode === "signup" ? (
-                <p>
-                  Already have an account?{" "}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMode("signin");
-                      setError(null);
-                      setNotice(null);
-                    }}
-                    style={{ color: "var(--text-primary)", textDecoration: "underline", textUnderlineOffset: "3px" }}
-                  >
-                    Sign in
-                  </button>
-                </p>
-              ) : (
-                <p>
-                  Remembered it?{" "}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMode("signin");
-                      setError(null);
-                      setNotice(null);
-                    }}
-                    style={{ color: "var(--text-primary)", textDecoration: "underline", textUnderlineOffset: "3px" }}
-                  >
-                    Back to sign in
-                  </button>
-                </p>
-              )}
-
-              {mode === "signin" && (
-                <p style={{ marginTop: 12 }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMode("reset");
-                      setError(null);
-                      setNotice(null);
-                    }}
-                    style={{ color: "var(--text-secondary)", textDecoration: "underline", textUnderlineOffset: "3px" }}
-                  >
-                    Forgot password?
-                  </button>
-                </p>
-              )}
-            </div>
-          </div>
+    <main
+      style={{
+        minHeight: "calc(100vh - 80px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "48px 24px 96px",
+      }}
+    >
+      <div className="atharias-auth-card">
+        <div className="atharias-auth-eyebrow">
+          <span className="mono-label" style={{ color: "var(--text-tertiary)" }}>
+            ATHARIAS
+          </span>
+          <span
+            className="mono-label"
+            style={{
+              color: "var(--text-tertiary)",
+              opacity: 0.7,
+            }}
+          >
+            {mode === "signin"
+              ? "ACCOUNT"
+              : mode === "signup"
+                ? "FREE TIER"
+                : "PASSWORD RESET"}
+          </span>
         </div>
+
+        <h1 className="atharias-auth-title">
+          {mode === "signup" ? (
+            <>
+              Open the{" "}
+              <span style={{ fontStyle: "italic" }}>playground.</span>
+            </>
+          ) : mode === "signin" ? (
+            <>
+              <span style={{ fontStyle: "italic" }}>Sign in.</span>
+            </>
+          ) : (
+            <>
+              Reset <span style={{ fontStyle: "italic" }}>password.</span>
+            </>
+          )}
+        </h1>
+
+        <p className="atharias-auth-sub">{description}</p>
+
+        <form onSubmit={handleSubmit} className="atharias-auth-form" noValidate>
+          <label htmlFor="email" className="atharias-auth-label">
+            Email
+          </label>
+          <input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@company.com"
+            required
+            spellCheck={false}
+            autoComplete="email"
+            className="atharias-auth-input"
+          />
+
+          {mode !== "reset" ? (
+            <>
+              <label
+                htmlFor="password"
+                className="atharias-auth-label"
+                style={{ marginTop: 16 }}
+              >
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={mode === "signup" ? "At least 8 characters" : "Password"}
+                required
+                minLength={mode === "signup" ? 8 : undefined}
+                autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                className="atharias-auth-input"
+              />
+            </>
+          ) : null}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="atharias-auth-submit"
+            aria-busy={loading}
+          >
+            {submitLabel}
+          </button>
+        </form>
+
+        {error ? (
+          <div className="atharias-auth-banner atharias-auth-banner--error" role="alert">
+            {error}
+          </div>
+        ) : null}
+
+        {notice ? (
+          <div className="atharias-auth-banner atharias-auth-banner--notice">
+            {notice}
+          </div>
+        ) : null}
+
+        <div className="atharias-auth-policy">
+          <span className="mono-label">ACCESS POLICY</span>
+          <p style={{ marginTop: 6 }}>
+            {mode === "signup"
+              ? "New accounts unlock the dashboard, custom audience uploads, and 5 free playground sims/day right after sign-up. API key access is reviewed manually."
+              : mode === "signin"
+                ? "Approved operators get direct API key access. Everyone else uses the dashboard and playground."
+                : "Recovery emails route back through the app callback to set a new password."}
+          </p>
+        </div>
+
+        <div className="atharias-auth-footer">
+          {mode === "signin" ? (
+            <>
+              <span>Don&rsquo;t have an account? </span>
+              <button type="button" onClick={() => switchMode("signup")} className="atharias-auth-link">
+                Create one
+              </button>
+              <span style={{ color: "var(--text-tertiary)", margin: "0 10px" }}>·</span>
+              <button type="button" onClick={() => switchMode("reset")} className="atharias-auth-link">
+                Forgot password
+              </button>
+            </>
+          ) : mode === "signup" ? (
+            <>
+              <span>Already have one? </span>
+              <button type="button" onClick={() => switchMode("signin")} className="atharias-auth-link">
+                Sign in
+              </button>
+            </>
+          ) : (
+            <>
+              <span>Remembered it? </span>
+              <button type="button" onClick={() => switchMode("signin")} className="atharias-auth-link">
+                Back to sign in
+              </button>
+            </>
+          )}
+        </div>
+
+        <Link href="/" className="atharias-auth-back">
+          ← Back to home
+        </Link>
       </div>
-    </section>
+
+      <style jsx global>{`
+        .atharias-auth-card {
+          width: 100%;
+          max-width: 460px;
+          padding: 36px 36px 32px;
+          background: var(--bg-element, #ffffff);
+          border-radius: 24px;
+          box-shadow:
+            0 0 0 1px rgba(0, 0, 0, 0.04),
+            0 1px 3px rgba(0, 0, 0, 0.04),
+            0 12px 36px rgba(0, 0, 0, 0.05);
+        }
+        .atharias-auth-eyebrow {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 16px;
+        }
+        .atharias-auth-title {
+          font-family: var(--font-display), Georgia, serif;
+          font-size: clamp(34px, 4vw, 44px);
+          line-height: 1.05;
+          letter-spacing: -0.03em;
+          color: var(--text-primary);
+          margin-top: 14px;
+          text-wrap: balance;
+        }
+        .atharias-auth-sub {
+          color: var(--text-secondary);
+          font-size: 15px;
+          line-height: 1.6;
+          margin-top: 14px;
+          text-wrap: pretty;
+        }
+        .atharias-auth-form {
+          display: flex;
+          flex-direction: column;
+          margin-top: 24px;
+        }
+        .atharias-auth-label {
+          font-family: var(--font-data), monospace;
+          font-size: 11px;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: var(--text-tertiary);
+          margin-bottom: 8px;
+        }
+        .atharias-auth-input {
+          width: 100%;
+          padding: 13px 16px;
+          border-radius: 12px;
+          background: var(--bg-subtle);
+          color: var(--text-primary);
+          font-size: 16px;
+          line-height: 1.4;
+          border: none;
+          box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
+          transition: box-shadow 160ms cubic-bezier(0.215, 0.61, 0.355, 1);
+          font-family: inherit;
+        }
+        .atharias-auth-input:focus {
+          outline: none;
+          box-shadow: 0 0 0 2px var(--ink, #141413);
+          background: var(--bg-element, #ffffff);
+        }
+        .atharias-auth-input::placeholder {
+          color: var(--text-tertiary);
+        }
+        .atharias-auth-submit {
+          margin-top: 22px;
+          padding: 14px 20px;
+          border-radius: 999px;
+          background: var(--ink, #141413);
+          color: var(--butter-deep, #e8d27a);
+          font-size: 15px;
+          font-weight: 500;
+          font-family: inherit;
+          border: none;
+          cursor: pointer;
+          transition:
+            background 160ms cubic-bezier(0.215, 0.61, 0.355, 1),
+            transform 80ms cubic-bezier(0.215, 0.61, 0.355, 1);
+          font-variant-numeric: tabular-nums;
+        }
+        @media (hover: hover) and (pointer: fine) {
+          .atharias-auth-submit:hover {
+            background: #1f1f1d;
+          }
+        }
+        .atharias-auth-submit:active {
+          transform: scale(0.99);
+        }
+        .atharias-auth-submit:disabled {
+          opacity: 0.55;
+          cursor: not-allowed;
+        }
+        .atharias-auth-submit:focus-visible {
+          outline: 2px solid var(--ink, #141413);
+          outline-offset: 3px;
+        }
+        .atharias-auth-banner {
+          margin-top: 18px;
+          padding: 11px 14px;
+          font-size: 13px;
+          line-height: 1.5;
+          border-radius: 12px;
+        }
+        .atharias-auth-banner--error {
+          background: rgba(249, 112, 102, 0.08);
+          color: #b1311a;
+          box-shadow: inset 0 0 0 1px rgba(249, 112, 102, 0.2);
+        }
+        .atharias-auth-banner--notice {
+          background: rgba(52, 211, 153, 0.08);
+          color: #166f4d;
+          box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.2);
+        }
+        .atharias-auth-policy {
+          margin-top: 24px;
+          padding: 14px 16px;
+          border-radius: 12px;
+          background: var(--bg-subtle);
+          font-size: 12.5px;
+          line-height: 1.55;
+          color: var(--text-secondary);
+        }
+        .atharias-auth-footer {
+          margin-top: 22px;
+          font-size: 13.5px;
+          color: var(--text-secondary);
+          line-height: 1.6;
+        }
+        .atharias-auth-link {
+          background: none;
+          border: none;
+          padding: 0;
+          color: var(--text-primary);
+          text-decoration: underline;
+          text-underline-offset: 3px;
+          font-family: inherit;
+          font-size: inherit;
+          cursor: pointer;
+          transition: color 160ms cubic-bezier(0.215, 0.61, 0.355, 1);
+        }
+        @media (hover: hover) and (pointer: fine) {
+          .atharias-auth-link:hover {
+            color: var(--ink, #141413);
+          }
+        }
+        .atharias-auth-link:focus-visible {
+          outline: 2px solid var(--ink, #141413);
+          outline-offset: 3px;
+          border-radius: 4px;
+        }
+        .atharias-auth-back {
+          display: inline-block;
+          margin-top: 18px;
+          font-size: 12px;
+          color: var(--text-tertiary);
+          font-family: var(--font-data), monospace;
+          letter-spacing: 0.04em;
+          text-decoration: none;
+        }
+        @media (hover: hover) and (pointer: fine) {
+          .atharias-auth-back:hover {
+            color: var(--text-primary);
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .atharias-auth-submit,
+          .atharias-auth-input,
+          .atharias-auth-link {
+            transition: none;
+          }
+        }
+      `}</style>
+    </main>
   );
 }

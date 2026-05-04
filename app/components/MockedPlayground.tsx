@@ -299,16 +299,17 @@ export default function MockedPlayground({
             <textarea
               id={`mock-input-${slug}`}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              readOnly
+              aria-readonly="true"
               className="input"
               rows={6}
-              maxLength={2000}
               style={{
                 width: "100%",
                 minHeight: 160,
-                resize: "vertical",
+                resize: "none",
                 fontSize: 15,
                 lineHeight: 1.5,
+                cursor: "default",
               }}
             />
 

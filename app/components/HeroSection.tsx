@@ -139,27 +139,6 @@ export default function HeroSection() {
           >
             Get early access
           </Link>
-          <Link
-            href="/#playground"
-            className="cta-ghost"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "14px 28px",
-              borderRadius: 999,
-              fontSize: 15,
-              fontWeight: 500,
-              letterSpacing: "-0.01em",
-              minHeight: 48,
-              color: "rgba(245, 244, 242, 0.95)",
-              background: "transparent",
-              border: "1px solid rgba(245, 244, 242, 0.22)",
-              textDecoration: "none",
-            }}
-          >
-            Try the playground
-          </Link>
         </div>
 
         {/* Swarm demo */}
