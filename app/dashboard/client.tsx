@@ -798,6 +798,7 @@ export default function DashboardClient({
                           >
                             Preview
                           </a>
+                          {/* Share button hidden — uncomment to re-enable
                           <button
                             type="button"
                             onClick={() => setShareModalSim(sim)}
@@ -810,6 +811,7 @@ export default function DashboardClient({
                           >
                             Share
                           </button>
+                          */}
                         </>
                       ) : null}
                     </div>
@@ -848,7 +850,7 @@ export default function DashboardClient({
         </div>
       )}
 
-      {/* Share modal */}
+      {/* Share modal hidden — uncomment to re-enable
       {shareModalSim ? (
         <ShareModal
           simulation={shareModalSim}
@@ -856,6 +858,7 @@ export default function DashboardClient({
           onShared={handleShareConfirmed}
         />
       ) : null}
+      */}
     </div>
   );
 }

@@ -29,11 +29,13 @@ export default function NavAuth() {
   }
 
   if (isLoggedIn) {
-    return (
-      <Link href="/dashboard" className="nav-link">
-        Playground
-      </Link>
-    );
+    // Playground link hidden — uncomment to re-enable
+    // return (
+    //   <Link href="/dashboard" className="nav-link">
+    //     Playground
+    //   </Link>
+    // );
+    return null;
   }
 
   return (

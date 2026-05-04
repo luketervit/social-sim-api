@@ -240,6 +240,7 @@ export default async function SimulationPage({ params }: PageProps) {
         {title}
       </h1>
 
+      {/* Share buttons hidden — uncomment to re-enable
       <div className="mt-4 flex flex-wrap gap-3">
         <a
           href={twitterIntentUrl}
@@ -251,6 +252,7 @@ export default async function SimulationPage({ params }: PageProps) {
           Share on X
         </a>
       </div>
+      */}
 
       {sim.summary ? (
         <p
