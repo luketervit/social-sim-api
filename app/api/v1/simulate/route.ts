@@ -1,9 +1,12 @@
-import { NextRequest } from "next/server";
+import { NextRequest, after } from "next/server";
 import { SimulateInputSchema } from "@/lib/schemas";
 import { consumeApiCredits, getApiKeyStatus, refundApiCredits } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createSimulationJob, getSimulationJob } from "@/lib/simulation/jobs";
+import { runSimulationInline } from "@/lib/simulation/runInline";
 import { CREDITS_PER_MESSAGE, MAX_MESSAGES_PER_SIMULATION, SIMULATION_ROUNDS } from "@/lib/credits";
+
+export const maxDuration = 800;
 
 export async function POST(request: NextRequest) {
   const apiKey = request.headers.get("x-api-key");
@@ -66,6 +69,8 @@ export async function POST(request: NextRequest) {
       input,
       reservedCredits,
     });
+
+    after(() => runSimulationInline(job));
 
     return Response.json(
       {

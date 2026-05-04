@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { NextRequest, after } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import {
   CREDITS_PER_MESSAGE,
@@ -16,7 +16,10 @@ import {
 } from "@/lib/quotas";
 import { SimulateInputSchema } from "@/lib/schemas";
 import { createSimulationJob } from "@/lib/simulation/jobs";
+import { runSimulationInline } from "@/lib/simulation/runInline";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+
+export const maxDuration = 800;
 
 async function getAuthenticatedUser(request: NextRequest) {
   const supabase = createServerClient(
@@ -136,6 +139,8 @@ export async function POST(request: NextRequest) {
       input,
       reservedCredits: 0,
     });
+
+    after(() => runSimulationInline(job));
 
     return Response.json(
       {

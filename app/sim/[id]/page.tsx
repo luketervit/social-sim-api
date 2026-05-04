@@ -250,13 +250,6 @@ export default async function SimulationPage({ params }: PageProps) {
         >
           Share on X
         </a>
-        <a
-          href="/explore"
-          className="btn-secondary"
-          style={{ minHeight: "auto", padding: "10px 16px", fontSize: 13 }}
-        >
-          Browse Explore
-        </a>
       </div>
 
       {sim.summary ? (
