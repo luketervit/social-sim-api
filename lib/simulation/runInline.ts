@@ -12,9 +12,41 @@ import { scoreAggression } from "./scoring";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import type { AgentMessage } from "./types";
 import type { Persona } from "@/lib/schemas";
+import { SimulationCapacityError } from "./llm";
 
 const HEARTBEAT_EVERY_MESSAGES = Number(process.env.SIMULATION_PROGRESS_BATCH || 3);
 const LEASE_SECONDS = Number(process.env.SIMULATION_JOB_LEASE_SECONDS || 900);
+
+/**
+ * Convert raw provider errors into user-readable error messages. Provider
+ * 4xx text (rate limits, auth errors, model URLs) must never bleed to the
+ * dashboard.
+ */
+function sanitiseSimulationError(error: unknown): string {
+  if (error instanceof SimulationCapacityError) {
+    return error.message;
+  }
+  const message = error instanceof Error ? error.message : "";
+  const lower = message.toLowerCase();
+  if (
+    lower.includes("rate limit") ||
+    lower.includes("429") ||
+    lower.includes("rpm") ||
+    lower.includes("quota")
+  ) {
+    return "The simulation hit a temporary capacity limit. Please retry in a moment.";
+  }
+  if (lower.includes("401") || lower.includes("unauthorized") || lower.includes("api key")) {
+    return "The simulation could not authenticate with the model provider. The team has been notified.";
+  }
+  if (lower.includes("timeout") || lower.includes("timed out") || lower.includes("network")) {
+    return "The simulation timed out talking to the model provider. Please retry.";
+  }
+  if (message && message.length < 200 && !message.startsWith("{") && !message.includes("http")) {
+    return message;
+  }
+  return "Simulation failed. Please retry in a moment.";
+}
 
 async function loadAudience(
   audienceId: string,
@@ -41,12 +73,19 @@ async function loadAudience(
       ? personas.slice(0, Math.min(personaCap, personas.length))
       : personas;
 
+  // Defensive: never use ":free" tier in production sims even if an older
+  // routing decision saved it. Free tier hits 8 RPM hard and crashes the
+  // engine. Strip the suffix so it falls through to the paid lane.
+  let generatorModel: string | null = null;
+  if (typeof data.generator_model === "string" && data.generator_model.length > 0) {
+    generatorModel = data.generator_model.endsWith(":free")
+      ? data.generator_model.slice(0, -":free".length)
+      : data.generator_model;
+  }
+
   return {
     personas: capped as Persona[],
-    generatorModel:
-      typeof data.generator_model === "string" && data.generator_model.length > 0
-        ? data.generator_model
-        : null,
+    generatorModel,
   };
 }
 
@@ -138,7 +177,7 @@ export async function runSimulationInline(job: SimulationJob): Promise<void> {
       }
     }
 
-    const errorMessage = error instanceof Error ? error.message : "Simulation failed";
+    const errorMessage = sanitiseSimulationError(error);
 
     try {
       await failSimulationJob({

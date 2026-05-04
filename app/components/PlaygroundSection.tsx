@@ -836,9 +836,22 @@ export default function PlaygroundSection({
                   ) : null}
 
                   {simulation.status === "failed" ? (
-                    <p className="mt-5 text-[13px]" style={{ color: "var(--coral)" }}>
-                      {simulation.error || "The simulation failed before completion."}
-                    </p>
+                    <div className="mt-5">
+                      <p
+                        className="text-[13px]"
+                        style={{ color: "var(--coral)", lineHeight: 1.5 }}
+                      >
+                        {sanitisePlaygroundError(simulation.error)}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => window.location.reload()}
+                        className="btn-secondary mt-3"
+                        style={{ padding: "8px 16px", minHeight: "auto", fontSize: 12 }}
+                      >
+                        Try again
+                      </button>
+                    </div>
                   ) : null}
                 </>
                 </div>
@@ -851,6 +864,38 @@ export default function PlaygroundSection({
 
     </section>
   );
+}
+
+/**
+ * Convert any provider error text into a user-readable message. Rate-limit
+ * URLs, model IDs, and stack-trace fragments must never bleed to the UI.
+ */
+function sanitisePlaygroundError(raw: string | null | undefined): string {
+  const fallback = "The simulation hit a temporary capacity limit. Please retry in a moment.";
+  if (!raw || typeof raw !== "string") return fallback;
+  const lower = raw.toLowerCase();
+  if (
+    lower.includes("rate limit") ||
+    lower.includes("rpm") ||
+    lower.includes("429") ||
+    lower.includes("quota") ||
+    lower.includes("openrouter") ||
+    lower.includes("/venice/") ||
+    lower.includes("limit_")
+  ) {
+    return fallback;
+  }
+  if (lower.includes("401") || lower.includes("unauthorized") || lower.includes("api key")) {
+    return "The simulation could not authenticate with the model provider. The team has been notified.";
+  }
+  if (lower.includes("timeout") || lower.includes("timed out")) {
+    return "The simulation timed out. Please retry.";
+  }
+  // If it already looks like a clean human sentence, keep it.
+  if (raw.length < 200 && !raw.includes("http") && !raw.startsWith("{")) {
+    return raw;
+  }
+  return "Simulation failed. Please retry.";
 }
 
 type PreviewSentiment = "hostile" | "positive" | "neutral";

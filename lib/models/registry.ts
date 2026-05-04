@@ -27,20 +27,8 @@ export interface GeneratorModel {
 
 export const GENERATORS: GeneratorModel[] = [
   {
-    id: "dolphin-mistral-24b-venice-free",
-    display_name: "Dolphin-Mistral 24B Venice (free)",
-    provider: "openrouter",
-    openrouter_id: "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
-    task_strengths: ["discourse"],
-    output_cost_per_million: 0,
-    languages: ["en"],
-    refusal_posture: "uncensored",
-    notes:
-      "Most uncensored production model (2.20% refusal rate, Apr 2026). Best for hostile/partisan/community discourse on X, Reddit, Discord, gaming. Free tier rate-limited.",
-  },
-  {
     id: "dolphin-mistral-24b-venice",
-    display_name: "Dolphin-Mistral 24B Venice (paid)",
+    display_name: "Dolphin-Mistral 24B Venice",
     provider: "openrouter",
     openrouter_id: "cognitivecomputations/dolphin-mistral-24b-venice-edition",
     task_strengths: ["discourse"],
@@ -48,7 +36,7 @@ export const GENERATORS: GeneratorModel[] = [
     languages: ["en"],
     refusal_posture: "uncensored",
     notes:
-      "Same as the free Dolphin-Mistral but with no rate limits. Use for production demos when free queues are stalling.",
+      "Most uncensored production model (2.20% refusal rate, Apr 2026). Best for hostile/partisan/community discourse on X, Reddit, Discord, gaming. Production lane — no rate limits. Default.",
   },
   {
     id: "dolphin-llama3-8b",
@@ -271,7 +259,7 @@ export const CLASSIFIERS: ClassifierModel[] = [
 // Defaults (used when Claude routing fails or env unset)
 // ---------------------------------------------------------------------------
 
-export const DEFAULT_GENERATOR_ID = "dolphin-mistral-24b-venice-free";
+export const DEFAULT_GENERATOR_ID = "dolphin-mistral-24b-venice";
 export const DEFAULT_CLASSIFIER_IDS: string[] = [
   "sentiment_en_twitter",
   "offensive_twitter",

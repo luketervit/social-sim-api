@@ -4,19 +4,22 @@ import type { TokenUsage } from "./types";
 
 // Dolphin-Mistral 24B Venice Edition — uncensored Mistral-Small fine-tune.
 // 2.20% refusal rate (lowest in industry as of Apr 2026), 32K context.
-// Free tier on OpenRouter; remove ":free" suffix to use the paid lane (no rate limits).
-// Override per-deployment via OPENROUTER_MODEL env var.
+//
+// IMPORTANT: do NOT default to the ":free" tier in production. Free is capped
+// at ~8 RPM on OpenRouter; the engine bursts ~20 parallel calls per round, so
+// a single sim hits the cap and crashes. Paid lane is ~$0.001/message
+// ($0.03/sim) with no rate limits. Override per-deployment via OPENROUTER_MODEL.
 const MODEL =
   process.env.OPENROUTER_MODEL ||
-  "cognitivecomputations/dolphin-mistral-24b-venice-edition:free";
+  "cognitivecomputations/dolphin-mistral-24b-venice-edition";
 
 // Dissertation final params (Table 4.3): temperature 0.9, response length 150 tokens.
 // Higher temperature (1.2) hurt composite by 0.085; longer responses didn't improve realism.
 const DEFAULT_TEMPERATURE = 0.9;
 const DEFAULT_MAX_TOKENS = 150;
 
-const MAX_RETRIES = 2;
-const BASE_RETRY_DELAY_MS = 400;
+const MAX_RETRIES = 4;
+const BASE_RETRY_DELAY_MS = 600;
 const RETRYABLE_STATUS_CODES = new Set([408, 409, 429]);
 const RETRYABLE_NETWORK_CODES = new Set([
   "ECONNABORTED",
@@ -113,7 +116,44 @@ function isTransientNetworkError(error: unknown) {
 }
 
 function getRetryDelayMs(attempt: number) {
-  return BASE_RETRY_DELAY_MS * 2 ** attempt + Math.floor(Math.random() * 150);
+  return BASE_RETRY_DELAY_MS * 2 ** attempt + Math.floor(Math.random() * 250);
+}
+
+/**
+ * If OpenRouter returns a 429 with a Retry-After header (seconds), honour it
+ * up to a 30s ceiling. Otherwise fall back to exponential backoff.
+ */
+function getRateLimitDelayMs(error: unknown, attempt: number): number {
+  const fallback = getRetryDelayMs(attempt);
+  if (!(error instanceof OpenAI.APIError)) return fallback;
+  const headers =
+    (error as unknown as { headers?: Record<string, string | string[]> }).headers ?? null;
+  if (!headers) return fallback;
+  const raw =
+    headers["retry-after"] ??
+    headers["Retry-After"] ??
+    headers["x-ratelimit-reset"] ??
+    null;
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (typeof value !== "string") return fallback;
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds) || seconds <= 0) return fallback;
+  return Math.min(30_000, Math.ceil(seconds * 1000) + 250);
+}
+
+function isRateLimitError(error: unknown): boolean {
+  if (error instanceof OpenAI.APIError && error.status === 429) return true;
+  if (error && typeof error === "object" && "status" in error) {
+    return (error as { status?: unknown }).status === 429;
+  }
+  return false;
+}
+
+export class SimulationCapacityError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SimulationCapacityError";
+  }
 }
 
 export async function generateReply(
@@ -146,15 +186,30 @@ export async function generateReply(
         },
       };
     } catch (error) {
-      if (attempt >= MAX_RETRIES || !isTransientNetworkError(error)) {
+      const rateLimited = isRateLimitError(error);
+
+      if (attempt >= MAX_RETRIES) {
+        // Surface a clean message for rate limits and capacity issues so the
+        // dashboard shows something readable instead of raw provider text.
+        if (rateLimited) {
+          throw new SimulationCapacityError(
+            "The simulation hit a temporary capacity limit. Please retry in a moment."
+          );
+        }
         throw error;
       }
 
-      const delayMs = getRetryDelayMs(attempt);
+      if (!rateLimited && !isTransientNetworkError(error)) {
+        throw error;
+      }
+
+      const delayMs = rateLimited
+        ? getRateLimitDelayMs(error, attempt)
+        : getRetryDelayMs(attempt);
       const message = error instanceof Error ? error.message : "Unknown error";
 
       console.warn(
-        `Transient OpenRouter error. Retrying ${attempt + 1}/${MAX_RETRIES} in ${delayMs}ms: ${message}`
+        `${rateLimited ? "Rate-limited" : "Transient"} OpenRouter error. Retrying ${attempt + 1}/${MAX_RETRIES} in ${delayMs}ms: ${message}`
       );
 
       attempt += 1;
