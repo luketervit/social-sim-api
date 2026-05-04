@@ -19,6 +19,8 @@ interface PlannedTurn {
 interface RunSimulationOptions {
   onBeforeMessage?: (turn: PlannedTurn, round: number) => Promise<void>;
   onAfterMessage?: (turn: PlannedTurn, round: number, usage: TokenUsage) => Promise<void>;
+  /** Override the OpenRouter model used for generation in this run. */
+  generatorModel?: string;
 }
 
 const TOPIC_HEAT_WORDS = [
@@ -337,7 +339,9 @@ export async function* runSimulation(
           state.platform
         );
 
-        const reply = await generateReply(systemPrompt, userPrompt);
+        const reply = await generateReply(systemPrompt, userPrompt, {
+          model: options?.generatorModel,
+        });
         await options?.onAfterMessage?.(turn, round, reply.usage);
         const sentiment = await classifySentiment(reply.content, turn.targetSentiment);
 

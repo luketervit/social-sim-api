@@ -1,26 +1,14 @@
-// Batched HuggingFace Inference API client for the CardiffNLP classifier
-// stack used during audience-upload persona synthesis.
-//
-// We only call sentiment + offensive in v1. Political/emotion/hate are
-// added in v2 when the validation panel ships.
+// Generalised classifier dispatcher. Runs whichever HuggingFace classifiers
+// the router selected, returns a per-row score record keyed by classifier
+// field. The downstream synthesizer reads only the fields that are present.
 
-const SENTIMENT_MODEL =
-  process.env.SENTIMENT_CLASSIFIER_MODEL ||
-  "cardiffnlp/twitter-roberta-base-sentiment-latest";
-const OFFENSIVE_MODEL =
-  process.env.OFFENSIVE_CLASSIFIER_MODEL ||
-  "cardiffnlp/twitter-roberta-base-offensive";
+import { classifiersByIds, type ClassifierField, type ClassifierModel } from "@/lib/models/registry";
 
 const HF_API_URL = "https://api-inference.huggingface.co/models";
 const BATCH_SIZE = 32;
 const REQUEST_TIMEOUT_MS = 20_000;
 
-export interface RowScores {
-  positive: number;
-  neutral: number;
-  negative: number;
-  offensive: number;
-}
+export type RowScores = Partial<Record<ClassifierField, Record<string, number>>>;
 
 interface HFLabelScore {
   label: string;
@@ -29,20 +17,25 @@ interface HFLabelScore {
 
 function normaliseLabel(label: string): string {
   const lower = label.toLowerCase();
+  // CardiffNLP returns LABEL_0/1/2 for some checkpoints
   if (lower === "label_0") return "negative";
   if (lower === "label_1") return "neutral";
   if (lower === "label_2") return "positive";
   return lower;
 }
 
-function pickScore(scores: HFLabelScore[], target: string): number {
-  for (const s of scores) {
-    if (normaliseLabel(s.label) === target) return s.score;
+function rowToMap(row: HFLabelScore[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const s of row) {
+    out[normaliseLabel(s.label)] = s.score;
   }
-  return 0;
+  return out;
 }
 
-async function callHFBatch(model: string, inputs: string[]): Promise<HFLabelScore[][] | null> {
+async function callHFBatch(
+  hfModel: string,
+  inputs: string[]
+): Promise<HFLabelScore[][] | null> {
   const apiKey = process.env.HUGGINGFACE_API_KEY;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
@@ -51,7 +44,7 @@ async function callHFBatch(model: string, inputs: string[]): Promise<HFLabelScor
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
-    const res = await fetch(`${HF_API_URL}/${model}`, {
+    const res = await fetch(`${HF_API_URL}/${hfModel}`, {
       method: "POST",
       headers,
       body: JSON.stringify({
@@ -62,19 +55,17 @@ async function callHFBatch(model: string, inputs: string[]): Promise<HFLabelScor
     });
 
     if (!res.ok) {
-      console.warn(`HF batch call ${model} failed:`, res.status, await res.text().catch(() => ""));
+      console.warn(`HF batch ${hfModel} failed:`, res.status);
       return null;
     }
 
     const data = (await res.json()) as HFLabelScore[][] | HFLabelScore[];
-    // Single-input non-batched response wraps differently; coerce to batch shape.
     if (Array.isArray(data) && data.length > 0 && !Array.isArray(data[0])) {
-      // Most likely a single-row batch (HF sometimes returns flat for size 1).
       return [data as HFLabelScore[]];
     }
     return data as HFLabelScore[][];
   } catch (err) {
-    console.warn(`HF batch call ${model} threw:`, err instanceof Error ? err.message : err);
+    console.warn(`HF batch ${hfModel} threw:`, err instanceof Error ? err.message : err);
     return null;
   } finally {
     clearTimeout(timeout);
@@ -88,55 +79,52 @@ function chunk<T>(arr: T[], size: number): T[][] {
 }
 
 /**
- * Classify a list of texts into per-row {positive, neutral, negative, offensive}
- * scores. Failed batches return zeroed neutral defaults so the pipeline keeps
- * moving.
+ * Run the chosen classifier set on every text. Returns a per-row map of
+ * {field → {label → score}}. If a classifier fails, that field is omitted
+ * from rows in its batch — synthesizer treats missing fields as "unknown".
  */
-export async function classifyTexts(texts: string[]): Promise<RowScores[]> {
-  const batches = chunk(texts, BATCH_SIZE);
+export async function classifyTexts(
+  texts: string[],
+  classifierIds: string[]
+): Promise<RowScores[]> {
+  const classifiers = classifiersByIds(classifierIds);
+  if (classifiers.length === 0) return texts.map(() => ({}));
 
-  // Run sentiment + offensive batches sequentially per chunk to be polite to
-  // the free HF tier, but parallelise the two model calls within a chunk.
-  const result: RowScores[] = new Array(texts.length).fill(null).map(() => ({
-    positive: 0,
-    neutral: 1,
-    negative: 0,
-    offensive: 0,
-  }));
+  // De-dupe by HF model id so we don't call the same checkpoint twice
+  // for fields that share a checkpoint.
+  const byModel = new Map<string, ClassifierModel[]>();
+  for (const c of classifiers) {
+    const list = byModel.get(c.hf_model) ?? [];
+    list.push(c);
+    byModel.set(c.hf_model, list);
+  }
+
+  const rows: RowScores[] = texts.map(() => ({}));
+  const batches = chunk(texts, BATCH_SIZE);
 
   let cursor = 0;
   for (const batch of batches) {
-    const [sentBatch, offBatch] = await Promise.all([
-      callHFBatch(SENTIMENT_MODEL, batch),
-      callHFBatch(OFFENSIVE_MODEL, batch),
-    ]);
+    // Call every distinct HF model in parallel within a chunk.
+    const results = await Promise.all(
+      Array.from(byModel.keys()).map(async (hfModel) => {
+        const out = await callHFBatch(hfModel, batch);
+        return { hfModel, out };
+      })
+    );
 
     for (let i = 0; i < batch.length; i++) {
-      const out: RowScores = {
-        positive: 0,
-        neutral: 1,
-        negative: 0,
-        offensive: 0,
-      };
-      const sentRow = sentBatch?.[i];
-      if (sentRow) {
-        out.positive = pickScore(sentRow, "positive");
-        out.neutral = pickScore(sentRow, "neutral");
-        out.negative = pickScore(sentRow, "negative");
+      for (const { hfModel, out } of results) {
+        const row = out?.[i];
+        if (!row) continue;
+        const labelMap = rowToMap(row);
+        // Each classifier registered against this hfModel claims a field.
+        for (const cls of byModel.get(hfModel) ?? []) {
+          rows[cursor + i][cls.field] = labelMap;
+        }
       }
-      const offRow = offBatch?.[i];
-      if (offRow) {
-        // CardiffNLP offensive returns "offensive" / "non-offensive"
-        const offScore = Math.max(
-          pickScore(offRow, "offensive"),
-          pickScore(offRow, "label_1")
-        );
-        out.offensive = offScore;
-      }
-      result[cursor + i] = out;
     }
     cursor += batch.length;
   }
 
-  return result;
+  return rows;
 }

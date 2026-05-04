@@ -137,7 +137,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  after(() => processAudienceUpload({ audienceId, rows: parsed.rows }));
+  after(() =>
+    processAudienceUpload({
+      audienceId,
+      audienceName: name,
+      platform,
+      rows: parsed.rows,
+    })
+  );
 
   return Response.json(
     {
@@ -163,7 +170,9 @@ export async function GET(request: NextRequest) {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("audiences")
-    .select("id, name, platform, status, row_count, error_message, created_at, processed_at")
+    .select(
+      "id, name, platform, status, row_count, error_message, created_at, processed_at, generator_model, classifier_models, routing_decision"
+    )
     .eq("owner_user_id", user.id)
     .order("created_at", { ascending: false });
 

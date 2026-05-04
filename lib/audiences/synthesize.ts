@@ -17,6 +17,11 @@ const STOPWORDS = new Set([
   "wow","huh","ugh","lmao","lol","rofl","tbh","fr","ngl","imo",
 ]);
 
+function pick(map: Record<string, number> | undefined, key: string): number {
+  if (!map) return 0;
+  return map[key.toLowerCase()] ?? 0;
+}
+
 function tier(score: number): { archetype: string; reactivity: number } {
   if (score < 0.15) return { archetype: "Quiet Voice", reactivity: 0.1 };
   if (score < 0.35) return { archetype: "Engaged", reactivity: 0.35 };
@@ -45,39 +50,87 @@ function clamp(v: number, lo: number, hi: number): number {
 }
 
 /**
- * Convert one classified row into a Persona conforming to the existing schema.
+ * Map dynamic classifier output to the existing Persona schema. Reads any
+ * subset of {sentiment, emotion, offensive, hate, toxicity, political,
+ * formality} that the router selected. Missing fields fall back to neutral
+ * defaults.
  *
- * - reactivity_baseline: derived from offensive score (5-tier)
- * - sophistication: proxy from text length (longer = more analytical)
- * - brand_affinity: 2 × P(positive) − 1, mapped from sentiment positivity
- * - core_values: top non-stopword keywords from the row's own text
- * - persona_prompt: anchors the generator with the user's actual voice
+ * Aggression composite (matches dissertation §4.3 derivation):
+ *   aggression = max(offensive, hate, toxicity)  // any one signals reactivity
+ * Brand affinity composite:
+ *   if political present and informative → political-derived
+ *   else → 2 × sentiment.positive − 1
  */
 export function synthesizePersona(
   audienceId: string,
   row: ParsedRow,
   scores: RowScores
 ): Persona {
-  const { archetype, reactivity } = tier(scores.offensive);
+  const sentimentMap = scores.sentiment;
+  const offensiveScore = pick(scores.offensive, "offensive");
+  const hateScore = pick(scores.hate, "hate");
+  const toxicityScore = pick(scores.toxicity, "toxic");
+  const aggression = Math.max(offensiveScore, hateScore, toxicityScore);
+
+  const { archetype, reactivity } = tier(aggression);
   const sophistication = clamp(row.text.length / 300, 0.2, 0.95);
-  const brandAffinity = clamp(2 * scores.positive - 1, -1, 1);
+
+  // Brand affinity: prefer political signal when meaningful, else sentiment.
+  let brandAffinity = 0;
+  const political = scores.political;
+  if (political) {
+    const right = political["right"] ?? 0;
+    const left = political["left"] ?? 0;
+    if (right + left > 0.5) {
+      // Heavily-leaning rows map to extremes; centre stays near 0.
+      brandAffinity = clamp(right - left, -1, 1);
+    } else {
+      brandAffinity = sentimentMap
+        ? clamp(2 * (sentimentMap["positive"] ?? 0) - 1, -1, 1)
+        : 0;
+    }
+  } else if (sentimentMap) {
+    brandAffinity = clamp(2 * (sentimentMap["positive"] ?? 0) - 1, -1, 1);
+  }
+
+  // Emotion influences archetype label when present (more vivid than tier alone).
+  let emotionLabel: string | null = null;
+  if (scores.emotion) {
+    let bestLabel = "";
+    let bestScore = 0;
+    for (const [label, score] of Object.entries(scores.emotion)) {
+      if (score > bestScore) {
+        bestLabel = label;
+        bestScore = score;
+      }
+    }
+    if (bestScore >= 0.4) emotionLabel = bestLabel;
+  }
+
+  const archetypeLabel = row.source_id
+    ? row.source_id
+    : emotionLabel
+      ? `${capitalize(emotionLabel)} ${archetype}`
+      : archetype;
+
   const keywords = topKeywords(row.text);
   const idSuffix = row.source_id
     ? row.source_id.slice(0, 24).replace(/[^a-zA-Z0-9_-]/g, "")
     : `r${row.index}`;
 
-  // Generator anchor — the user's actual voice, capped at 240 chars to keep
-  // the system prompt manageable. Quotes are preserved so the model treats it
-  // as an example rather than instruction.
   const voiceSnippet = row.text.slice(0, 240).trim();
 
   return {
     id: `upload-${audienceId.slice(0, 8)}-${idSuffix}`,
-    archetype: row.source_id || archetype,
+    archetype: archetypeLabel,
     reactivity_baseline: reactivity,
     sophistication,
     brand_affinity: brandAffinity,
     core_values: keywords.length > 0 ? keywords : ["candor"],
     persona_prompt: `You write things like: "${voiceSnippet}"`,
   };
+}
+
+function capitalize(s: string): string {
+  return s.length === 0 ? s : s[0].toUpperCase() + s.slice(1);
 }

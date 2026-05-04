@@ -15,6 +15,15 @@ interface AudienceRow {
   error_message: string | null;
   created_at: string;
   processed_at: string | null;
+  generator_model: string | null;
+  classifier_models: string[] | null;
+  routing_decision: {
+    classifier_ids?: string[];
+    generator_id?: string;
+    reasoning?: string;
+    vocabulary_seeds?: string[];
+    source?: string;
+  } | null;
 }
 
 export default async function AudiencesPage() {
@@ -33,7 +42,7 @@ export default async function AudiencesPage() {
   const { data } = await db
     .from("audiences")
     .select(
-      "id, name, platform, status, row_count, error_message, created_at, processed_at"
+      "id, name, platform, status, row_count, error_message, created_at, processed_at, generator_model, classifier_models, routing_decision"
     )
     .eq("owner_user_id", user.id)
     .order("created_at", { ascending: false });

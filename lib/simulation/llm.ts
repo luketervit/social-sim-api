@@ -118,14 +118,16 @@ function getRetryDelayMs(attempt: number) {
 
 export async function generateReply(
   systemPrompt: string,
-  userPrompt: string
+  userPrompt: string,
+  options?: { model?: string }
 ): Promise<{ content: string; usage: TokenUsage }> {
   let attempt = 0;
+  const modelToUse = options?.model || MODEL;
 
   while (true) {
     try {
       const response = await getClient().chat.completions.create({
-        model: MODEL,
+        model: modelToUse,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },

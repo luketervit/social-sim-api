@@ -16,11 +16,14 @@ import type { Persona } from "@/lib/schemas";
 const HEARTBEAT_EVERY_MESSAGES = Number(process.env.SIMULATION_PROGRESS_BATCH || 3);
 const LEASE_SECONDS = Number(process.env.SIMULATION_JOB_LEASE_SECONDS || 900);
 
-async function loadPersonas(audienceId: string, personaCap?: number | null): Promise<Persona[]> {
+async function loadAudience(
+  audienceId: string,
+  personaCap?: number | null
+): Promise<{ personas: Persona[]; generatorModel: string | null }> {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("audiences")
-    .select("personas")
+    .select("personas, generator_model")
     .eq("id", audienceId)
     .single();
 
@@ -38,7 +41,13 @@ async function loadPersonas(audienceId: string, personaCap?: number | null): Pro
       ? personas.slice(0, Math.min(personaCap, personas.length))
       : personas;
 
-  return capped as Persona[];
+  return {
+    personas: capped as Persona[],
+    generatorModel:
+      typeof data.generator_model === "string" && data.generator_model.length > 0
+        ? data.generator_model
+        : null,
+  };
 }
 
 async function claimJob(jobId: string, workerId: string): Promise<boolean> {
@@ -77,7 +86,7 @@ export async function runSimulationInline(job: SimulationJob): Promise<void> {
   let refundedCredits = 0;
 
   try {
-    const personas = await loadPersonas(job.audience_id, job.persona_cap);
+    const { personas, generatorModel } = await loadAudience(job.audience_id, job.persona_cap);
 
     for await (const message of runSimulation(
       personas,
@@ -85,6 +94,7 @@ export async function runSimulationInline(job: SimulationJob): Promise<void> {
       job.platform,
       job.input,
       {
+        generatorModel: generatorModel ?? undefined,
         async onAfterMessage(_turn, _round, usage) {
           totalTokensUsed += usage.total_tokens;
         },

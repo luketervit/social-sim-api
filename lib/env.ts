@@ -14,13 +14,19 @@ const deepSeekEnvSchema = baseEnvSchema.extend({
   DEEPSEEK_API_KEY: z.string().min(1),
 });
 
+const anthropicEnvSchema = baseEnvSchema.extend({
+  ANTHROPIC_API_KEY: z.string().min(1),
+});
+
 export type Env = z.infer<typeof baseEnvSchema>;
 export type OpenRouterEnv = z.infer<typeof openRouterEnvSchema>;
 export type DeepSeekEnv = z.infer<typeof deepSeekEnvSchema>;
+export type AnthropicEnv = z.infer<typeof anthropicEnvSchema>;
 
 let _env: Env | null = null;
 let _openRouterEnv: OpenRouterEnv | null = null;
 let _deepSeekEnv: DeepSeekEnv | null = null;
+let _anthropicEnv: AnthropicEnv | null = null;
 
 export function getEnv(): Env {
   if (_env) return _env;
@@ -53,4 +59,14 @@ export function getDeepSeekEnv(): DeepSeekEnv {
   }
   _deepSeekEnv = parsed.data;
   return _deepSeekEnv;
+}
+
+export function getAnthropicEnv(): AnthropicEnv | null {
+  if (_anthropicEnv) return _anthropicEnv;
+  const parsed = anthropicEnvSchema.safeParse(process.env);
+  if (!parsed.success) {
+    return null;
+  }
+  _anthropicEnv = parsed.data;
+  return _anthropicEnv;
 }

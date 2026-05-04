@@ -12,6 +12,15 @@ interface AudienceRow {
   error_message: string | null;
   created_at: string;
   processed_at: string | null;
+  generator_model?: string | null;
+  classifier_models?: string[] | null;
+  routing_decision?: {
+    classifier_ids?: string[];
+    generator_id?: string;
+    reasoning?: string;
+    vocabulary_seeds?: string[];
+    source?: string;
+  } | null;
 }
 
 interface AudiencesClientProps {
@@ -424,6 +433,85 @@ export default function AudiencesClient({ initialAudiences }: AudiencesClientPro
                     >
                       {audience.error_message}
                     </p>
+                  ) : null}
+                  {audience.routing_decision &&
+                  audience.status === "ready" ? (
+                    <details
+                      style={{
+                        marginTop: 8,
+                        fontSize: 12,
+                        color: "var(--text-tertiary)",
+                      }}
+                    >
+                      <summary
+                        style={{
+                          cursor: "pointer",
+                          color: "var(--text-secondary)",
+                          fontFamily: "var(--font-data), monospace",
+                          fontSize: 11,
+                          letterSpacing: "0.04em",
+                        }}
+                      >
+                        Routing
+                        {audience.routing_decision.source === "router"
+                          ? " · Claude-routed"
+                          : " · default"}
+                      </summary>
+                      <div
+                        style={{
+                          marginTop: 8,
+                          padding: "10px 12px",
+                          background: "var(--surface)",
+                          border: "1px solid var(--border)",
+                          borderRadius: 8,
+                          lineHeight: 1.55,
+                        }}
+                      >
+                        <div style={{ marginBottom: 6 }}>
+                          <span style={{ color: "var(--text-secondary)" }}>
+                            Generator:{" "}
+                          </span>
+                          <code style={{ fontSize: 11 }}>
+                            {audience.generator_model ??
+                              audience.routing_decision.generator_id ??
+                              "default"}
+                          </code>
+                        </div>
+                        <div style={{ marginBottom: 6 }}>
+                          <span style={{ color: "var(--text-secondary)" }}>
+                            Classifiers:{" "}
+                          </span>
+                          {(
+                            audience.classifier_models ??
+                            audience.routing_decision.classifier_ids ??
+                            []
+                          ).join(", ") || "none"}
+                        </div>
+                        {audience.routing_decision.vocabulary_seeds &&
+                        audience.routing_decision.vocabulary_seeds.length >
+                          0 ? (
+                          <div style={{ marginBottom: 6 }}>
+                            <span style={{ color: "var(--text-secondary)" }}>
+                              Vocab seeds:{" "}
+                            </span>
+                            {audience.routing_decision.vocabulary_seeds
+                              .map((v) => `"${v}"`)
+                              .join(", ")}
+                          </div>
+                        ) : null}
+                        {audience.routing_decision.reasoning ? (
+                          <div
+                            style={{
+                              marginTop: 6,
+                              color: "var(--text-secondary)",
+                              fontStyle: "italic",
+                            }}
+                          >
+                            {audience.routing_decision.reasoning}
+                          </div>
+                        ) : null}
+                      </div>
+                    </details>
                   ) : null}
                 </div>
 
