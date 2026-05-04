@@ -27,6 +27,7 @@ interface PlaygroundSectionProps {
   isSignedIn: boolean;
   defaultPrompt?: string;
   defaultPlatform?: "twitter" | "reddit" | "slack";
+  defaultAudienceId?: string;
 }
 
 interface PlaygroundSimulation {
@@ -401,10 +402,11 @@ export default function PlaygroundSection({
   isSignedIn,
   defaultPrompt = "We're launching a free tier for all new users starting next week.",
   defaultPlatform = "twitter",
+  defaultAudienceId = "genz",
 }: PlaygroundSectionProps) {
   const [input, setInput] = useState(defaultPrompt);
   const [audienceId, setAudienceId] = useState(
-    audiences.find((a) => a.id === "genz")?.id ?? audiences[0]?.id ?? "genz"
+    audiences.find((a) => a.id === defaultAudienceId)?.id ?? audiences[0]?.id ?? defaultAudienceId
   );
   const [platform, setPlatform] = useState<(typeof PLATFORM_OPTIONS)[number]["value"]>(defaultPlatform);
   const [error, setError] = useState<string | null>(null);

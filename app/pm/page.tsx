@@ -23,6 +23,7 @@ export default async function PmPage() {
         isSignedIn={!!user}
         defaultPrompt="Introducing our new pricing — Pro is now $39/mo, with the legacy plan grandfathered for 12 months."
         defaultPlatform="twitter"
+        defaultAudienceId="engineers"
       />
       <Footer />
     </div>

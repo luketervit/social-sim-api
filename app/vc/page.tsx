@@ -23,6 +23,7 @@ export default async function VcPage() {
         isSignedIn={!!user}
         defaultPrompt="Tough decision today — we're restructuring and reducing the team by 12% to extend runway."
         defaultPlatform="twitter"
+        defaultAudienceId="engineers"
       />
       <Footer />
     </div>

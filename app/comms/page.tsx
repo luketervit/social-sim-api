@@ -23,6 +23,7 @@ export default async function CommsPage() {
         isSignedIn={!!user}
         defaultPrompt="Team — starting June, we're moving back to 5 days in-office. Details and FAQ in the doc below."
         defaultPlatform="slack"
+        defaultAudienceId="company_internal"
       />
       <Footer />
     </div>

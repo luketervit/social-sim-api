@@ -23,6 +23,7 @@ export default async function AlignmentPage() {
         isSignedIn={!!user}
         defaultPrompt="A new study finds that exposure to AI-generated content reduces trust in human-written news by 23%."
         defaultPlatform="reddit"
+        defaultAudienceId="engineers"
       />
       <Footer />
     </div>

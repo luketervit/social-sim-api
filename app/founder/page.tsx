@@ -23,6 +23,7 @@ export default async function FounderPage() {
         isSignedIn={!!user}
         defaultPrompt="we just shipped v2 — bigger context, faster, $19/mo from today"
         defaultPlatform="twitter"
+        defaultAudienceId="engineers"
       />
       <Footer />
     </div>
