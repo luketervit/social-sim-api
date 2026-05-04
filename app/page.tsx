@@ -1,17 +1,17 @@
 import Footer from "./components/Footer";
 import HeroSection from "./components/HeroSection";
 import HowItWorks from "./components/HowItWorks";
-import PlaygroundSection from "./components/PlaygroundSection";
+import MockedPlayground from "./components/MockedPlayground";
 import { getLandingData } from "./lib/landing-data";
 
 export default async function Home() {
-  const { user, audiences } = await getLandingData();
+  const { user } = await getLandingData();
 
   return (
     <div style={{ overflowX: "clip" }}>
       <HeroSection />
       <HowItWorks />
-      <PlaygroundSection audiences={audiences} isSignedIn={!!user} />
+      <MockedPlayground slug="home" isSignedIn={!!user} />
       <Footer />
     </div>
   );

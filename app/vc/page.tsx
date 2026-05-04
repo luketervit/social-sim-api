@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Footer from "../components/Footer";
 import HowItWorks from "../components/HowItWorks";
 import IndustryHero from "../components/IndustryHero";
-import PlaygroundSection from "../components/PlaygroundSection";
+import MockedPlayground from "../components/MockedPlayground";
 import { VC_CONFIG } from "../components/industry-configs";
 import { getLandingData } from "../lib/landing-data";
 
@@ -13,18 +13,12 @@ export const metadata: Metadata = {
 };
 
 export default async function VcPage() {
-  const { user, audiences } = await getLandingData();
+  const { user } = await getLandingData();
   return (
     <div style={{ overflowX: "clip" }}>
       <IndustryHero config={VC_CONFIG} />
       <HowItWorks />
-      <PlaygroundSection
-        audiences={audiences}
-        isSignedIn={!!user}
-        defaultPrompt="Tough decision today — we're restructuring and reducing the team by 12% to extend runway."
-        defaultPlatform="twitter"
-        defaultAudienceId="engineers"
-      />
+      <MockedPlayground slug="vc" isSignedIn={!!user} />
       <Footer />
     </div>
   );

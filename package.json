@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint .",
     "seed": "tsx --env-file=.env scripts/seed.ts",
-    "worker": "tsx --env-file=.env scripts/worker.ts"
+    "worker": "tsx --env-file=.env scripts/worker.ts",
+    "mock-runs": "tsx --env-file=.env scripts/mock-runs.ts"
   },
   "keywords": [],
   "author": "",

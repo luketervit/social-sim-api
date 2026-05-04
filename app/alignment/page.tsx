@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Footer from "../components/Footer";
 import HowItWorks from "../components/HowItWorks";
 import IndustryHero from "../components/IndustryHero";
-import PlaygroundSection from "../components/PlaygroundSection";
+import MockedPlayground from "../components/MockedPlayground";
 import { ALIGNMENT_CONFIG } from "../components/industry-configs";
 import { getLandingData } from "../lib/landing-data";
 
@@ -13,18 +13,12 @@ export const metadata: Metadata = {
 };
 
 export default async function AlignmentPage() {
-  const { user, audiences } = await getLandingData();
+  const { user } = await getLandingData();
   return (
     <div style={{ overflowX: "clip" }}>
       <IndustryHero config={ALIGNMENT_CONFIG} />
       <HowItWorks />
-      <PlaygroundSection
-        audiences={audiences}
-        isSignedIn={!!user}
-        defaultPrompt="A new study finds that exposure to AI-generated content reduces trust in human-written news by 23%."
-        defaultPlatform="reddit"
-        defaultAudienceId="engineers"
-      />
+      <MockedPlayground slug="alignment" isSignedIn={!!user} />
       <Footer />
     </div>
   );
