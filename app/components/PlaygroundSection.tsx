@@ -551,36 +551,60 @@ export default function PlaygroundSection({
     <section
       id="playground"
       style={{
-        padding: "48px 0 96px",
+        padding: "clamp(80px, 11vh, 128px) 0 clamp(96px, 13vh, 160px)",
         scrollMarginTop: 96,
-        background: "linear-gradient(180deg, rgba(124, 92, 252, 0.02) 0%, transparent 100%)",
+        background:
+          "linear-gradient(180deg, rgba(124, 92, 252, 0.025) 0%, transparent 60%)",
       }}
     >
       <div className="mx-auto max-w-[1200px] px-6">
-        <div style={{ marginBottom: 48, maxWidth: 560 }}>
-          <span className="mono-label">Interactive Playground</span>
-          <h2
-            style={{
-              fontSize: "clamp(1.75rem, 3.5vw, 2.5rem)",
-              marginTop: 14,
-            }}
-          >
-            Try it yourself.
-          </h2>
+        <div
+          style={{
+            marginBottom: 36,
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "flex-end",
+            justifyContent: "space-between",
+            gap: 20,
+          }}
+        >
+          <div style={{ maxWidth: 560 }}>
+            <span className="mono-label">The playground</span>
+            <h2
+              style={{
+                fontSize: "clamp(2rem, 4vw, 3rem)",
+                marginTop: 12,
+                maxWidth: 16 + "ch",
+              }}
+            >
+              Try it on something{" "}
+              <span style={{ fontStyle: "italic", color: "var(--accent)" }}>
+                you&apos;d actually post.
+              </span>
+            </h2>
+          </div>
           <p
             style={{
               color: "var(--text-secondary)",
-              fontSize: 16,
-              lineHeight: 1.7,
-              marginTop: 14,
+              fontSize: 14,
+              lineHeight: 1.55,
+              maxWidth: 320,
+              fontFamily: "var(--font-data), monospace",
+              letterSpacing: "0.02em",
             }}
           >
-            {PLAYGROUND_RUNS_INCLUDED} free runs per day with a {PLAYGROUND_PERSONA_CAP}-agent cap.
-            The full simulation engine, just a smaller audience slice.
+            {PLAYGROUND_RUNS_INCLUDED} free runs / day · {PLAYGROUND_PERSONA_CAP}-agent
+            cap · same engine, smaller room.
           </p>
         </div>
 
-        <div className="section-shell" style={{ border: "1px solid var(--border)" }}>
+        <div
+          className="section-shell"
+          style={{
+            border: "1px solid var(--border)",
+            padding: "clamp(24px, 3vw, 36px)",
+          }}
+        >
           <div className="grid gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
             {/* Left: Form */}
             <div>
@@ -794,42 +818,7 @@ export default function PlaygroundSection({
                   ) : null}
                 </>
               ) : (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    textAlign: "center",
-                    height: "100%",
-                    minHeight: 380,
-                    padding: 32,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: "50%",
-                      background: "var(--accent-muted)",
-                      display: "grid",
-                      placeItems: "center",
-                      marginBottom: 20,
-                      fontSize: 22,
-                      color: "var(--accent)",
-                      fontWeight: 300,
-                    }}
-                    aria-hidden="true"
-                  >
-                    +
-                  </div>
-                  <p style={{ color: "var(--text-primary)", fontSize: 16, fontWeight: 500 }}>
-                    Run a simulation to see results
-                  </p>
-                  <p className="mt-2" style={{ color: "var(--text-tertiary)", fontSize: 14, maxWidth: 280 }}>
-                    Fill in the form and hit run. The output will appear here in real time.
-                  </p>
-                </div>
+                <PlaygroundPreview />
               )}
             </div>
           </div>
@@ -837,6 +826,166 @@ export default function PlaygroundSection({
       </div>
 
     </section>
+  );
+}
+
+type PreviewSentiment = "hostile" | "positive" | "neutral";
+const PREVIEW_CHIPS: { handle: string; body: string; sentiment: PreviewSentiment; pending?: boolean }[] = [
+  { handle: "@reply_guy", body: "ratio incoming", sentiment: "hostile" },
+  { handle: "@power_user", body: "honestly fair", sentiment: "positive" },
+  { handle: "@too_online", body: "and the support tickets begin", sentiment: "hostile" },
+  { handle: "@noopinion", body: "huh", sentiment: "neutral" },
+  { handle: "@buildlogs", body: "[generating…]", sentiment: "neutral", pending: true },
+];
+
+function previewDot(s: PreviewSentiment) {
+  if (s === "hostile") return "var(--coral)";
+  if (s === "positive") return "var(--mint)";
+  return "var(--text-tertiary)";
+}
+
+function PlaygroundPreview() {
+  return (
+    <div
+      style={{
+        position: "relative",
+        height: "100%",
+        minHeight: 380,
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+        padding: "8px 4px",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 4px 4px",
+        }}
+      >
+        <span className="mono-label" style={{ color: "var(--text-tertiary)" }}>
+          Preview · what you&apos;ll see
+        </span>
+        <span
+          style={{
+            fontSize: 10,
+            fontFamily: "var(--font-data), monospace",
+            letterSpacing: "0.06em",
+            color: "var(--text-tertiary)",
+            textTransform: "uppercase",
+          }}
+        >
+          Idle
+        </span>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+          opacity: 0.55,
+          flex: 1,
+        }}
+      >
+        {PREVIEW_CHIPS.map((c, i) => (
+          <div
+            key={i}
+            style={{
+              padding: "10px 14px",
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: 12,
+              transform: `rotate(${(i % 2 === 0 ? -1 : 1) * 0.4}deg)`,
+              boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                marginBottom: 4,
+              }}
+            >
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: 999,
+                  background: previewDot(c.sentiment),
+                  animation: c.pending ? "pulse-soft 1.4s ease-in-out infinite" : undefined,
+                }}
+              />
+              <span
+                style={{
+                  fontFamily: "var(--font-data), monospace",
+                  fontSize: 10,
+                  letterSpacing: "0.04em",
+                  color: "var(--text-tertiary)",
+                }}
+              >
+                {c.handle}
+              </span>
+            </div>
+            <span
+              style={{
+                fontSize: 13,
+                color: c.pending ? "var(--text-tertiary)" : "var(--text-primary)",
+                fontStyle: c.pending ? "italic" : undefined,
+              }}
+            >
+              {c.body}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <div
+        style={{
+          marginTop: "auto",
+          padding: "12px 14px",
+          borderRadius: 12,
+          background: "var(--surface)",
+          border: "1px dashed var(--border)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+          Hit{" "}
+          <span
+            style={{
+              fontFamily: "var(--font-data), monospace",
+              padding: "2px 6px",
+              borderRadius: 6,
+              background: "var(--accent-muted)",
+              color: "var(--accent)",
+              fontSize: 11,
+            }}
+          >
+            run
+          </span>{" "}
+          to summon a real audience.
+        </span>
+        <span
+          style={{
+            fontFamily: "var(--font-data), monospace",
+            fontSize: 10,
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            color: "var(--text-tertiary)",
+          }}
+        >
+          ~30s · {PLAYGROUND_PERSONA_CAP} agents
+        </span>
+      </div>
+    </div>
   );
 }
 

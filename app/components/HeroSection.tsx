@@ -35,7 +35,7 @@ export default function HeroSection() {
   return (
     <section
       style={{
-        padding: "clamp(72px, 11vh, 132px) 0 clamp(56px, 9vh, 96px)",
+        padding: "clamp(56px, 9vh, 96px) 0 clamp(40px, 7vh, 80px)",
         position: "relative",
         overflow: "hidden",
       }}
@@ -46,13 +46,13 @@ export default function HeroSection() {
           position: "absolute",
           inset: 0,
           background:
-            "radial-gradient(ellipse 70% 55% at 50% 30%, rgba(124, 92, 252, 0.06), transparent 70%), radial-gradient(ellipse 60% 50% at 50% 80%, rgba(232, 93, 78, 0.04), transparent 70%)",
+            "radial-gradient(ellipse 65% 50% at 50% 32%, rgba(124, 92, 252, 0.05), transparent 70%), radial-gradient(ellipse 50% 40% at 50% 78%, rgba(232, 93, 78, 0.035), transparent 70%)",
           pointerEvents: "none",
         }}
       />
 
       <div
-        className="mx-auto max-w-[1100px] px-6"
+        className="mx-auto max-w-[1080px] px-6"
         style={{
           position: "relative",
           zIndex: 1,
@@ -62,37 +62,53 @@ export default function HeroSection() {
           alignItems: "center",
         }}
       >
-        <span className="hero-kicker">Social Simulation Engine</span>
+        <span
+          className="mono-label"
+          style={{ color: "var(--text-tertiary)", fontSize: 11 }}
+        >
+          Atharias · Social Simulation Engine
+        </span>
 
         <h1
           className="hero-headline"
           style={{
-            fontSize: "clamp(2.6rem, 7vw, 5.2rem)",
-            marginTop: 18,
-            maxWidth: 12 + "ch",
+            fontSize: "clamp(2.4rem, 6.2vw, 4.4rem)",
+            marginTop: 14,
+            maxWidth: 18 + "ch",
+            lineHeight: 1.02,
           }}
         >
-          <span className="hero-line">Get ratioed</span>
-          <span
-            className="hero-line"
-            style={{ fontStyle: "italic", color: "var(--accent)" }}
-          >
+          Get ratioed{" "}
+          <span style={{ fontStyle: "italic", color: "var(--accent)" }}>
             in private
-          </span>
-          <span className="hero-line">first.</span>
+          </span>{" "}
+          first.
         </h1>
+
+        <p
+          style={{
+            marginTop: 16,
+            fontFamily: "var(--font-display), Georgia, serif",
+            fontStyle: "italic",
+            fontSize: "clamp(1.15rem, 1.6vw, 1.45rem)",
+            color: "var(--text-secondary)",
+            letterSpacing: "-0.01em",
+            lineHeight: 1.4,
+          }}
+        >
+          Then ship it like nothing happened.
+        </p>
 
         <p
           className="hero-copy"
           style={{
-            fontSize: 18,
-            marginTop: 24,
-            maxWidth: 540,
+            fontSize: 16,
+            marginTop: 18,
+            maxWidth: 520,
           }}
         >
           Atharias runs your post past a synthetic audience before the real one
-          gets to it. See the dunks, the praise, and the shrug — before you
-          publish.
+          gets to it — dunks, praise, and the shrug, in advance.
         </p>
 
         <div
@@ -101,7 +117,7 @@ export default function HeroSection() {
             flexWrap: "wrap",
             justifyContent: "center",
             gap: 12,
-            marginTop: 36,
+            marginTop: 28,
           }}
         >
           <Link href="/waitlist" className="btn-primary">
@@ -112,8 +128,8 @@ export default function HeroSection() {
           </Link>
         </div>
 
-        {/* Swarm demo */}
-        <div style={{ marginTop: 64, width: "100%" }}>
+        {/* Swarm demo — tightened gap */}
+        <div style={{ marginTop: 40, width: "100%" }}>
           <ReactionSwarm />
         </div>
 
@@ -121,13 +137,13 @@ export default function HeroSection() {
         <div
           className="tabular-nums"
           style={{
-            marginTop: 28,
+            marginTop: 20,
             display: "inline-flex",
             flexWrap: "wrap",
             justifyContent: "center",
             gap: 24,
             fontFamily: "var(--font-data), monospace",
-            fontSize: 12,
+            fontSize: 11,
             letterSpacing: "0.08em",
             textTransform: "uppercase",
             color: "var(--text-secondary)",
@@ -136,8 +152,8 @@ export default function HeroSection() {
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
             <span
               style={{
-                width: 8,
-                height: 8,
+                width: 7,
+                height: 7,
                 borderRadius: 999,
                 background: "var(--coral)",
               }}
@@ -147,8 +163,8 @@ export default function HeroSection() {
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
             <span
               style={{
-                width: 8,
-                height: 8,
+                width: 7,
+                height: 7,
                 borderRadius: 999,
                 background: "var(--mint)",
               }}
@@ -158,8 +174,8 @@ export default function HeroSection() {
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
             <span
               style={{
-                width: 8,
-                height: 8,
+                width: 7,
+                height: 7,
                 borderRadius: 999,
                 background: "var(--text-tertiary)",
               }}
