@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AgentMessage } from "@/lib/simulation/types";
 
 const PLAYBACK_DURATION_MS = 15_000;
@@ -51,6 +51,79 @@ const AGGRESSION_LABEL: Record<MockedRun["aggression_score"], string> = {
   moderate: "moderate aggression",
   high: "high aggression",
   critical: "critical aggression",
+};
+
+interface ClosingVerdict {
+  surface: string;
+  body: ReactNode;
+}
+
+const CLOSING_VERDICT: Record<string, ClosingVerdict> = {
+  home: {
+    surface: "From the outside, this is a routine free-tier announcement.",
+    body: (
+      <>
+        Running this <strong>stopped the enshittification post.</strong> The
+        thread read it as a sketchy data play, an ad-tier-incoming setup, and
+        &ldquo;lol the cycle.&rdquo; You have time to add the line that says
+        what your free tier <em>isn&rsquo;t</em>.
+      </>
+    ),
+  },
+  founder: {
+    surface: "From the outside, this is a clean v2 launch tweet.",
+    body: (
+      <>
+        Running this <strong>stopped the four-day apology cycle.</strong> The
+        thread read it as another wrapper, a stealth price-hike, and
+        &ldquo;shipping &gt; posting.&rdquo; Your reply guys would have ratio&rsquo;d
+        you inside an hour.
+      </>
+    ),
+  },
+  vc: {
+    surface: "On paper, this is the standard restructuring statement.",
+    body: (
+      <>
+        Running this <strong>stopped the TechCrunch ratio.</strong> The audience
+        read it as runway theatre, a soft fire, and a hint the next round
+        won&rsquo;t close — 48 hours before the leak would have framed the
+        narrative for you.
+      </>
+    ),
+  },
+  pm: {
+    surface:
+      "From the outside, this is a generous grandfather-clause pricing change.",
+    body: (
+      <>
+        Running this <strong>stopped the cancel thread.</strong> The audience
+        read the 12-month grace period as cover for a stealth hike on existing
+        users. The App Store review brigade was already drafting.
+      </>
+    ),
+  },
+  alignment: {
+    surface: "On its face, this is a neutral research finding.",
+    body: (
+      <>
+        Running this <strong>stopped the citogenesis trap.</strong> The same
+        line gets quoted by both sides of the AI debate, then re-cited as a
+        primary source. Press would have framed your finding before you did.
+      </>
+    ),
+  },
+  comms: {
+    surface: "Looks like a cleanly-worded RTO mandate.",
+    body: (
+      <>
+        Running this <strong>stopped the leak.</strong> Senior engineers
+        refreshed their LinkedIns by round two; remote hires asked about
+        severance by round five. HR has 24 hours and a rewrite to keep the
+        team.
+      </>
+    ),
+  },
 };
 
 const HANDLE_PREFIX: Record<MockedRun["platform"], string> = {
@@ -372,6 +445,26 @@ export default function MockedPlayground({
                 </div>
               ) : null}
             </div>
+
+            {status === "complete" && CLOSING_VERDICT[slug] ? (
+              <div className="atharias-mock-verdict">
+                <div className="atharias-mock-verdict-eyebrow">
+                  <span className="mono-label">VERDICT</span>
+                  <span className="atharias-mock-verdict-aggression">
+                    {AGGRESSION_LABEL[run.aggression_score]}
+                  </span>
+                </div>
+                <p className="atharias-mock-verdict-surface">
+                  &ldquo;{CLOSING_VERDICT[slug].surface}&rdquo;
+                </p>
+                <p className="atharias-mock-verdict-body">
+                  {CLOSING_VERDICT[slug].body}
+                </p>
+                <Link href={ctaHref} className="atharias-mock-verdict-cta">
+                  {ctaLabel} →
+                </Link>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -620,6 +713,84 @@ export default function MockedPlayground({
             cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
         }
 
+        .atharias-mock-verdict {
+          margin-top: 28px;
+          padding: 26px 28px 24px;
+          background: var(--ink, #141413);
+          color: rgba(245, 244, 242, 0.95);
+          border-radius: 18px;
+          box-shadow: 0 12px 36px rgba(0, 0, 0, 0.12);
+        }
+        .atharias-mock-verdict-eyebrow {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+        }
+        .atharias-mock-verdict-eyebrow .mono-label {
+          color: var(--butter-deep, #e8d27a);
+        }
+        .atharias-mock-verdict-aggression {
+          font-family: var(--font-data), monospace;
+          font-size: 11px;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: rgba(245, 244, 242, 0.55);
+          font-variant-numeric: tabular-nums;
+        }
+        .atharias-mock-verdict-surface {
+          margin-top: 16px;
+          font-family: var(--font-display), Georgia, serif;
+          font-style: italic;
+          font-size: clamp(20px, 2.4vw, 24px);
+          line-height: 1.3;
+          color: rgba(245, 244, 242, 0.78);
+          letter-spacing: -0.01em;
+          text-wrap: balance;
+        }
+        .atharias-mock-verdict-body {
+          margin-top: 14px;
+          font-size: 16px;
+          line-height: 1.55;
+          color: rgba(245, 244, 242, 0.95);
+          text-wrap: pretty;
+        }
+        .atharias-mock-verdict-body strong {
+          color: var(--butter-deep, #e8d27a);
+          font-weight: 600;
+        }
+        .atharias-mock-verdict-body em {
+          font-style: italic;
+        }
+        .atharias-mock-verdict-cta {
+          display: inline-flex;
+          align-items: center;
+          margin-top: 22px;
+          padding: 11px 20px;
+          border-radius: 999px;
+          background: var(--butter-deep, #e8d27a);
+          color: var(--ink, #141413);
+          font-size: 14px;
+          font-weight: 500;
+          font-family: inherit;
+          text-decoration: none;
+          transition:
+            background 160ms cubic-bezier(0.215, 0.61, 0.355, 1),
+            transform 80ms cubic-bezier(0.215, 0.61, 0.355, 1);
+        }
+        @media (hover: hover) and (pointer: fine) {
+          .atharias-mock-verdict-cta:hover {
+            background: #f0db90;
+          }
+        }
+        .atharias-mock-verdict-cta:active {
+          transform: scale(0.99);
+        }
+        .atharias-mock-verdict-cta:focus-visible {
+          outline: 2px solid var(--butter-deep, #e8d27a);
+          outline-offset: 3px;
+        }
+
         @keyframes atharias-mock-fade-in {
           from {
             opacity: 0;
@@ -646,7 +817,8 @@ export default function MockedPlayground({
             animation: none;
           }
           .atharias-mock-run,
-          .atharias-mock-cta {
+          .atharias-mock-cta,
+          .atharias-mock-verdict-cta {
             transition: none;
           }
         }
