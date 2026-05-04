@@ -56,6 +56,10 @@ export interface AudienceOption {
   metadata: {
     persona_count?: number;
   } | null;
+  source?: string;
+  status?: string;
+  platform?: string;
+  row_count?: number | null;
 }
 
 export { ensureOperatorAccount };
@@ -137,11 +141,18 @@ export async function listVisibleApiKeysForUser(userId: string) {
   return ((data ?? []) as ApiKeyRecord[]).map(withDisplayedCredits);
 }
 
-export async function listAudienceOptions() {
+export async function listAudienceOptions(userId?: string | null) {
   const db = supabaseAdmin();
+  // Seeded audiences + (optionally) the user's ready uploads.
   const { data, error } = await db
     .from("audiences")
-    .select("id, name, metadata")
+    .select("id, name, metadata, source, status, platform, row_count, owner_user_id")
+    .or(
+      userId
+        ? `source.eq.seeded,and(owner_user_id.eq.${userId},status.eq.ready)`
+        : "source.eq.seeded"
+    )
+    .order("source", { ascending: true })
     .order("name", { ascending: true });
 
   if (error) {

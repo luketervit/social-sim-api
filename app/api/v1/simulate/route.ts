@@ -34,11 +34,17 @@ export async function POST(request: NextRequest) {
 
   const { data: audience, error: audError } = await db
     .from("audiences")
-    .select("personas")
+    .select("personas, source")
     .eq("id", audience_id)
     .single();
 
   if (audError || !audience) {
+    return Response.json({ error: `Audience '${audience_id}' not found` }, { status: 404 });
+  }
+
+  // The public API only exposes seeded audiences. User-uploaded audiences
+  // are dashboard-only and require session auth (see /api/v1/playground).
+  if (audience.source && audience.source !== "seeded") {
     return Response.json({ error: `Audience '${audience_id}' not found` }, { status: 404 });
   }
 

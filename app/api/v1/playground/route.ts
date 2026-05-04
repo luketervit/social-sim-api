@@ -83,12 +83,26 @@ export async function POST(request: NextRequest) {
   const db = supabaseAdmin();
   const { data: audience, error: audienceError } = await db
     .from("audiences")
-    .select("personas")
+    .select("personas, source, owner_user_id, status")
     .eq("id", audience_id)
     .single();
 
   if (audienceError || !audience) {
     return Response.json({ error: `Audience '${audience_id}' not found` }, { status: 404 });
+  }
+
+  // Gate: seeded audiences are public; uploaded audiences must be owned by the
+  // requesting user and finished processing.
+  if (audience.source === "uploaded") {
+    if (audience.owner_user_id !== user.id) {
+      return Response.json({ error: "Audience not found" }, { status: 404 });
+    }
+    if (audience.status !== "ready") {
+      return Response.json(
+        { error: "Audience is still processing." },
+        { status: 409 }
+      );
+    }
   }
 
   const personas = audience.personas as unknown[];

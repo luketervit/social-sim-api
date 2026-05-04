@@ -124,7 +124,14 @@ export default function DashboardClient({
   userEmail,
 }: DashboardProps) {
   const [sims, setSims] = useState(simulations);
-  const [selectedAudience, setSelectedAudience] = useState(audiences[0]?.id ?? "toxic_gamers");
+  const initialAudience = (() => {
+    if (typeof window !== "undefined") {
+      const param = new URLSearchParams(window.location.search).get("audience");
+      if (param && audiences.some((a) => a.id === param)) return param;
+    }
+    return audiences[0]?.id ?? "toxic_gamers";
+  })();
+  const [selectedAudience, setSelectedAudience] = useState(initialAudience);
   const [selectedPlatform, setSelectedPlatform] = useState<"twitter" | "slack" | "reddit">(
     "twitter"
   );

@@ -25,7 +25,7 @@ export default async function DashboardPage() {
   const [playgroundQuota, simulations, audiences] = await Promise.all([
     getDailyPlaygroundQuotaForUser(user.id),
     listSimulationsForUser(user.id),
-    listAudienceOptions(),
+    listAudienceOptions(user.id),
   ]);
 
   const simulationIds = simulations.map((s) => s.id);
