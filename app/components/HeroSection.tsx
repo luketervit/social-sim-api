@@ -35,7 +35,9 @@ export default function HeroSection() {
   return (
     <section
       style={{
-        padding: "clamp(56px, 9vh, 96px) 0 clamp(40px, 7vh, 80px)",
+        background: "var(--ink)",
+        color: "rgba(245, 244, 242, 0.95)",
+        padding: "clamp(64px, 10vh, 112px) 0 clamp(56px, 9vh, 96px)",
         position: "relative",
         overflow: "hidden",
       }}
@@ -46,7 +48,7 @@ export default function HeroSection() {
           position: "absolute",
           inset: 0,
           background:
-            "radial-gradient(ellipse 65% 50% at 50% 32%, rgba(124, 92, 252, 0.05), transparent 70%), radial-gradient(ellipse 50% 40% at 50% 78%, rgba(232, 93, 78, 0.035), transparent 70%)",
+            "radial-gradient(ellipse 65% 50% at 50% 28%, rgba(245, 230, 184, 0.07), transparent 70%), radial-gradient(ellipse 50% 40% at 50% 80%, rgba(232, 93, 78, 0.06), transparent 70%)",
           pointerEvents: "none",
         }}
       />
@@ -63,23 +65,32 @@ export default function HeroSection() {
         }}
       >
         <span
-          className="mono-label"
-          style={{ color: "var(--text-tertiary)", fontSize: 11 }}
+          style={{
+            fontFamily: "var(--font-data), monospace",
+            fontSize: 11,
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+            color: "var(--butter-deep)",
+            fontWeight: 500,
+          }}
         >
           Atharias · Social Simulation Engine
         </span>
 
         <h1
-          className="hero-headline"
           style={{
-            fontSize: "clamp(2.4rem, 6.2vw, 4.4rem)",
-            marginTop: 14,
+            fontFamily: "var(--font-display), Georgia, serif",
+            fontSize: "clamp(2.6rem, 6.4vw, 4.8rem)",
+            marginTop: 16,
+            lineHeight: 1.0,
+            letterSpacing: "-0.035em",
+            fontWeight: 400,
+            color: "rgba(245, 244, 242, 0.98)",
             maxWidth: 18 + "ch",
-            lineHeight: 1.02,
           }}
         >
           Get ratioed{" "}
-          <span style={{ fontStyle: "italic", color: "var(--accent)" }}>
+          <span style={{ fontStyle: "italic", color: "var(--butter-deep)" }}>
             in private
           </span>{" "}
           first.
@@ -87,28 +98,16 @@ export default function HeroSection() {
 
         <p
           style={{
-            marginTop: 16,
+            marginTop: 18,
             fontFamily: "var(--font-display), Georgia, serif",
             fontStyle: "italic",
-            fontSize: "clamp(1.15rem, 1.6vw, 1.45rem)",
-            color: "var(--text-secondary)",
+            fontSize: "clamp(1.1rem, 1.6vw, 1.4rem)",
+            color: "rgba(245, 244, 242, 0.7)",
             letterSpacing: "-0.01em",
             lineHeight: 1.4,
           }}
         >
           Then ship it like nothing happened.
-        </p>
-
-        <p
-          className="hero-copy"
-          style={{
-            fontSize: 16,
-            marginTop: 18,
-            maxWidth: 520,
-          }}
-        >
-          Atharias runs your post past a synthetic audience before the real one
-          gets to it — dunks, praise, and the shrug, in advance.
         </p>
 
         <div
@@ -117,20 +116,55 @@ export default function HeroSection() {
             flexWrap: "wrap",
             justifyContent: "center",
             gap: 12,
-            marginTop: 28,
+            marginTop: 32,
           }}
         >
-          <Link href="/waitlist" className="btn-primary">
+          <Link
+            href="/waitlist"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "14px 28px",
+              borderRadius: 999,
+              fontSize: 15,
+              fontWeight: 500,
+              letterSpacing: "-0.01em",
+              minHeight: 48,
+              color: "var(--ink)",
+              background: "var(--butter-deep)",
+              textDecoration: "none",
+              transition: "background 150ms ease, transform 150ms ease",
+            }}
+          >
             Get early access
           </Link>
-          <Link href="/#playground" className="btn-secondary">
+          <Link
+            href="/#playground"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "14px 28px",
+              borderRadius: 999,
+              fontSize: 15,
+              fontWeight: 500,
+              letterSpacing: "-0.01em",
+              minHeight: 48,
+              color: "rgba(245, 244, 242, 0.95)",
+              background: "transparent",
+              border: "1px solid rgba(245, 244, 242, 0.22)",
+              textDecoration: "none",
+              transition: "border-color 150ms ease, background 150ms ease",
+            }}
+          >
             Try the playground
           </Link>
         </div>
 
-        {/* Swarm demo — tightened gap */}
-        <div style={{ marginTop: 40, width: "100%" }}>
-          <ReactionSwarm />
+        {/* Swarm demo */}
+        <div style={{ marginTop: 48, width: "100%" }}>
+          <ReactionSwarm theme="dark" />
         </div>
 
         {/* Live sentiment readout */}
@@ -146,29 +180,15 @@ export default function HeroSection() {
             fontSize: 11,
             letterSpacing: "0.08em",
             textTransform: "uppercase",
-            color: "var(--text-secondary)",
+            color: "rgba(245, 244, 242, 0.6)",
           }}
         >
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <span
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: 999,
-                background: "var(--coral)",
-              }}
-            />
+            <span style={{ width: 7, height: 7, borderRadius: 999, background: "var(--coral)" }} />
             {counts.hostile}% hostile
           </span>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <span
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: 999,
-                background: "var(--mint)",
-              }}
-            />
+            <span style={{ width: 7, height: 7, borderRadius: 999, background: "var(--mint)" }} />
             {counts.positive}% positive
           </span>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
@@ -177,7 +197,7 @@ export default function HeroSection() {
                 width: 7,
                 height: 7,
                 borderRadius: 999,
-                background: "var(--text-tertiary)",
+                background: "rgba(245, 244, 242, 0.45)",
               }}
             />
             {counts.noise}% noise

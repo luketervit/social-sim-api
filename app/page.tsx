@@ -1,9 +1,7 @@
 import Footer from "./components/Footer";
 import HeroSection from "./components/HeroSection";
 import HowItWorks from "./components/HowItWorks";
-import Manifesto from "./components/Manifesto";
 import PlaygroundSection from "./components/PlaygroundSection";
-import SocialProofStrip from "./components/SocialProofStrip";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createSupabaseServer } from "@/lib/supabase/server";
 
@@ -30,8 +28,6 @@ export default async function Home() {
   return (
     <div style={{ overflowX: "clip" }}>
       <HeroSection />
-      <SocialProofStrip />
-      <Manifesto />
       <HowItWorks />
       <PlaygroundSection
         audiences={audiences?.length ? audiences : FALLBACK_AUDIENCES}

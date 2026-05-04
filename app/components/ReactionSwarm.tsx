@@ -5,18 +5,16 @@ import { useEffect, useState } from "react";
 type Sentiment = "hostile" | "positive" | "noise";
 
 type Reaction = {
-  id: number;
   body: string;
   handle: string;
   sentiment: Sentiment;
-  // Position relative to the central post, in % of container.
   x: number;
   y: number;
   rotate: number;
   delay: number;
 };
 
-const REACTIONS: Omit<Reaction, "id">[] = [
+const REACTIONS: Reaction[] = [
   { body: "ratio", handle: "@dril_lite", sentiment: "hostile", x: 6, y: 10, rotate: -3, delay: 600 },
   { body: "this is so out of touch", handle: "@notgenz", sentiment: "hostile", x: 72, y: 4, rotate: 2, delay: 800 },
   { body: "based actually", handle: "@buildlogs", sentiment: "positive", x: 78, y: 30, rotate: -1, delay: 1100 },
@@ -31,7 +29,9 @@ const REACTIONS: Omit<Reaction, "id">[] = [
   { body: "huh", handle: "@noopinion", sentiment: "noise", x: 12, y: 64, rotate: 1, delay: 2900 },
 ];
 
-export default function ReactionSwarm() {
+type Theme = "light" | "dark";
+
+export default function ReactionSwarm({ theme = "light" }: { theme?: Theme }) {
   const [mounted, setMounted] = useState(false);
   const [reduced, setReduced] = useState(false);
 
@@ -43,6 +43,18 @@ export default function ReactionSwarm() {
     mq.addEventListener("change", handle);
     return () => mq.removeEventListener("change", handle);
   }, []);
+
+  const isDark = theme === "dark";
+  const surface = isDark ? "rgba(28, 27, 25, 0.92)" : "var(--surface)";
+  const chipBorder = isDark ? "1px solid rgba(245, 244, 242, 0.12)" : "1px solid var(--border)";
+  const text = isDark ? "rgba(245, 244, 242, 0.95)" : "var(--text-primary)";
+  const muted = isDark ? "rgba(245, 244, 242, 0.5)" : "var(--text-tertiary)";
+  const chipShadow = isDark
+    ? "0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35)"
+    : "0 1px 2px rgba(0,0,0,0.03), 0 6px 18px rgba(20,20,19,0.05)";
+  const postShadow = isDark
+    ? "0 0 0 1px rgba(245, 244, 242, 0.08), 0 16px 48px rgba(0,0,0,0.45)"
+    : "0 0 0 1px rgba(0,0,0,0.05), 0 2px 6px rgba(0,0,0,0.04), 0 16px 40px rgba(20,20,19,0.06)";
 
   return (
     <div
@@ -64,11 +76,10 @@ export default function ReactionSwarm() {
           top: "50%",
           transform: "translate(-50%, -50%)",
           width: "min(360px, 62%)",
-          background: "var(--surface)",
+          background: surface,
           borderRadius: 18,
           padding: "20px 22px 18px",
-          boxShadow:
-            "0 0 0 1px rgba(0,0,0,0.05), 0 2px 6px rgba(0,0,0,0.04), 0 16px 40px rgba(20,20,19,0.06)",
+          boxShadow: postShadow,
           opacity: mounted || reduced ? 1 : 0,
           transition: "opacity 600ms var(--ease-out-cubic)",
           zIndex: 2,
@@ -87,15 +98,16 @@ export default function ReactionSwarm() {
               width: 32,
               height: 32,
               borderRadius: 999,
-              background:
-                "linear-gradient(135deg, var(--accent) 0%, var(--tomato) 100%)",
+              background: isDark
+                ? "linear-gradient(135deg, var(--butter-deep) 0%, var(--tomato) 100%)"
+                : "linear-gradient(135deg, var(--accent) 0%, var(--tomato) 100%)",
             }}
           />
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>
+            <span style={{ fontSize: 13, fontWeight: 500, color: text }}>
               your launch post
             </span>
-            <span style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
+            <span style={{ fontSize: 11, color: muted }}>
               @you · drafted 2m ago
             </span>
           </div>
@@ -104,7 +116,7 @@ export default function ReactionSwarm() {
           style={{
             fontSize: 15,
             lineHeight: 1.5,
-            color: "var(--text-primary)",
+            color: text,
             margin: 0,
           }}
         >
@@ -125,11 +137,10 @@ export default function ReactionSwarm() {
               top: `${r.y}%`,
               maxWidth: 220,
               padding: "9px 13px 10px",
-              background: "var(--surface)",
+              background: surface,
               borderRadius: 14,
-              border: "1px solid var(--border)",
-              boxShadow:
-                "0 1px 2px rgba(0,0,0,0.03), 0 6px 18px rgba(20,20,19,0.05)",
+              border: chipBorder,
+              boxShadow: chipShadow,
               transform: `rotate(${r.rotate}deg) translateY(${visible ? 0 : 8}px) scale(${visible ? 1 : 0.92})`,
               opacity: visible ? 1 : 0,
               transition: `opacity 500ms var(--ease-out-cubic) ${delay}ms, transform 600ms var(--ease-out-quint) ${delay}ms`,
@@ -154,14 +165,14 @@ export default function ReactionSwarm() {
                       ? "var(--coral)"
                       : r.sentiment === "positive"
                       ? "var(--mint)"
-                      : "var(--text-tertiary)",
+                      : muted,
                 }}
               />
               <span
                 style={{
                   fontSize: 10,
                   letterSpacing: "0.04em",
-                  color: "var(--text-tertiary)",
+                  color: muted,
                   fontFamily: "var(--font-data), monospace",
                 }}
               >
@@ -172,7 +183,7 @@ export default function ReactionSwarm() {
               style={{
                 fontSize: 13,
                 lineHeight: 1.4,
-                color: "var(--text-primary)",
+                color: text,
               }}
             >
               {r.body}
