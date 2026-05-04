@@ -267,10 +267,11 @@ export default function MockedPlayground({
               fontFamily: "var(--font-display), Georgia, serif",
               marginTop: 14,
               maxWidth: 720,
+              textWrap: "balance",
             }}
           >
             Try it on something{" "}
-            <span style={{ fontStyle: "italic" }}>you&apos;d actually post.</span>
+            <span style={{ fontStyle: "italic" }}>you&rsquo;d actually post.</span>
           </h2>
         </Reveal>
 
@@ -444,6 +445,9 @@ export default function MockedPlayground({
                   fontWeight: 500,
                   fontFamily: "var(--font-data), monospace",
                   letterSpacing: "0.04em",
+                  fontVariantNumeric: "tabular-nums",
+                  minWidth: 132,
+                  textAlign: "center",
                 }}
               >
                 {status === "idle"
@@ -549,9 +553,10 @@ export default function MockedPlayground({
                       color: "var(--text-primary)",
                       marginTop: 6,
                       fontStyle: "italic",
+                      textWrap: "pretty",
                     }}
                   >
-                    “{run.input}”
+                    &ldquo;{run.input}&rdquo;
                   </div>
                 </div>
 
@@ -559,6 +564,7 @@ export default function MockedPlayground({
                 {visibleMessages.map((msg) => (
                   <div
                     key={msg.id}
+                    className="atharias-reply"
                     style={{
                       background: "var(--surface)",
                       border: `1px solid ${SENTIMENT_COLORS[msg.sentiment]}33`,
@@ -567,7 +573,6 @@ export default function MockedPlayground({
                       padding: "10px 12px",
                       fontSize: 13,
                       lineHeight: 1.5,
-                      animation: "atharias-fade-in 220ms ease-out both",
                     }}
                   >
                     <div
@@ -605,12 +610,16 @@ export default function MockedPlayground({
                 {/* Typing-indicator-style placeholder for the next round */}
                 {status === "running" && visibleMessages.length > 0 ? (
                   <div
+                    aria-hidden="true"
                     style={{
                       padding: "10px 12px",
                       color: "var(--text-tertiary)",
                       fontSize: 11,
                       fontFamily: "var(--font-data), monospace",
                       letterSpacing: "0.04em",
+                      pointerEvents: "none",
+                      userSelect: "none",
+                      fontVariantNumeric: "tabular-nums",
                     }}
                   >
                     <span className="atharias-pulse">round {activeRound} streaming…</span>
@@ -643,7 +652,19 @@ export default function MockedPlayground({
           }
         }
         .atharias-pulse {
-          animation: atharias-pulse-anim 1.2s ease-in-out infinite;
+          animation: atharias-pulse-anim 1.2s
+            cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
+        }
+        .atharias-reply {
+          animation: atharias-fade-in 220ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .atharias-pulse {
+            animation: none;
+          }
+          .atharias-reply {
+            animation: none;
+          }
         }
       `}</style>
     </section>
@@ -667,7 +688,9 @@ function StatChip({
         borderRadius: 10,
         padding: "8px 10px",
         textAlign: "center",
-        transition: "all 160ms ease-out",
+        // Specific properties only — never `transition: all` (Emil §UI Polish).
+        transition:
+          "color 160ms cubic-bezier(0.215, 0.61, 0.355, 1), border-color 160ms cubic-bezier(0.215, 0.61, 0.355, 1)",
       }}
     >
       <div
@@ -689,6 +712,7 @@ function StatChip({
           marginTop: 2,
           fontWeight: 500,
           fontVariantNumeric: "tabular-nums",
+          minHeight: 28,
         }}
       >
         {value}
