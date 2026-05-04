@@ -5,6 +5,7 @@ import type { AgentMessage, SimulationState, TokenUsage } from "./types";
 import { getMessageId } from "./threading";
 import { buildSystemPrompt, buildUserPrompt } from "./prompts";
 import { generateReply } from "./llm";
+import { classifySentiment } from "./sentimentClassifier";
 
 type TargetSentiment = AgentMessage["sentiment"];
 
@@ -27,37 +28,8 @@ const TOPIC_HEAT_WORDS = [
   "monetization", "subscription", "ownership",
 ];
 
-const HOSTILE_WORDS = [
-  "trash", "garbage", "scam", "boycott", "terrible", "awful",
-  "hate", "worst", "pathetic", "disgusting", "fraud", "joke",
-  "clown", "rip off", "ripoff", "greed", "greedy", "predatory",
-  "unacceptable", "outrage", "furious", "insulting", "shameful",
-  "disaster", "ratio", "L ",
-];
-
-const POSITIVE_WORDS = [
-  "love", "amazing", "great", "awesome", "excited", "fantastic",
-  "incredible", "brilliant", "perfect", "can't wait", "hyped",
-  "beautiful", "thank", "appreciate", "well done", "bravo",
-  "impressive",
-];
-
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
-}
-
-function analyzeSentiment(
-  text: string,
-  fallback: TargetSentiment
-): AgentMessage["sentiment"] {
-  const lower = text.toLowerCase();
-  const hostileCount = HOSTILE_WORDS.filter((word) => lower.includes(word)).length;
-  const positiveCount = POSITIVE_WORDS.filter((word) => lower.includes(word)).length;
-
-  if (hostileCount >= 2 || (fallback === "hostile" && hostileCount >= 1)) return "hostile";
-  if (hostileCount > positiveCount) return "negative";
-  if (positiveCount > hostileCount) return "positive";
-  return fallback;
 }
 
 function baseTargetSentiment(persona: Persona): TargetSentiment {
@@ -367,7 +339,7 @@ export async function* runSimulation(
 
         const reply = await generateReply(systemPrompt, userPrompt);
         await options?.onAfterMessage?.(turn, round, reply.usage);
-        const sentiment = analyzeSentiment(reply.content, turn.targetSentiment);
+        const sentiment = await classifySentiment(reply.content, turn.targetSentiment);
 
         return {
           id: randomUUID(),

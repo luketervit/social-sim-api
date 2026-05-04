@@ -2,7 +2,19 @@ import OpenAI from "openai";
 import { getOpenRouterEnv } from "@/lib/env";
 import type { TokenUsage } from "./types";
 
-const MODEL = "meta-llama/llama-3.1-8b-instruct";
+// Dolphin-Mistral 24B Venice Edition — uncensored Mistral-Small fine-tune.
+// 2.20% refusal rate (lowest in industry as of Apr 2026), 32K context.
+// Free tier on OpenRouter; remove ":free" suffix to use the paid lane (no rate limits).
+// Override per-deployment via OPENROUTER_MODEL env var.
+const MODEL =
+  process.env.OPENROUTER_MODEL ||
+  "cognitivecomputations/dolphin-mistral-24b-venice-edition:free";
+
+// Dissertation final params (Table 4.3): temperature 0.9, response length 150 tokens.
+// Higher temperature (1.2) hurt composite by 0.085; longer responses didn't improve realism.
+const DEFAULT_TEMPERATURE = 0.9;
+const DEFAULT_MAX_TOKENS = 150;
+
 const MAX_RETRIES = 2;
 const BASE_RETRY_DELAY_MS = 400;
 const RETRYABLE_STATUS_CODES = new Set([408, 409, 429]);
@@ -118,8 +130,9 @@ export async function generateReply(
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
-        max_tokens: 300,
-        temperature: 0.9,
+        max_tokens: DEFAULT_MAX_TOKENS,
+        temperature: DEFAULT_TEMPERATURE,
+        frequency_penalty: 0.1,
       });
 
       return {
