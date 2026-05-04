@@ -6,8 +6,7 @@ import type { AgentMessage } from "@/lib/simulation/types";
 import Reveal from "./Reveal";
 
 const PLAYBACK_DURATION_MS = 15_000;
-const FINAL_REVEAL_BUFFER_MS = 600;
-const TICK_MS = 90;
+const POST_COMPLETE_DELAY_MS = 400;
 
 interface MockedRun {
   slug: string;
@@ -55,6 +54,13 @@ const SENTIMENT_COLORS: Record<AgentMessage["sentiment"], string> = {
   hostile: "#EF4444",
 };
 
+const SENTIMENT_LABELS: Record<AgentMessage["sentiment"], string> = {
+  positive: "Positive",
+  neutral: "Neutral",
+  negative: "Negative",
+  hostile: "Hostile",
+};
+
 const HANDLE_PREFIX: Record<MockedRun["platform"], string> = {
   twitter: "@",
   reddit: "u/",
@@ -62,11 +68,61 @@ const HANDLE_PREFIX: Record<MockedRun["platform"], string> = {
 };
 
 function formatHandle(platform: MockedRun["platform"], archetype: string): string {
-  return `${HANDLE_PREFIX[platform]}${archetype.replace(/\s+/g, platform === "reddit" ? "_" : "")}`;
+  const cleaned = archetype.replace(/\s+/g, platform === "reddit" ? "_" : "");
+  return `${HANDLE_PREFIX[platform]}${cleaned}`;
 }
 
-function easeOutCubic(x: number): number {
-  return 1 - Math.pow(1 - x, 3);
+interface RoundSchedule {
+  /** Index into thread where this round's messages start. */
+  startIndex: number;
+  /** Number of messages in this round. */
+  count: number;
+  /** Round number from the AgentMessage. */
+  round: number;
+  /** ms from playback start when this round begins revealing. */
+  startTime: number;
+  /** ms from playback start when this round finishes revealing. */
+  endTime: number;
+}
+
+/**
+ * Group thread messages by round, then assign each round a slice of the total
+ * playback window. Within each slice, messages stream in evenly so the round
+ * arrives in a recognisable burst (matching dissertation §3.5.1 synchronous
+ * activation).
+ */
+function buildSchedule(thread: AgentMessage[]): RoundSchedule[] {
+  if (thread.length === 0) return [];
+  const rounds: RoundSchedule[] = [];
+  let cursor = 0;
+  let currentRound = thread[0].round;
+  let runStart = 0;
+  for (let i = 0; i <= thread.length; i++) {
+    const next = thread[i];
+    if (i === thread.length || (next && next.round !== currentRound)) {
+      rounds.push({
+        startIndex: runStart,
+        count: i - runStart,
+        round: currentRound,
+        startTime: 0,
+        endTime: 0,
+      });
+      runStart = i;
+      if (next) currentRound = next.round;
+    }
+  }
+  // Distribute time: each round gets a base slice + a small ramp-up bias toward
+  // earlier rounds (so the user doesn't wait long for the first replies).
+  const base = PLAYBACK_DURATION_MS / rounds.length;
+  let elapsed = 0;
+  for (const r of rounds) {
+    r.startTime = elapsed;
+    r.endTime = elapsed + base;
+    elapsed += base;
+    cursor += r.count;
+  }
+  void cursor;
+  return rounds;
 }
 
 export default function MockedPlayground({
@@ -78,11 +134,14 @@ export default function MockedPlayground({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [input, setInput] = useState(defaultPrompt ?? "");
   const [status, setStatus] = useState<"idle" | "running" | "complete">("idle");
-  const [progressPct, setProgressPct] = useState(0);
   const [revealedCount, setRevealedCount] = useState(0);
+  const [activeRound, setActiveRound] = useState(0);
   const tickerRef = useRef<number | null>(null);
   const startedAtRef = useRef<number | null>(null);
   const liveListRef = useRef<HTMLDivElement | null>(null);
+
+  const schedule = useMemo(() => (run ? buildSchedule(run.thread) : []), [run]);
+  const totalRounds = schedule.length;
 
   // Load the cached run on mount.
   useEffect(() => {
@@ -122,47 +181,62 @@ export default function MockedPlayground({
   function startPlayback() {
     if (!run || status === "running") return;
     setStatus("running");
-    setProgressPct(0);
     setRevealedCount(0);
+    setActiveRound(schedule[0]?.round ?? 0);
     startedAtRef.current = performance.now();
 
     if (tickerRef.current != null) window.clearInterval(tickerRef.current);
     tickerRef.current = window.setInterval(() => {
       const now = performance.now();
       const elapsed = now - (startedAtRef.current ?? now);
-      const linearT = Math.min(1, elapsed / PLAYBACK_DURATION_MS);
-      const easedT = easeOutCubic(linearT);
-      const pct = Math.min(99, Math.round(easedT * 99));
-      setProgressPct(pct);
 
-      // Reveal messages in pace with eased progress (so they feel like they're
-      // actually streaming in).
-      const targetCount = Math.min(
-        run.thread.length,
-        Math.floor(easedT * run.thread.length)
+      // Find which round we're in and how far through it.
+      let totalRevealed = 0;
+      let currentRoundIdx = 0;
+      for (let i = 0; i < schedule.length; i++) {
+        const r = schedule[i];
+        if (elapsed >= r.endTime) {
+          totalRevealed += r.count;
+          currentRoundIdx = i + 1;
+          continue;
+        }
+        if (elapsed >= r.startTime) {
+          const t = (elapsed - r.startTime) / (r.endTime - r.startTime);
+          totalRevealed += Math.floor(t * r.count);
+          currentRoundIdx = i;
+          break;
+        }
+        break;
+      }
+
+      setRevealedCount((prev) =>
+        totalRevealed > prev ? totalRevealed : prev
       );
-      setRevealedCount((prev) => (targetCount > prev ? targetCount : prev));
 
-      if (linearT >= 1) {
+      const liveRound = schedule[currentRoundIdx]?.round ?? schedule.at(-1)?.round ?? 0;
+      setActiveRound(liveRound);
+
+      if (elapsed >= PLAYBACK_DURATION_MS) {
         if (tickerRef.current != null) window.clearInterval(tickerRef.current);
         tickerRef.current = null;
-        setProgressPct(100);
         setRevealedCount(run.thread.length);
-        // Brief pause before snapping to complete state — feels less jarring.
-        window.setTimeout(() => setStatus("complete"), FINAL_REVEAL_BUFFER_MS);
+        setActiveRound(schedule.at(-1)?.round ?? 0);
+        window.setTimeout(() => setStatus("complete"), POST_COMPLETE_DELAY_MS);
       }
-    }, TICK_MS);
+    }, 80);
   }
 
   const sentimentBreakdown = useMemo(() => {
-    if (!run) return { hostile: 0, negative: 0, neutral: 0, positive: 0 };
+    if (!run)
+      return { hostile: 0, negative: 0, neutral: 0, positive: 0 };
+    const visible = run.thread.slice(0, revealedCount);
     return {
-      hostile: run.thread.filter((m) => m.sentiment === "hostile").length,
-      negative: run.thread.filter((m) => m.sentiment === "negative").length,
-      neutral: run.thread.filter((m) => m.sentiment === "neutral").length,
-      positive: run.thread.filter((m) => m.sentiment === "positive").length,
+      hostile: visible.filter((m) => m.sentiment === "hostile").length,
+      negative: visible.filter((m) => m.sentiment === "negative").length,
+      neutral: visible.filter((m) => m.sentiment === "neutral").length,
+      positive: visible.filter((m) => m.sentiment === "positive").length,
     };
-  }, [run]);
+  }, [run, revealedCount]);
 
   const visibleMessages = useMemo(() => {
     if (!run) return [] as AgentMessage[];
@@ -196,14 +270,14 @@ export default function MockedPlayground({
             }}
           >
             Try it on something{" "}
-            <span style={{ fontStyle: "italic" }}>you'd actually post.</span>
+            <span style={{ fontStyle: "italic" }}>you&apos;d actually post.</span>
           </h2>
         </Reveal>
 
         <Reveal
           as="div"
           className="grid gap-5"
-          style={{ gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)" }}
+          style={{ gridTemplateColumns: "minmax(0, 0.95fr) minmax(0, 1.1fr)" }}
         >
           {/* Left: form */}
           <div
@@ -305,7 +379,7 @@ export default function MockedPlayground({
                 {status === "idle"
                   ? "Run simulation →"
                   : status === "running"
-                    ? "Running…"
+                    ? "Streaming…"
                     : "Run again"}
               </button>
               <Link
@@ -327,19 +401,20 @@ export default function MockedPlayground({
             ) : null}
           </div>
 
-          {/* Right: live output */}
+          {/* Right: live stream */}
           <div
             style={{
               background: "var(--bg-subtle, var(--surface))",
               borderRadius: 14,
               padding: "26px 26px 22px",
               border: "1px solid var(--border)",
-              minHeight: 480,
+              minHeight: 540,
               display: "flex",
               flexDirection: "column",
             }}
           >
-            <div className="flex items-center justify-between gap-3">
+            {/* Header */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <div className="mono-label">Live Output</div>
                 <p
@@ -362,125 +437,183 @@ export default function MockedPlayground({
                   color:
                     status === "complete" && run
                       ? AGGRESSION_COLORS[run.aggression_score]
-                      : "var(--text-tertiary)",
+                      : status === "running"
+                        ? "var(--accent, #7C5CFC)"
+                        : "var(--text-tertiary)",
                   fontSize: 12,
                   fontWeight: 500,
+                  fontFamily: "var(--font-data), monospace",
+                  letterSpacing: "0.04em",
                 }}
               >
                 {status === "idle"
                   ? "ready"
                   : status === "running"
-                    ? "running"
+                    ? `round ${activeRound} / ${totalRounds || 10}`
                     : run
                       ? `${run.aggression_score} aggression`
                       : "complete"}
               </span>
             </div>
 
-            {status === "idle" && run ? (
-              <p
-                className="mt-6 text-[13px]"
-                style={{ color: "var(--text-tertiary)", lineHeight: 1.6 }}
+            {/* Live stats strip — visible during running and complete */}
+            {(status === "running" || status === "complete") && run ? (
+              <div
+                className="mt-4 grid gap-2"
+                style={{
+                  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                }}
               >
-                Hit <strong>Run simulation</strong> to watch {run.persona_cap} synthetic users
-                react in real time.
-              </p>
+                <StatChip
+                  label="Pos"
+                  value={sentimentBreakdown.positive}
+                  color={SENTIMENT_COLORS.positive}
+                />
+                <StatChip
+                  label="Neu"
+                  value={sentimentBreakdown.neutral}
+                  color={SENTIMENT_COLORS.neutral}
+                />
+                <StatChip
+                  label="Neg"
+                  value={sentimentBreakdown.negative}
+                  color={SENTIMENT_COLORS.negative}
+                />
+                <StatChip
+                  label="Host"
+                  value={sentimentBreakdown.hostile}
+                  color={SENTIMENT_COLORS.hostile}
+                />
+              </div>
             ) : null}
 
+            {/* Idle-state hint */}
+            {status === "idle" && run ? (
+              <div
+                className="mt-6"
+                style={{
+                  padding: "20px 18px",
+                  borderRadius: 10,
+                  border: "1px dashed var(--border)",
+                  background: "var(--surface)",
+                  color: "var(--text-tertiary)",
+                  fontSize: 13,
+                  lineHeight: 1.6,
+                }}
+              >
+                Hit <strong style={{ color: "var(--text-primary)" }}>Run simulation</strong>{" "}
+                to watch {run.persona_cap} synthetic users react across{" "}
+                {totalRounds || 10} rounds in real time.
+              </div>
+            ) : null}
+
+            {/* Stream */}
             {(status === "running" || status === "complete") && run ? (
-              <div className="mt-4">
+              <div
+                ref={liveListRef}
+                className="mt-4"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                  flex: 1,
+                  maxHeight: 420,
+                  overflowY: "auto",
+                  paddingRight: 4,
+                  scrollBehavior: "smooth",
+                }}
+              >
+                {/* Root post — what they're reacting to */}
                 <div
-                  className="h-1 overflow-hidden rounded-full"
-                  style={{ background: "var(--border)" }}
+                  style={{
+                    background: "var(--surface)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 10,
+                    padding: "12px 14px",
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                    position: "sticky",
+                    top: 0,
+                    zIndex: 1,
+                    backdropFilter: "blur(6px)",
+                  }}
                 >
+                  <div
+                    className="mono-label"
+                    style={{ fontSize: 10, color: "var(--text-tertiary)" }}
+                  >
+                    ROOT POST
+                  </div>
                   <div
                     style={{
-                      width: `${progressPct}%`,
-                      height: "100%",
-                      background: AGGRESSION_COLORS[run.aggression_score],
-                      borderRadius: 999,
-                      transition: "width 90ms linear",
+                      color: "var(--text-primary)",
+                      marginTop: 6,
+                      fontStyle: "italic",
                     }}
-                  />
-                </div>
-                <div
-                  className="mt-2 flex items-center justify-between text-[11px]"
-                  style={{
-                    color: "var(--text-tertiary)",
-                    fontFamily: "var(--font-data), monospace",
-                  }}
-                >
-                  <span>
-                    {visibleMessages.length} / {run.thread.length} replies
-                  </span>
-                  <span>{progressPct}%</span>
-                </div>
-
-                {/* Streaming reply list */}
-                <div
-                  ref={liveListRef}
-                  className="mt-4"
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 8,
-                    maxHeight: 320,
-                    overflowY: "auto",
-                    paddingRight: 4,
-                  }}
-                >
-                  {visibleMessages.slice(-10).map((msg) => (
-                    <div
-                      key={msg.id}
-                      style={{
-                        background: "var(--surface)",
-                        border: `1px solid ${SENTIMENT_COLORS[msg.sentiment]}33`,
-                        borderLeft: `3px solid ${SENTIMENT_COLORS[msg.sentiment]}`,
-                        borderRadius: 10,
-                        padding: "10px 12px",
-                        fontSize: 13,
-                        lineHeight: 1.5,
-                        animation: "atharias-fade-in 240ms ease-out both",
-                      }}
-                    >
-                      <div
-                        className="mono-label"
-                        style={{ fontSize: 10, color: "var(--text-tertiary)" }}
-                      >
-                        {formatHandle(run.platform, msg.archetype)}
-                      </div>
-                      <div style={{ color: "var(--text-primary)", marginTop: 4 }}>
-                        {msg.message}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {status === "complete" ? (
-                  <div
-                    className="mt-5 grid gap-3"
-                    style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}
                   >
-                    <SentimentChip
-                      label="Positive"
-                      value={sentimentBreakdown.positive}
-                      color={SENTIMENT_COLORS.positive}
-                    />
-                    <SentimentChip
-                      label="Neutral"
-                      value={sentimentBreakdown.neutral}
-                      color={SENTIMENT_COLORS.neutral}
-                    />
-                    <SentimentChip
-                      label="Negative"
-                      value={sentimentBreakdown.negative}
-                      color={SENTIMENT_COLORS.negative}
-                    />
-                    <SentimentChip
-                      label="Hostile"
-                      value={sentimentBreakdown.hostile}
-                      color={SENTIMENT_COLORS.hostile}
-                    />
+                    “{run.input}”
+                  </div>
+                </div>
+
+                {/* Replies */}
+                {visibleMessages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    style={{
+                      background: "var(--surface)",
+                      border: `1px solid ${SENTIMENT_COLORS[msg.sentiment]}33`,
+                      borderLeft: `3px solid ${SENTIMENT_COLORS[msg.sentiment]}`,
+                      borderRadius: 10,
+                      padding: "10px 12px",
+                      fontSize: 13,
+                      lineHeight: 1.5,
+                      animation: "atharias-fade-in 220ms ease-out both",
+                    }}
+                  >
+                    <div
+                      className="flex items-center justify-between gap-2"
+                      style={{ marginBottom: 4 }}
+                    >
+                      <span
+                        className="mono-label"
+                        style={{
+                          fontSize: 10,
+                          color: "var(--text-tertiary)",
+                          letterSpacing: "0.04em",
+                        }}
+                      >
+                        {formatHandle(run.platform, msg.archetype)} · R{msg.round}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 9,
+                          color: SENTIMENT_COLORS[msg.sentiment],
+                          fontFamily: "var(--font-data), monospace",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.06em",
+                        }}
+                      >
+                        {SENTIMENT_LABELS[msg.sentiment]}
+                      </span>
+                    </div>
+                    <div style={{ color: "var(--text-primary)" }}>
+                      {msg.message}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Typing-indicator-style placeholder for the next round */}
+                {status === "running" && visibleMessages.length > 0 ? (
+                  <div
+                    style={{
+                      padding: "10px 12px",
+                      color: "var(--text-tertiary)",
+                      fontSize: 11,
+                      fontFamily: "var(--font-data), monospace",
+                      letterSpacing: "0.04em",
+                    }}
+                  >
+                    <span className="atharias-pulse">round {activeRound} streaming…</span>
                   </div>
                 ) : null}
               </div>
@@ -500,12 +633,24 @@ export default function MockedPlayground({
             transform: translateY(0);
           }
         }
+        @keyframes atharias-pulse-anim {
+          0%,
+          100% {
+            opacity: 0.55;
+          }
+          50% {
+            opacity: 1;
+          }
+        }
+        .atharias-pulse {
+          animation: atharias-pulse-anim 1.2s ease-in-out infinite;
+        }
       `}</style>
     </section>
   );
 }
 
-function SentimentChip({
+function StatChip({
   label,
   value,
   color,
@@ -520,16 +665,17 @@ function SentimentChip({
         background: "var(--surface)",
         border: "1px solid var(--border)",
         borderRadius: 10,
-        padding: "10px 12px",
+        padding: "8px 10px",
         textAlign: "center",
+        transition: "all 160ms ease-out",
       }}
     >
       <div
         style={{
-          fontSize: 10,
+          fontSize: 9,
           color: "var(--text-tertiary)",
           fontFamily: "var(--font-data), monospace",
-          letterSpacing: "0.06em",
+          letterSpacing: "0.08em",
           textTransform: "uppercase",
         }}
       >
@@ -542,6 +688,7 @@ function SentimentChip({
           fontFamily: "var(--font-display), Georgia, serif",
           marginTop: 2,
           fontWeight: 500,
+          fontVariantNumeric: "tabular-nums",
         }}
       >
         {value}
