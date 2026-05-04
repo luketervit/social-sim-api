@@ -3,7 +3,6 @@ import localFont from "next/font/local";
 import { Azeret_Mono, Fraunces } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
-import NavAuth from "./nav-auth";
 import { PostHogProvider } from "./posthog-provider";
 
 const brandFont = localFont({
@@ -58,9 +57,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </Link>
             <div className="flex items-center gap-1">
               <Link href="/" className="nav-link">Home</Link>
-              <NavAuth />
-              <Link href="/keys" className="nav-link">API</Link>
               <Link href="/docs" className="nav-link">Docs</Link>
+              <Link
+                href="/waitlist"
+                className="nav-link"
+                style={{
+                  background: "var(--ink)",
+                  color: "var(--butter-deep)",
+                  padding: "8px 16px",
+                }}
+              >
+                Get early access
+              </Link>
             </div>
           </nav>
         </header>

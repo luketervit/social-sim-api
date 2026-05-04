@@ -23,7 +23,6 @@ interface MockedRun {
 interface MockedPlaygroundProps {
   /** /mocked-runs/{slug}.json under /public */
   slug: string;
-  isSignedIn: boolean;
   /** Optional override of the prompt shown in the textarea. */
   defaultPrompt?: string;
 }
@@ -127,7 +126,6 @@ function buildSchedule(thread: AgentMessage[]): RoundSchedule[] {
 
 export default function MockedPlayground({
   slug,
-  isSignedIn,
   defaultPrompt,
 }: MockedPlaygroundProps) {
   const [run, setRun] = useState<MockedRun | null>(null);
@@ -243,8 +241,8 @@ export default function MockedPlayground({
     return run.thread.slice(0, revealedCount);
   }, [run, revealedCount]);
 
-  const ctaHref = isSignedIn ? "/dashboard" : "/login?mode=signup&next=%2Fdashboard";
-  const ctaLabel = isSignedIn ? "Open dashboard" : "Sign up to run yours";
+  const ctaHref = "/waitlist";
+  const ctaLabel = "Get early access";
 
   return (
     <section

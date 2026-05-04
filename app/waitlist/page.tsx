@@ -1,33 +1,27 @@
 "use client";
 
-import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { createSupabaseBrowser } from "@/lib/supabase/browser";
 
 export default function WaitlistPage() {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
-  const [signedInAfterSubmit, setSignedInAfterSubmit] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setSubmittedEmail(null);
-
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
-      return;
-    }
-
     setLoading(true);
 
     const supabase = createSupabaseBrowser();
+    // No product behind the waitlist yet — generate a throwaway password so
+    // Supabase auth can record the email. Users won't sign in anywhere.
+    const throwawayPassword = `${crypto.randomUUID()}-${crypto.randomUUID()}`;
     const { data, error } = await supabase.auth.signUp({
       email,
-      password,
+      password: throwawayPassword,
     });
 
     setLoading(false);
@@ -37,7 +31,6 @@ export default function WaitlistPage() {
       return;
     }
 
-    setSignedInAfterSubmit(!!data.session);
     setSubmittedEmail(data.user?.email ?? email);
   }
 
@@ -194,9 +187,7 @@ export default function WaitlistPage() {
                     style={{ background: "var(--ink)", color: "var(--butter-deep)" }}
                     onClick={() => {
                       setSubmittedEmail(null);
-                      setSignedInAfterSubmit(false);
                       setEmail("");
-                      setPassword("");
                     }}
                   >
                     Add another email
@@ -205,7 +196,7 @@ export default function WaitlistPage() {
               </div>
             ) : (
               <>
-                <span className="mono-label">Sign up</span>
+                <span className="mono-label">Get early access</span>
                 <h2
                   style={{
                     fontFamily: "var(--font-display), Georgia, serif",
@@ -215,8 +206,18 @@ export default function WaitlistPage() {
                     color: "var(--text-primary)",
                   }}
                 >
-                  Create your account
+                  Just leave your email.
                 </h2>
+                <p
+                  style={{
+                    fontSize: 14,
+                    color: "var(--text-secondary)",
+                    lineHeight: 1.55,
+                    marginTop: 10,
+                  }}
+                >
+                  We&apos;ll email you the moment Atharias opens up.
+                </p>
 
                 <form
                   onSubmit={handleSubmit}
@@ -249,32 +250,6 @@ export default function WaitlistPage() {
                     />
                   </div>
 
-                  <div>
-                    <label
-                      htmlFor="password"
-                      style={{
-                        display: "block",
-                        marginBottom: 8,
-                        fontSize: 13,
-                        color: "var(--text-secondary)",
-                        letterSpacing: "-0.01em",
-                      }}
-                    >
-                      Password
-                    </label>
-                    <input
-                      id="password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="At least 8 characters"
-                      required
-                      minLength={8}
-                      autoComplete="new-password"
-                      className="input"
-                    />
-                  </div>
-
                   <button
                     type="submit"
                     disabled={loading}
@@ -303,29 +278,6 @@ export default function WaitlistPage() {
                   </div>
                 )}
 
-                <div
-                  className="mt-6"
-                  style={{
-                    color: "var(--text-tertiary)",
-                    fontSize: 13,
-                    paddingTop: 16,
-                    borderTop: "1px solid var(--border)",
-                  }}
-                >
-                  <p>
-                    Already have an account?{" "}
-                    <Link
-                      href="/login"
-                      style={{
-                        color: "var(--text-primary)",
-                        textDecoration: "underline",
-                        textUnderlineOffset: "3px",
-                      }}
-                    >
-                      Sign in
-                    </Link>
-                  </p>
-                </div>
               </>
             )}
           </div>

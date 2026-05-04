@@ -7,15 +7,12 @@ const LINK_GROUPS = [
     links: [
       { label: "Playground", href: "/#playground" },
       { label: "Docs", href: "/docs" },
-      { label: "API keys", href: "/keys" },
     ],
   },
   {
     title: "Company",
     links: [
       { label: "Waitlist", href: "/waitlist" },
-      { label: "Sign in", href: "/login" },
-      { label: "Dashboard", href: "/dashboard" },
     ],
   },
   {

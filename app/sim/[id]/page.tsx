@@ -3,10 +3,8 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import SimulationGraph from "@/components/SimulationGraph";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { createSupabaseServer } from "@/lib/supabase/server";
 import type { AgentMessage } from "@/lib/simulation/types";
 import { buildResolvedThread } from "@/lib/simulation/threading";
-import PreviewPublishButton from "./publish-button";
 import SimulationThread from "./thread";
 import ViewTracker from "./view-tracker";
 
@@ -27,30 +25,6 @@ async function getPublicSimulation(id: string) {
 
   if (error || !data) return null;
   return { ...data, isPreview: false };
-}
-
-async function getOwnedSimulation(id: string, userId: string) {
-  const db = supabaseAdmin();
-
-  // Look up all API keys owned by this user
-  const { data: keys } = await db
-    .from("api_keys")
-    .select("key")
-    .eq("user_id", userId);
-
-  if (!keys || keys.length === 0) return null;
-
-  const { data, error } = await db
-    .from("simulations")
-    .select(
-      "id, api_key, audience_id, persona_cap, platform, input, thread, aggression_score, title, summary, shared_at, progress_messages, created_at, completed_at, public"
-    )
-    .eq("id", id)
-    .in("api_key", keys.map((k) => k.key))
-    .single();
-
-  if (error || !data) return null;
-  return { ...data, isPreview: !data.public };
 }
 
 async function getBaseUrl() {
@@ -148,22 +122,11 @@ function formatDate(dateStr: string) {
 export default async function SimulationPage({ params }: PageProps) {
   const { id } = await params;
 
-  // Try public first, then fall back to owner preview
-  let sim = await getPublicSimulation(id);
-
-  if (!sim) {
-    const supabase = await createSupabaseServer();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      sim = await getOwnedSimulation(id, user.id);
-    }
-  }
-
+  const sim = await getPublicSimulation(id);
   if (!sim) {
     notFound();
   }
 
-  const isPreview = sim.isPreview;
   const baseUrl = await getBaseUrl();
   const thread = (sim.thread ?? []) as AgentMessage[];
   const sentimentCounts = {
@@ -184,47 +147,7 @@ export default async function SimulationPage({ params }: PageProps) {
 
   return (
     <div className="mx-auto max-w-[760px] px-6 pt-12 pb-24">
-      {!isPreview && <ViewTracker simulationId={sim.id} />}
-
-      {isPreview && (
-        <div
-          className="mb-6 rounded-xl px-4 py-3 flex items-center justify-between flex-wrap gap-3"
-          style={{
-            background: "rgba(234, 179, 8, 0.08)",
-            border: "1px solid rgba(234, 179, 8, 0.25)",
-          }}
-        >
-          <p style={{ fontSize: 13, color: "#eab308" }}>
-            Preview — only you can see this. Share to make it public.
-          </p>
-          <div className="flex items-center gap-2">
-            <PreviewPublishButton
-              simulation={{
-                id: sim.id,
-                audience_id: sim.audience_id,
-                platform: sim.platform,
-                input: sim.input,
-                status: "completed",
-                aggression_score: sim.aggression_score,
-                public: sim.public,
-                title: sim.title,
-                summary: sim.summary,
-                shared_at: sim.shared_at,
-                progress_messages: sim.progress_messages,
-                created_at: sim.created_at,
-                completed_at: sim.completed_at,
-              }}
-            />
-            <a
-              href="/dashboard"
-              className="btn-secondary"
-              style={{ padding: "6px 12px", minHeight: "auto", fontSize: 12 }}
-            >
-              Back to dashboard
-            </a>
-          </div>
-        </div>
-      )}
+      <ViewTracker simulationId={sim.id} />
 
       <div className="mono-label">SIMULATION_REPORT</div>
       <h1
@@ -448,7 +371,7 @@ export default async function SimulationPage({ params }: PageProps) {
           API waitlist separately when you need direct integration.
         </p>
         <a
-          href="/login?mode=signup"
+          href="/waitlist"
           className="btn-primary mt-5 inline-flex"
           style={{
             padding: "12px 26px",
@@ -457,7 +380,7 @@ export default async function SimulationPage({ params }: PageProps) {
             color: "var(--butter-deep)",
           }}
         >
-          Start free
+          Get early access
         </a>
       </div>
     </div>

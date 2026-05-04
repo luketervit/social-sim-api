@@ -4,7 +4,6 @@ import HowItWorks from "../components/HowItWorks";
 import IndustryHero from "../components/IndustryHero";
 import MockedPlayground from "../components/MockedPlayground";
 import { COMMS_CONFIG } from "../components/industry-configs";
-import { getLandingData } from "../lib/landing-data";
 
 export const metadata: Metadata = {
   title: "Atharias for Internal Comms — Rehearse the all-hands",
@@ -12,13 +11,12 @@ export const metadata: Metadata = {
     "Layoffs, RTO mandates, comp changes. Rehearse the leak before it leaks.",
 };
 
-export default async function CommsPage() {
-  const { user } = await getLandingData();
+export default function CommsPage() {
   return (
     <div style={{ overflowX: "clip" }}>
       <IndustryHero config={COMMS_CONFIG} />
       <HowItWorks />
-      <MockedPlayground slug="comms" isSignedIn={!!user} />
+      <MockedPlayground slug="comms" />
       <Footer />
     </div>
   );

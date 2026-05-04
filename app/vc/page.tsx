@@ -4,7 +4,6 @@ import HowItWorks from "../components/HowItWorks";
 import IndustryHero from "../components/IndustryHero";
 import MockedPlayground from "../components/MockedPlayground";
 import { VC_CONFIG } from "../components/industry-configs";
-import { getLandingData } from "../lib/landing-data";
 
 export const metadata: Metadata = {
   title: "Atharias for Investors — Stress-test the portfolio bombshell",
@@ -12,13 +11,12 @@ export const metadata: Metadata = {
     "Layoffs, down rounds, pivots — preview your portfolio's public reaction before they ship the announcement.",
 };
 
-export default async function VcPage() {
-  const { user } = await getLandingData();
+export default function VcPage() {
   return (
     <div style={{ overflowX: "clip" }}>
       <IndustryHero config={VC_CONFIG} />
       <HowItWorks />
-      <MockedPlayground slug="vc" isSignedIn={!!user} />
+      <MockedPlayground slug="vc" />
       <Footer />
     </div>
   );
