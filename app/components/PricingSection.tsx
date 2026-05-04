@@ -4,10 +4,8 @@ import {
   SIMULATION_ROUNDS,
 } from "@/lib/credits";
 
-type PlanName = "Developer" | "Growth" | "Enterprise";
-
 type Plan = {
-  name: PlanName;
+  name: string;
   price: string;
   credits: string;
   summary: string;
@@ -19,40 +17,40 @@ type Plan = {
 
 const PLANS: Plan[] = [
   {
-    name: "Developer",
+    name: "Hobby",
     price: "$19/mo",
-    credits: "50,000 included",
+    credits: "50,000 credits",
     summary:
-      "For developers moving beyond the free playground and starting to integrate Atharias through the API.",
+      "For the indie dev wiring Atharias into a side project. ~50 standard runs, capped at 100 agents per simulation.",
     cta: "Build with the API",
     highlights: [
       "First paid API tier",
-      "~50 standard runs included",
+      "~50 standard runs / month",
       "100 max agents per simulation",
     ],
     accentColor: "var(--accent)",
   },
   {
-    name: "Growth",
+    name: "Studio",
     price: "$99/mo",
-    credits: "500,000 included",
+    credits: "500,000 credits",
     summary:
-      "For companies using Atharias internally across product, research, communications, or strategy workflows.",
+      "For product, research, comms, and strategy teams running this every week. Bigger rooms, faster queue, top-ups when you blow through.",
     featured: true,
-    cta: "Scale API usage",
+    cta: "Start a Studio plan",
     highlights: [
-      "~500 standard runs included",
+      "~500 standard runs / month",
       "500 max agents per simulation",
       "Priority queue + credit top-ups",
     ],
-    accentColor: "var(--coral)",
+    accentColor: "var(--tomato)",
   },
   {
-    name: "Enterprise",
-    price: "Contact",
+    name: "Volume",
+    price: "Talk to us",
     credits: "Custom volume",
     summary:
-      "For teams embedding Atharias into their own product, serving end users, and needing higher-volume infrastructure.",
+      "For teams putting Atharias inside their own product. Dedicated workers, custom limits, real SLA, a contract a procurement team will sign.",
     cta: "Talk to sales",
     highlights: [
       "Customer-facing integration",
@@ -67,31 +65,37 @@ export default function PricingSection() {
   return (
     <section
       style={{
-        padding: "96px 0 120px",
-        background: "linear-gradient(180deg, transparent 0%, rgba(52, 211, 153, 0.02) 100%)",
+        padding: "clamp(96px, 13vh, 160px) 0 clamp(96px, 13vh, 160px)",
+        background:
+          "linear-gradient(180deg, transparent 0%, rgba(52, 211, 153, 0.025) 100%)",
       }}
     >
       <div className="mx-auto max-w-[1200px] px-6">
-        <div style={{ marginBottom: 56, maxWidth: 560 }}>
+        <div style={{ marginBottom: 56, maxWidth: 600 }}>
           <span className="mono-label">Pricing</span>
           <h2
             style={{
-              fontSize: "clamp(1.75rem, 3.5vw, 2.5rem)",
+              fontSize: "clamp(2rem, 4vw, 3rem)",
               marginTop: 14,
+              maxWidth: 18 + "ch",
             }}
           >
-            Start free, scale with usage.
+            Free until you&apos;re{" "}
+            <span style={{ fontStyle: "italic", color: "var(--accent)" }}>
+              actually using it.
+            </span>
           </h2>
           <p
             style={{
               color: "var(--text-secondary)",
-              fontSize: 16,
-              marginTop: 14,
-              lineHeight: 1.7,
+              fontSize: 17,
+              marginTop: 16,
+              lineHeight: 1.65,
+              maxWidth: 560,
             }}
           >
-            The playground is free. Paid pricing starts when you need API keys, larger simulations,
-            and production-grade throughput.
+            The playground is on the house. Pay when you need API keys, bigger
+            rooms, or production throughput — not before.
           </p>
         </div>
 
@@ -109,12 +113,12 @@ export default function PricingSection() {
               <div className="flex items-center gap-3">
                 <h3
                   style={{
-                    fontSize: 22,
+                    fontSize: 24,
                     fontFamily: "var(--font-display), Georgia, serif",
                     letterSpacing: "-0.02em",
                   }}
                 >
-                  Free Playground
+                  Playground
                 </h3>
                 <span
                   style={{
@@ -129,25 +133,27 @@ export default function PricingSection() {
                     fontWeight: 600,
                   }}
                 >
-                  Free
+                  Free forever
                 </span>
               </div>
               <p
                 style={{
                   color: "var(--text-secondary)",
                   fontSize: 15,
-                  lineHeight: 1.7,
+                  lineHeight: 1.65,
                   marginTop: 10,
                   maxWidth: 600,
                 }}
               >
-                {PLAYGROUND_RUNS_INCLUDED} sandbox runs per day, up to {PLAYGROUND_PERSONA_CAP} agents
-                across {SIMULATION_ROUNDS} rounds.
+                {PLAYGROUND_RUNS_INCLUDED} runs a day, up to{" "}
+                {PLAYGROUND_PERSONA_CAP} agents across {SIMULATION_ROUNDS}{" "}
+                rounds. No card, no API key. Open the playground and post
+                something dangerous.
               </p>
             </div>
             <div>
               <a href="/login?mode=signup" className="btn-primary">
-                Get started free
+                Open the playground
               </a>
             </div>
           </div>
@@ -161,12 +167,30 @@ export default function PricingSection() {
               className="panel"
               style={{
                 padding: "36px 32px",
-                border: plan.featured ? `1px solid var(--accent)` : "1px solid var(--border)",
+                border: plan.featured
+                  ? `1px solid var(--tomato)`
+                  : "1px solid var(--border)",
                 background: plan.featured
-                  ? "linear-gradient(180deg, rgba(124, 92, 252, 0.03), var(--surface) 20%)"
+                  ? "linear-gradient(180deg, rgba(232, 93, 78, 0.05), var(--surface) 25%)"
                   : "var(--surface)",
+                position: "relative",
+                overflow: "hidden",
               }}
             >
+              {plan.featured ? (
+                <div
+                  aria-hidden="true"
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: 3,
+                    background: "var(--tomato)",
+                  }}
+                />
+              ) : null}
+
               <div
                 style={{
                   display: "flex",
@@ -175,7 +199,12 @@ export default function PricingSection() {
                   alignItems: "flex-start",
                 }}
               >
-                <span className="mono-label" style={{ color: "var(--text-tertiary)" }}>
+                <span
+                  className="mono-label"
+                  style={{
+                    color: plan.featured ? "var(--tomato)" : "var(--text-tertiary)",
+                  }}
+                >
                   {plan.name}
                 </span>
 
@@ -187,13 +216,13 @@ export default function PricingSection() {
                       letterSpacing: "0.06em",
                       textTransform: "uppercase",
                       color: "white",
-                      background: "var(--accent)",
+                      background: "var(--tomato)",
                       borderRadius: 999,
                       padding: "4px 10px",
                       fontWeight: 600,
                     }}
                   >
-                    Popular
+                    Most teams
                   </span>
                 ) : null}
               </div>
@@ -202,10 +231,11 @@ export default function PricingSection() {
                 className="tabular-nums"
                 style={{
                   fontFamily: "var(--font-display), Georgia, serif",
-                  fontSize: 36,
+                  fontSize: 40,
                   letterSpacing: "-0.03em",
                   color: "var(--text-primary)",
-                  marginTop: 20,
+                  marginTop: 18,
+                  lineHeight: 1.05,
                 }}
               >
                 {plan.price}
@@ -228,7 +258,7 @@ export default function PricingSection() {
                 style={{
                   color: "var(--text-secondary)",
                   fontSize: 14,
-                  lineHeight: 1.7,
+                  lineHeight: 1.65,
                   marginTop: 20,
                   paddingTop: 20,
                   borderTop: "1px solid var(--border)",
@@ -286,6 +316,7 @@ export default function PricingSection() {
                     display: "flex",
                     width: "100%",
                     justifyContent: "center",
+                    background: plan.featured ? "var(--tomato)" : undefined,
                   }}
                 >
                   {plan.cta}

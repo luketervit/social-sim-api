@@ -12,11 +12,6 @@ const brandFont = localFont({
   fallback: ["system-ui", "sans-serif"],
   src: [
     {
-      path: "./fonts/PPNeueMontreal-Thin.otf",
-      weight: "200",
-      style: "normal",
-    },
-    {
       path: "./fonts/PPNeueMontreal-Book.otf",
       weight: "400",
       style: "normal",
@@ -30,11 +25,6 @@ const brandFont = localFont({
       path: "./fonts/PPNeueMontreal-Bold.otf",
       weight: "700",
       style: "normal",
-    },
-    {
-      path: "./fonts/PPNeueMontreal-Italic.otf",
-      weight: "400",
-      style: "italic",
     },
   ],
 });

@@ -27,6 +27,16 @@
   --mint: #34D399;
   --mint-muted: rgba(52, 211, 153, 0.08);
 
+  /* Editorial accent surfaces — full-bleed bands, not sentiment */
+  --butter: #F5E6B8;
+  --butter-deep: #E8D27A;
+  --tomato: #E85D4E;
+  --ink: #141413;
+
+  /* Rotation tokens for tilted panels */
+  --rotation-soft: 1deg;
+  --rotation-medium: 2deg;
+
   /* Borders */
   --border: #EBEBEB;
   --border-hover: #D4D4D4;
@@ -45,27 +55,9 @@
   --z-dropdown: 100;
   --z-sticky: 50;
 
-  /* Legacy aliases for non-landing pages still using old dark tokens */
+  /* Legacy aliases — only what's still referenced */
   --obsidian: var(--bg);
-  --obsidian-light: var(--bg-subtle);
   --obsidian-panel: var(--bg-subtle);
-  --obsidian-elevated: var(--surface);
-  --champagne: var(--text-primary);
-  --champagne-dim: var(--accent-muted);
-  --champagne-glow: var(--accent-subtle);
-  --gray-1: #F5F4F2;
-  --gray-2: #EBEBEB;
-  --gray-3: #D4D4D4;
-  --gray-4: #B5B5B5;
-  --gray-5: #9E9E9E;
-  --gray-6: #8A8A8A;
-  --gray-7: #6B6B6B;
-  --gray-8: #4A4A4A;
-  --gray-9: #2A2A2A;
-  --gray-10: #1A1A1A;
-  --font-heading: var(--font-display);
-  --font-body-legacy: var(--font-body);
-  --font-brand: var(--font-body);
 
   /* Hairline border */
   --border-hairline: 1px;
@@ -247,6 +239,46 @@ button, a, input {
   }
 }
 
+/* Editorial pull quote — oversized italic display serif used as section divider */
+.display-pull {
+  font-family: var(--font-display), Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: clamp(2.4rem, 7vw, 6rem);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+}
+
+/* Full-bleed color band that escapes max-w containers */
+.color-band {
+  position: relative;
+  width: 100vw;
+  margin-left: 50%;
+  transform: translateX(-50%);
+}
+
+/* Editorial section number — oversized display serif bleeding off edges */
+.editorial-number {
+  font-family: var(--font-display), Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: clamp(8rem, 22vw, 18rem);
+  line-height: 0.85;
+  letter-spacing: -0.06em;
+  color: var(--text-primary);
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Tilted shell wrapper for the playground */
+.tilt-soft {
+  transform: rotate(calc(var(--rotation-soft) * -1));
+}
+.tilt-medium {
+  transform: rotate(var(--rotation-medium));
+}
+
 /* Primary button — violet pill */
 .btn-primary {
   display: inline-flex;
@@ -279,6 +311,11 @@ button, a, input {
   cursor: not-allowed;
 }
 
+.btn-primary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
 /* Secondary button — outlined pill */
 .btn-secondary {
   display: inline-flex;
@@ -305,6 +342,11 @@ button, a, input {
     border-color: var(--border-hover);
     background: var(--bg-subtle);
   }
+}
+
+.btn-secondary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 
 /* Card — soft shadow, no glassmorphism */
@@ -369,23 +411,13 @@ button, a, input {
   box-shadow: 0 0 0 3px var(--accent-muted);
 }
 
+.input:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-muted);
+}
+
 .input::placeholder {
   color: var(--text-tertiary);
-}
-
-/* Bento grid */
-.bento-grid {
-  display: grid;
-  gap: 0;
-}
-
-.bento-cell {
-  padding: 40px;
-  background: var(--surface);
-  border-radius: 16px;
-  position: relative;
-  overflow: hidden;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04);
 }
 
 /* Marquee animation */
@@ -394,10 +426,23 @@ button, a, input {
   to { transform: translateX(-50%); }
 }
 
+@keyframes marquee-scroll-reverse {
+  from { transform: translateX(-50%); }
+  to { transform: translateX(0); }
+}
+
 .marquee-track {
   display: flex;
-  gap: 48px;
+  gap: 16px;
   animation: marquee-scroll 60s linear infinite;
+}
+
+.marquee-track--reverse {
+  animation-name: marquee-scroll-reverse;
+}
+
+.marquee-track--fast {
+  animation-duration: 42s;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -506,73 +551,3 @@ button, a, input {
   border-radius: 3px;
 }
 
-/* SVG chart styles */
-.angular-line {
-  stroke-linejoin: miter;
-  stroke-linecap: square;
-}
-
-/* Docs prose — light theme */
-.docs-prose h1, .docs-prose h2, .docs-prose h3 {
-  color: var(--text-primary);
-  margin-top: 1.5em;
-  margin-bottom: 0.5em;
-}
-
-.docs-prose h1 { font-size: 20px; }
-.docs-prose h2 { font-size: 16px; }
-.docs-prose h3 { font-size: 14px; }
-
-.docs-prose p {
-  margin-bottom: 0.75em;
-}
-
-.docs-prose ul, .docs-prose ol {
-  padding-left: 1.25em;
-  margin-bottom: 0.75em;
-}
-
-.docs-prose li {
-  margin-bottom: 0.25em;
-}
-
-.docs-prose code {
-  font-size: 12px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: var(--bg-subtle);
-  color: var(--accent);
-  letter-spacing: 0.035em;
-}
-
-.docs-prose pre {
-  padding: 16px 20px;
-  border-radius: 12px;
-  background: var(--bg-subtle);
-  overflow-x: auto;
-  margin: 0.75em 0;
-  font-size: 13px;
-  line-height: 1.72;
-}
-
-.docs-prose pre code {
-  padding: 0;
-  background: none;
-  color: var(--text-primary);
-}
-
-.docs-prose strong {
-  color: var(--text-primary);
-  font-weight: var(--font-weight-semibold);
-}
-
-/* Glimmer effect for API key field */
-.glimmer-border {
-  position: relative;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .glimmer-border:hover {
-    border-color: var(--accent);
-  }
-}
