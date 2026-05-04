@@ -18,7 +18,12 @@ export default async function VcPage() {
     <div style={{ overflowX: "clip" }}>
       <IndustryHero config={VC_CONFIG} />
       <HowItWorks />
-      <PlaygroundSection audiences={audiences} isSignedIn={!!user} />
+      <PlaygroundSection
+        audiences={audiences}
+        isSignedIn={!!user}
+        defaultPrompt="Tough decision today — we're restructuring and reducing the team by 12% to extend runway."
+        defaultPlatform="twitter"
+      />
       <Footer />
     </div>
   );

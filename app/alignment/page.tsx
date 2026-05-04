@@ -18,7 +18,12 @@ export default async function AlignmentPage() {
     <div style={{ overflowX: "clip" }}>
       <IndustryHero config={ALIGNMENT_CONFIG} />
       <HowItWorks />
-      <PlaygroundSection audiences={audiences} isSignedIn={!!user} />
+      <PlaygroundSection
+        audiences={audiences}
+        isSignedIn={!!user}
+        defaultPrompt="A new study finds that exposure to AI-generated content reduces trust in human-written news by 23%."
+        defaultPlatform="reddit"
+      />
       <Footer />
     </div>
   );

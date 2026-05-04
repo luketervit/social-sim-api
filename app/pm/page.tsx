@@ -18,7 +18,12 @@ export default async function PmPage() {
     <div style={{ overflowX: "clip" }}>
       <IndustryHero config={PM_CONFIG} />
       <HowItWorks />
-      <PlaygroundSection audiences={audiences} isSignedIn={!!user} />
+      <PlaygroundSection
+        audiences={audiences}
+        isSignedIn={!!user}
+        defaultPrompt="Introducing our new pricing — Pro is now $39/mo, with the legacy plan grandfathered for 12 months."
+        defaultPlatform="twitter"
+      />
       <Footer />
     </div>
   );

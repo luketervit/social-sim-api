@@ -18,7 +18,12 @@ export default async function CommsPage() {
     <div style={{ overflowX: "clip" }}>
       <IndustryHero config={COMMS_CONFIG} />
       <HowItWorks />
-      <PlaygroundSection audiences={audiences} isSignedIn={!!user} />
+      <PlaygroundSection
+        audiences={audiences}
+        isSignedIn={!!user}
+        defaultPrompt="Team — starting June, we're moving back to 5 days in-office. Details and FAQ in the doc below."
+        defaultPlatform="slack"
+      />
       <Footer />
     </div>
   );

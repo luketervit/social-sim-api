@@ -25,6 +25,8 @@ interface AudienceOption {
 interface PlaygroundSectionProps {
   audiences: AudienceOption[];
   isSignedIn: boolean;
+  defaultPrompt?: string;
+  defaultPlatform?: "twitter" | "reddit" | "slack";
 }
 
 interface PlaygroundSimulation {
@@ -397,12 +399,14 @@ function CustomSelect({
 export default function PlaygroundSection({
   audiences,
   isSignedIn,
+  defaultPrompt = "We're launching a free tier for all new users starting next week.",
+  defaultPlatform = "twitter",
 }: PlaygroundSectionProps) {
-  const [input, setInput] = useState("We're launching a free tier for all new users starting next week.");
+  const [input, setInput] = useState(defaultPrompt);
   const [audienceId, setAudienceId] = useState(
     audiences.find((a) => a.id === "genz")?.id ?? audiences[0]?.id ?? "genz"
   );
-  const [platform, setPlatform] = useState<(typeof PLATFORM_OPTIONS)[number]["value"]>("twitter");
+  const [platform, setPlatform] = useState<(typeof PLATFORM_OPTIONS)[number]["value"]>(defaultPlatform);
   const [error, setError] = useState<string | null>(null);
   const [activeSimulationId, setActiveSimulationId] = useState<string | null>(null);
   const [simulation, setSimulation] = useState<PlaygroundSimulation | null>(null);

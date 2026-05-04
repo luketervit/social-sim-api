@@ -18,7 +18,12 @@ export default async function FounderPage() {
     <div style={{ overflowX: "clip" }}>
       <IndustryHero config={FOUNDER_CONFIG} />
       <HowItWorks />
-      <PlaygroundSection audiences={audiences} isSignedIn={!!user} />
+      <PlaygroundSection
+        audiences={audiences}
+        isSignedIn={!!user}
+        defaultPrompt="we just shipped v2 — bigger context, faster, $19/mo from today"
+        defaultPlatform="twitter"
+      />
       <Footer />
     </div>
   );
