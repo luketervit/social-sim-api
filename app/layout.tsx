@@ -4,6 +4,7 @@ import { Azeret_Mono, Fraunces } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
 import NavAuth from "./nav-auth";
+import { PostHogProvider } from "./posthog-provider";
 
 const brandFont = localFont({
   variable: "--font-body",
@@ -59,6 +60,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={`${brandFont.className} ${brandFont.variable} ${displayFont.variable} ${tacticalFont.variable}`}>
+        <PostHogProvider>
         <header className="header">
           <nav className="mx-auto flex max-w-[1200px] items-center justify-between px-6 py-4">
             <Link href="/" className="logo">
@@ -73,6 +75,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </nav>
         </header>
         <main>{children}</main>
+        </PostHogProvider>
       </body>
     </html>
   );

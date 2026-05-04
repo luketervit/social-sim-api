@@ -19,7 +19,7 @@ import { createSimulationJob } from "@/lib/simulation/jobs";
 import { runSimulationInline } from "@/lib/simulation/runInline";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
-export const maxDuration = 800;
+export const maxDuration = 300;
 
 async function getAuthenticatedUser(request: NextRequest) {
   const supabase = createServerClient(

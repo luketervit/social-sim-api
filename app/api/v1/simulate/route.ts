@@ -6,7 +6,7 @@ import { createSimulationJob, getSimulationJob } from "@/lib/simulation/jobs";
 import { runSimulationInline } from "@/lib/simulation/runInline";
 import { CREDITS_PER_MESSAGE, MAX_MESSAGES_PER_SIMULATION, SIMULATION_ROUNDS } from "@/lib/credits";
 
-export const maxDuration = 800;
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   const apiKey = request.headers.get("x-api-key");
