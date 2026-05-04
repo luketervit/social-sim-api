@@ -535,6 +535,147 @@ button, a, input {
   50% { opacity: 1; }
 }
 
+/* ==========================================
+   REVEAL ANIMATIONS — scroll-triggered
+   ========================================== */
+
+/* Word-by-word headline reveal */
+.reveal-heading .reveal-word {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(14px);
+  transition:
+    opacity 700ms var(--ease-out-cubic) calc(var(--reveal-i, 0) * 70ms),
+    transform 700ms var(--ease-out-cubic) calc(var(--reveal-i, 0) * 70ms);
+  will-change: opacity, transform;
+}
+
+.reveal-heading.is-visible .reveal-word {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Footer wordmark dramatic entrance */
+.reveal-wordmark > * {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(60px) scale(0.94);
+  filter: blur(6px);
+  transition:
+    opacity 1100ms var(--ease-out-quint),
+    transform 1200ms var(--ease-out-quint),
+    filter 900ms var(--ease-out-cubic);
+  will-change: opacity, transform, filter;
+}
+
+.reveal-wordmark.is-visible > * {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  filter: blur(0);
+}
+
+/* Generic block reveal — used for cards, mocks */
+.reveal-block {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity 800ms var(--ease-out-cubic),
+    transform 800ms var(--ease-out-cubic);
+  will-change: opacity, transform;
+}
+
+.reveal-block.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal-heading .reveal-word,
+  .reveal-wordmark > *,
+  .reveal-block {
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+    transition: none !important;
+  }
+}
+
+/* ==========================================
+   HOVER POLISH
+   ========================================== */
+
+/* Hero butter CTA glow */
+.cta-butter {
+  transition: background 180ms ease, transform 180ms ease, box-shadow 220ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cta-butter:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      0 0 0 1px rgba(245, 230, 184, 0.4),
+      0 8px 28px rgba(245, 230, 184, 0.25);
+  }
+}
+
+/* Hero ghost CTA hover */
+.cta-ghost {
+  transition: border-color 180ms ease, background 180ms ease, transform 180ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cta-ghost:hover {
+    border-color: rgba(245, 244, 242, 0.45) !important;
+    background: rgba(245, 244, 242, 0.04);
+    transform: translateY(-1px);
+  }
+}
+
+/* HowItWorks mock-card wake-up on hover */
+.mock-card {
+  transition: transform 350ms var(--ease-out-quint), box-shadow 350ms ease;
+  will-change: transform;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .mock-card:hover {
+    transform: rotate(0deg) translateY(-4px) !important;
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.05),
+      0 6px 18px rgba(20, 20, 19, 0.08),
+      0 18px 40px rgba(20, 20, 19, 0.06);
+  }
+}
+
+/* Footer link hover — butter underline */
+.footer-link {
+  position: relative;
+  display: inline-block;
+  transition: color 180ms ease;
+}
+
+.footer-link::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  height: 1px;
+  width: 100%;
+  background: var(--butter-deep);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 280ms var(--ease-out-quint);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .footer-link:hover {
+    color: var(--butter-deep) !important;
+  }
+  .footer-link:hover::after {
+    transform: scaleX(1);
+  }
+}
+
 /* Custom dropdown */
 @keyframes dropdown-enter {
   from {

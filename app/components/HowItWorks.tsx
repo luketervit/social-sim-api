@@ -1,3 +1,5 @@
+import Reveal from "./Reveal";
+
 type Step = {
   number: string;
   kicker: string;
@@ -12,7 +14,7 @@ type Step = {
 function MockMessage() {
   return (
     <div
-      className="panel"
+      className="panel mock-card"
       style={{
         padding: "20px 22px",
         maxWidth: 360,
@@ -67,7 +69,7 @@ function MockAudience() {
   ];
   return (
     <div
-      className="panel"
+      className="panel mock-card"
       style={{
         padding: "16px 18px",
         maxWidth: 320,
@@ -138,7 +140,7 @@ function MockReactions() {
       ].map((c, i) => (
         <div
           key={i}
-          className="panel"
+          className="panel mock-card"
           style={{
             padding: "10px 14px",
             transform: `rotate(${i % 2 ? 1 : -1}deg)`,
@@ -212,15 +214,21 @@ export default function HowItWorks() {
     <div>
       <div className="mx-auto max-w-[1200px] px-6" style={{ paddingTop: 96, paddingBottom: 24 }}>
         <span className="mono-label">How it works</span>
-        <h2
+        <Reveal
+          as="h2"
+          className="reveal-heading"
+          threshold={0.3}
           style={{
             fontSize: "clamp(2rem, 4vw, 3rem)",
             marginTop: 14,
             maxWidth: 14 + "ch",
           }}
         >
-          Three steps. <span style={{ fontStyle: "italic" }}>No surprises.</span>
-        </h2>
+          <span className="reveal-word" style={{ ["--reveal-i" as string]: 0 }}>Three</span>{" "}
+          <span className="reveal-word" style={{ ["--reveal-i" as string]: 1 }}>steps.</span>{" "}
+          <span className="reveal-word" style={{ ["--reveal-i" as string]: 2, fontStyle: "italic" }}>No</span>{" "}
+          <span className="reveal-word" style={{ ["--reveal-i" as string]: 3, fontStyle: "italic" }}>surprises.</span>
+        </Reveal>
       </div>
 
       {STEPS.map((step) => {

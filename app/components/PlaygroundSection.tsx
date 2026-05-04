@@ -10,6 +10,7 @@ import {
   type FormEvent,
 } from "react";
 import type { AgentMessage } from "@/lib/simulation/types";
+import Reveal from "./Reveal";
 import {
   PLAYGROUND_PERSONA_CAP,
   PLAYGROUND_RUNS_INCLUDED,
@@ -570,18 +571,24 @@ export default function PlaygroundSection({
         >
           <div style={{ maxWidth: 560 }}>
             <span className="mono-label">The playground</span>
-            <h2
+            <Reveal
+              as="h2"
+              className="reveal-heading"
+              threshold={0.3}
               style={{
                 fontSize: "clamp(2rem, 4vw, 3rem)",
                 marginTop: 12,
                 maxWidth: 16 + "ch",
               }}
             >
-              Try it on something{" "}
-              <span style={{ fontStyle: "italic" }}>
-                you&apos;d actually post.
-              </span>
-            </h2>
+              <span className="reveal-word" style={{ ["--reveal-i" as string]: 0 }}>Try</span>{" "}
+              <span className="reveal-word" style={{ ["--reveal-i" as string]: 1 }}>it</span>{" "}
+              <span className="reveal-word" style={{ ["--reveal-i" as string]: 2 }}>on</span>{" "}
+              <span className="reveal-word" style={{ ["--reveal-i" as string]: 3 }}>something</span>{" "}
+              <span className="reveal-word" style={{ ["--reveal-i" as string]: 4, fontStyle: "italic" }}>you&apos;d</span>{" "}
+              <span className="reveal-word" style={{ ["--reveal-i" as string]: 5, fontStyle: "italic" }}>actually</span>{" "}
+              <span className="reveal-word" style={{ ["--reveal-i" as string]: 6, fontStyle: "italic" }}>post.</span>
+            </Reveal>
           </div>
           <p
             style={{

@@ -121,6 +121,7 @@ export default function HeroSection() {
         >
           <Link
             href="/waitlist"
+            className="cta-butter"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -134,13 +135,13 @@ export default function HeroSection() {
               color: "var(--ink)",
               background: "var(--butter-deep)",
               textDecoration: "none",
-              transition: "background 150ms ease, transform 150ms ease",
             }}
           >
             Get early access
           </Link>
           <Link
             href="/#playground"
+            className="cta-ghost"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -155,7 +156,6 @@ export default function HeroSection() {
               background: "transparent",
               border: "1px solid rgba(245, 244, 242, 0.22)",
               textDecoration: "none",
-              transition: "border-color 150ms ease, background 150ms ease",
             }}
           >
             Try the playground

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Reveal from "./Reveal";
 
 const LINK_GROUPS = [
   {
@@ -107,6 +108,7 @@ export default function Footer() {
                     <li key={l.label}>
                       <Link
                         href={l.href}
+                        className="footer-link"
                         style={{
                           fontSize: 14,
                           color: "rgba(245, 244, 242, 0.85)",
@@ -125,8 +127,9 @@ export default function Footer() {
         </div>
 
         {/* Oversized wordmark */}
-        <div
-          aria-hidden="true"
+        <Reveal
+          className="reveal-wordmark"
+          threshold={0.25}
           style={{
             marginTop: 64,
             paddingTop: 32,
@@ -135,6 +138,7 @@ export default function Footer() {
           }}
         >
           <span
+            aria-hidden="true"
             style={{
               display: "block",
               fontFamily: "var(--font-display), Georgia, serif",
@@ -145,12 +149,12 @@ export default function Footer() {
               color: "var(--butter-deep)",
               userSelect: "none",
               whiteSpace: "nowrap",
-              transform: "translateY(8%)",
+              marginBottom: "-6%",
             }}
           >
             Atharias.
           </span>
-        </div>
+        </Reveal>
       </div>
     </footer>
   );
