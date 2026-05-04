@@ -507,8 +507,24 @@ export default function MockedPlayground({
                 }}
               >
                 Hit <strong style={{ color: "var(--text-primary)" }}>Run simulation</strong>{" "}
-                to watch {run.persona_cap} synthetic users react across{" "}
-                {totalRounds || 10} rounds in real time.
+                to play back a pre-recorded run — {run.persona_cap} synthetic
+                users across {totalRounds || 10} rounds.
+              </div>
+            ) : null}
+
+            {/* mocked-playback note */}
+            {status === "idle" && run ? (
+              <div
+                style={{
+                  marginTop: 8,
+                  fontFamily: "var(--font-data), monospace",
+                  fontSize: 10,
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  color: "var(--text-tertiary)",
+                }}
+              >
+                Demo · sample run · sign up to run your own
               </div>
             ) : null}
 
