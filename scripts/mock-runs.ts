@@ -36,9 +36,9 @@ const SPECS: MockSpec[] = [
   },
   {
     slug: "vc",
-    audience_file: "toxic_gamers.json",
-    audience_id: "toxic_gamers",
-    audience_name: "Toxic Gamers",
+    audience_file: "engineers.json",
+    audience_id: "engineers",
+    audience_name: "Engineers",
     platform: "twitter",
     input:
       "Tough decision today — we're restructuring and reducing the team by 12% to extend runway.",
@@ -46,9 +46,9 @@ const SPECS: MockSpec[] = [
   },
   {
     slug: "pm",
-    audience_file: "toxic_gamers.json",
-    audience_id: "toxic_gamers",
-    audience_name: "Toxic Gamers",
+    audience_file: "engineers.json",
+    audience_id: "engineers",
+    audience_name: "Engineers",
     platform: "twitter",
     input:
       "Introducing our new pricing — Pro is now $39/mo, with the legacy plan grandfathered for 12 months.",
@@ -86,7 +86,15 @@ async function generate() {
   const outDir = join(process.cwd(), "public", "mocked-runs");
   mkdirSync(outDir, { recursive: true });
 
-  for (const spec of SPECS) {
+  const filter = process.argv.slice(2);
+  const specs = filter.length > 0 ? SPECS.filter((s) => filter.includes(s.slug)) : SPECS;
+  if (filter.length > 0 && specs.length === 0) {
+    console.error(`No specs matched filter: ${filter.join(", ")}`);
+    console.error(`Known slugs: ${SPECS.map((s) => s.slug).join(", ")}`);
+    process.exit(1);
+  }
+
+  for (const spec of specs) {
     console.log(`→ Generating mock for /${spec.slug} (${spec.audience_id} on ${spec.platform})…`);
     const personas = loadPersonas(spec.audience_file, spec.persona_cap);
     const messages: AgentMessage[] = [];
