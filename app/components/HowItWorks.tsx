@@ -61,18 +61,22 @@ function MockMessage() {
 }
 
 function MockAudience() {
-  const rows = [
-    { name: "Toxic Gamers", count: "1,200 agents" },
-    { name: "Gen Z", count: "800 agents" },
-    { name: "Engineers", count: "500 agents" },
-    { name: "Finance Twitter", count: "320 agents" },
+  const sources = [
+    { name: "customers.csv", meta: "12,840 rows" },
+    { name: "support-tickets.csv", meta: "4,210 rows" },
+    { name: "slack-archive.json", meta: "8,900 messages" },
+  ];
+  const agents = [
+    { name: "Avery", role: "founder · churn-risk", dot: "var(--coral)" },
+    { name: "Marco", role: "ic eng · skeptical", dot: "var(--text-tertiary)" },
+    { name: "Priya", role: "ops · loyal", dot: "var(--mint)" },
   ];
   return (
     <div
       className="panel mock-card"
       style={{
         padding: "16px 18px",
-        maxWidth: 320,
+        maxWidth: 340,
         transform: "rotate(1.2deg)",
       }}
     >
@@ -80,43 +84,144 @@ function MockAudience() {
         className="mono-label"
         style={{ fontSize: 10, color: "var(--text-tertiary)" }}
       >
-        Audience
+        Your data
       </span>
-      <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-        {rows.map((r, i) => (
+      <div
+        style={{
+          marginTop: 10,
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+        }}
+      >
+        {sources.map((s) => (
           <div
-            key={r.name}
+            key={s.name}
             style={{
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              padding: "8px 12px",
+              padding: "7px 10px",
+              borderRadius: 8,
+              border: "1px dashed var(--border)",
+              background: "var(--bg-subtle)",
+              fontFamily: "var(--font-data), monospace",
+              fontSize: 11,
+              letterSpacing: "0.02em",
+            }}
+          >
+            <span style={{ color: "var(--text-primary)" }}>{s.name}</span>
+            <span style={{ color: "var(--text-tertiary)" }}>{s.meta}</span>
+          </div>
+        ))}
+      </div>
+
+      <div
+        style={{
+          margin: "14px 0 12px",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+        }}
+      >
+        <span
+          style={{
+            flex: 1,
+            height: 1,
+            background: "var(--border)",
+          }}
+        />
+        <span
+          style={{
+            fontFamily: "var(--font-data), monospace",
+            fontSize: 10,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            padding: "3px 8px",
+            borderRadius: 999,
+            background: "var(--ink)",
+            color: "var(--butter-deep)",
+          }}
+        >
+          Synthesize ↓
+        </span>
+        <span
+          style={{
+            flex: 1,
+            height: 1,
+            background: "var(--border)",
+          }}
+        />
+      </div>
+
+      <span
+        className="mono-label"
+        style={{ fontSize: 10, color: "var(--text-tertiary)" }}
+      >
+        Agents generated
+      </span>
+      <div
+        style={{
+          marginTop: 10,
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+        }}
+      >
+        {agents.map((a) => (
+          <div
+            key={a.name}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "8px 10px",
               borderRadius: 10,
-              background: i === 0 ? "rgba(20, 20, 19, 0.05)" : "transparent",
-              border: i === 0 ? "1px solid var(--ink)" : "1px solid var(--border)",
+              border: "1px solid var(--border)",
+              background: "var(--surface)",
             }}
           >
             <span
               style={{
+                width: 6,
+                height: 6,
+                borderRadius: 999,
+                background: a.dot,
+                flexShrink: 0,
+              }}
+            />
+            <span
+              style={{
                 fontSize: 13,
                 color: "var(--text-primary)",
-                fontWeight: i === 0 ? 500 : 400,
+                fontWeight: 500,
               }}
             >
-              {r.name}
+              {a.name}
             </span>
             <span
               style={{
                 fontFamily: "var(--font-data), monospace",
                 fontSize: 10,
                 color: "var(--text-tertiary)",
-                letterSpacing: "0.04em",
+                letterSpacing: "0.02em",
               }}
             >
-              {r.count}
+              {a.role}
             </span>
           </div>
         ))}
+        <span
+          style={{
+            fontFamily: "var(--font-data), monospace",
+            fontSize: 10,
+            color: "var(--text-tertiary)",
+            letterSpacing: "0.04em",
+            paddingLeft: 10,
+          }}
+        >
+          + 25,947 more
+        </span>
       </div>
     </div>
   );
@@ -188,9 +293,14 @@ const STEPS: Step[] = [
   {
     number: "02",
     kicker: "Step two",
-    title: <>Pick the room.</>,
+    title: (
+      <>
+        Bring your{" "}
+        <span style={{ fontStyle: "italic" }}>actual</span> customers.
+      </>
+    ),
     description:
-      "Choose from seeded audiences (Toxic Gamers, Gen Z, Engineers, Finance Twitter, your own internal Slack) or upload customer data and we'll synthesize the agents.",
+      "Drop in your CSVs, your Slack archive, your support tickets — Atharias synthesizes a population of agents that argue, dunk, and praise like the people behind your data. Seeded audiences (Toxic Gamers, Gen Z, Engineers) are bundled in for the playground.",
     background: "var(--butter)",
     numberColor: "var(--tomato)",
     align: "right",
