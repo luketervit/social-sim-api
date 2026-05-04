@@ -147,7 +147,7 @@ export default function Footer() {
               color: "var(--butter-deep)",
               userSelect: "none",
               whiteSpace: "nowrap",
-              marginBottom: "-6%",
+              paddingBottom: "0.08em",
             }}
           >
             Atharias.
