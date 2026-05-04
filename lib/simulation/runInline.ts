@@ -73,14 +73,16 @@ async function loadAudience(
       ? personas.slice(0, Math.min(personaCap, personas.length))
       : personas;
 
-  // Defensive: never use ":free" tier in production sims even if an older
-  // routing decision saved it. Free tier hits 8 RPM hard and crashes the
-  // engine. Strip the suffix so it falls through to the paid lane.
+  // Defensive: ignore older saved generator_model values that no longer have
+  // a working endpoint on OpenRouter (anything ending ":free" or pointing at
+  // the paid Dolphin-Mistral that doesn't exist). Fall back to env default.
   let generatorModel: string | null = null;
   if (typeof data.generator_model === "string" && data.generator_model.length > 0) {
-    generatorModel = data.generator_model.endsWith(":free")
-      ? data.generator_model.slice(0, -":free".length)
-      : data.generator_model;
+    const saved = data.generator_model;
+    const broken =
+      saved.endsWith(":free") ||
+      saved === "cognitivecomputations/dolphin-mistral-24b-venice-edition";
+    generatorModel = broken ? null : saved;
   }
 
   return {

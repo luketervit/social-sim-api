@@ -49,7 +49,8 @@ ${classifiers}
 
 ROUTING RULES:
 - For corporate / Slack / internal-comms / professional-email simulations, pick an aligned generator (Claude Haiku, Claude Sonnet, Llama 3.3 70B). RLHF politeness is realistic in those domains.
-- For X / Twitter / Reddit / Discord / gaming / political / community simulations where hostility is expected, pick an uncensored generator (Dolphin-Mistral 24B Venice or Dolphin-Llama3 8B). Aligned models WILL refuse and ruin the sim.
+- For X / Twitter / Reddit / Discord / gaming / political / community simulations where hostility is expected, pick a permissive/uncensored generator (Hermes 4 70B or Hermes 4 405B). Aligned models WILL refuse and ruin the sim.
+- DO NOT pick the dolphin-mistral-24b-venice-budget option for any sim larger than 20 personas — it is rate-limited at ~8 requests per minute and the engine will fail.
 - For non-English or multilingual data, prefer multilingual classifiers and generators (Qwen 3, Mistral Small, Claude).
 - Skip the political_leaning classifier unless the data is clearly politically inflected. It produces noise on product/brand data.
 - Skip the formality classifier unless the platform is slack or internal-comms.

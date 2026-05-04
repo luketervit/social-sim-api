@@ -27,16 +27,52 @@ export interface GeneratorModel {
 
 export const GENERATORS: GeneratorModel[] = [
   {
-    id: "dolphin-mistral-24b-venice",
-    display_name: "Dolphin-Mistral 24B Venice",
+    id: "hermes-4-70b",
+    display_name: "Hermes 4 70B",
     provider: "openrouter",
-    openrouter_id: "cognitivecomputations/dolphin-mistral-24b-venice-edition",
+    openrouter_id: "nousresearch/hermes-4-70b",
+    task_strengths: ["discourse", "long_form"],
+    output_cost_per_million: 0.4,
+    languages: ["en"],
+    refusal_posture: "permissive",
+    notes:
+      "Steerable Llama-3.1-70B fine-tune by NousResearch. Low refusal rate, no production rate limits. Default for hostile/community/political/gaming/Reddit discourse. ~$0.06/sim.",
+  },
+  {
+    id: "hermes-4-405b",
+    display_name: "Hermes 4 405B",
+    provider: "openrouter",
+    openrouter_id: "nousresearch/hermes-4-405b",
+    task_strengths: ["discourse", "long_form"],
+    output_cost_per_million: 3.0,
+    languages: ["en"],
+    refusal_posture: "permissive",
+    notes:
+      "Premium Hermes 4 at frontier scale. Use for high-stakes brand demos where output realism justifies higher cost (~$0.45/sim). Same refusal posture as 70B but more nuanced.",
+  },
+  {
+    id: "hermes-3-70b",
+    display_name: "Hermes 3 Llama 3.1 70B",
+    provider: "openrouter",
+    openrouter_id: "nousresearch/hermes-3-llama-3.1-70b",
+    task_strengths: ["discourse", "long_form"],
+    output_cost_per_million: 0.3,
+    languages: ["en"],
+    refusal_posture: "permissive",
+    notes:
+      "Older Hermes 3 generation. Cheaper than Hermes 4 70B, similar steerability. Good budget pick.",
+  },
+  {
+    id: "dolphin-mistral-24b-venice-budget",
+    display_name: "Dolphin-Mistral 24B Venice (free, rate-limited)",
+    provider: "openrouter",
+    openrouter_id: "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
     task_strengths: ["discourse"],
-    output_cost_per_million: 1.0,
+    output_cost_per_million: 0,
     languages: ["en"],
     refusal_posture: "uncensored",
     notes:
-      "Most uncensored production model (2.20% refusal rate, Apr 2026). Best for hostile/partisan/community discourse on X, Reddit, Discord, gaming. Production lane — no rate limits. Default.",
+      "Most uncensored model available, but FREE TIER ONLY on OpenRouter — capped at ~8 RPM. DO NOT use for live demos with 100-persona audiences; the engine bursts 20 calls/round and gets blocked. OK for tiny tests.",
   },
   {
     id: "dolphin-llama3-8b",
@@ -259,7 +295,7 @@ export const CLASSIFIERS: ClassifierModel[] = [
 // Defaults (used when Claude routing fails or env unset)
 // ---------------------------------------------------------------------------
 
-export const DEFAULT_GENERATOR_ID = "dolphin-mistral-24b-venice";
+export const DEFAULT_GENERATOR_ID = "hermes-4-70b";
 export const DEFAULT_CLASSIFIER_IDS: string[] = [
   "sentiment_en_twitter",
   "offensive_twitter",
