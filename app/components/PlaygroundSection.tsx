@@ -578,7 +578,7 @@ export default function PlaygroundSection({
               }}
             >
               Try it on something{" "}
-              <span style={{ fontStyle: "italic", color: "var(--accent)" }}>
+              <span style={{ fontStyle: "italic" }}>
                 you&apos;d actually post.
               </span>
             </h2>
@@ -598,25 +598,23 @@ export default function PlaygroundSection({
           </p>
         </div>
 
-        <div
-          className="section-shell"
-          style={{
-            border: "1px solid var(--border)",
-            padding: "clamp(24px, 3vw, 36px)",
-          }}
-        >
-          <div className="grid gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
+        <div className="grid gap-12 lg:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)] lg:items-start">
             {/* Left: Form */}
             <div>
               <form onSubmit={handleSubmit}>
-                <div className="grid gap-5">
+                <div className="grid gap-6">
                   <div>
                     <label
                       htmlFor="playground-input"
-                      className="mono-label"
-                      style={{ display: "block", marginBottom: 10 }}
+                      style={{
+                        display: "block",
+                        marginBottom: 8,
+                        fontSize: 13,
+                        color: "var(--text-secondary)",
+                        letterSpacing: "-0.01em",
+                      }}
                     >
-                      Prompt
+                      Your post
                     </label>
                     <textarea
                       id="playground-input"
@@ -625,17 +623,22 @@ export default function PlaygroundSection({
                       rows={5}
                       maxLength={2000}
                       className="input"
-                      placeholder="Paste the announcement, launch post, or internal message you want to pressure test."
-                      style={{ resize: "vertical", minHeight: 140, borderRadius: 12 }}
+                      placeholder="we're sunsetting the free tier next month — paid plans start at $19/mo."
+                      style={{ resize: "vertical", minHeight: 140, borderRadius: 14 }}
                     />
                   </div>
 
-                  <div className="grid gap-5 md:grid-cols-2">
+                  <div className="grid gap-6 md:grid-cols-2">
                     <div>
                       <label
                         htmlFor="playground-audience"
-                        className="mono-label"
-                        style={{ display: "block", marginBottom: 10 }}
+                        style={{
+                          display: "block",
+                          marginBottom: 8,
+                          fontSize: 13,
+                          color: "var(--text-secondary)",
+                          letterSpacing: "-0.01em",
+                        }}
                       >
                         Audience
                       </label>
@@ -650,8 +653,13 @@ export default function PlaygroundSection({
                     <div>
                       <label
                         htmlFor="playground-platform"
-                        className="mono-label"
-                        style={{ display: "block", marginBottom: 10 }}
+                        style={{
+                          display: "block",
+                          marginBottom: 8,
+                          fontSize: 13,
+                          color: "var(--text-secondary)",
+                          letterSpacing: "-0.01em",
+                        }}
                       >
                         Environment
                       </label>
@@ -666,13 +674,18 @@ export default function PlaygroundSection({
                 </div>
 
                 <div
-                  className="mt-4 flex flex-wrap items-center gap-3"
-                  style={{ fontSize: 13, color: "var(--text-tertiary)" }}
+                  className="mt-5 flex flex-wrap items-center gap-3"
+                  style={{
+                    fontSize: 12,
+                    color: "var(--text-tertiary)",
+                    fontFamily: "var(--font-data), monospace",
+                    letterSpacing: "0.02em",
+                  }}
                 >
                   <span>Instant queueing</span>
-                  <span style={{ opacity: 0.4 }}>/</span>
+                  <span style={{ opacity: 0.4 }}>·</span>
                   <span>{PLAYGROUND_PERSONA_CAP}-agent sample</span>
-                  <span style={{ opacity: 0.4 }}>/</span>
+                  <span style={{ opacity: 0.4 }}>·</span>
                   <span>
                     {
                       PLATFORM_OPTIONS.find((option) => option.value === platform)?.description
@@ -686,18 +699,23 @@ export default function PlaygroundSection({
                   </p>
                 ) : null}
 
-                <div className="mt-6 flex flex-wrap gap-3">
+                <div className="mt-7 flex flex-wrap gap-3">
                   {isSignedIn ? (
                     <button
                       type="submit"
                       className="btn-primary"
+                      style={{ background: "var(--ink)", color: "var(--butter-deep)" }}
                       disabled={isRunning || input.trim().length === 0}
                     >
-                      {isRunning ? "Running..." : "Run simulation"}
+                      {isRunning ? "Running..." : "Run simulation →"}
                     </button>
                   ) : (
                     <>
-                      <Link href={authHref} className="btn-primary">
+                      <Link
+                        href={authHref}
+                        className="btn-primary"
+                        style={{ background: "var(--ink)", color: "var(--butter-deep)" }}
+                      >
                         Create free account
                       </Link>
                       <Link href="/login?mode=signin&next=%2Fdashboard" className="btn-secondary">
@@ -710,17 +728,16 @@ export default function PlaygroundSection({
             </div>
 
             {/* Right: Output */}
-            <div
-              suppressHydrationWarning
-              style={{
-                padding: 28,
-                minHeight: 480,
-                background: "var(--bg-subtle)",
-                borderRadius: 14,
-                border: "1px solid var(--border)",
-              }}
-            >
+            <div suppressHydrationWarning style={{ minHeight: 480 }}>
               {!mounted ? null : simulation ? (
+                <div
+                  style={{
+                    padding: 28,
+                    background: "var(--bg-subtle)",
+                    borderRadius: 14,
+                    border: "1px solid var(--border)",
+                  }}
+                >
                 <>
                   <div className="flex items-center justify-between gap-4">
                     <div>
@@ -817,11 +834,11 @@ export default function PlaygroundSection({
                     </p>
                   ) : null}
                 </>
+                </div>
               ) : (
                 <PlaygroundPreview />
               )}
             </div>
-          </div>
         </div>
       </div>
 
@@ -849,12 +866,15 @@ function PlaygroundPreview() {
     <div
       style={{
         position: "relative",
-        height: "100%",
-        minHeight: 380,
+        background: "var(--ink)",
+        color: "rgba(245, 244, 242, 0.95)",
+        borderRadius: 18,
+        padding: 24,
+        minHeight: 480,
         display: "flex",
         flexDirection: "column",
-        gap: 10,
-        padding: "8px 4px",
+        gap: 12,
+        boxShadow: "0 1px 2px rgba(0,0,0,0.05), 0 14px 40px rgba(20,20,19,0.18)",
       }}
     >
       <div
@@ -862,21 +882,41 @@ function PlaygroundPreview() {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "0 4px 4px",
+          paddingBottom: 4,
         }}
       >
-        <span className="mono-label" style={{ color: "var(--text-tertiary)" }}>
+        <span
+          style={{
+            fontFamily: "var(--font-data), monospace",
+            fontSize: 11,
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
+            color: "var(--butter-deep)",
+            fontWeight: 500,
+          }}
+        >
           Preview · what you&apos;ll see
         </span>
         <span
           style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
             fontSize: 10,
             fontFamily: "var(--font-data), monospace",
-            letterSpacing: "0.06em",
-            color: "var(--text-tertiary)",
+            letterSpacing: "0.08em",
+            color: "rgba(245, 244, 242, 0.5)",
             textTransform: "uppercase",
           }}
         >
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: 999,
+              background: "rgba(245, 244, 242, 0.4)",
+            }}
+          />
           Idle
         </span>
       </div>
@@ -886,7 +926,6 @@ function PlaygroundPreview() {
           display: "flex",
           flexDirection: "column",
           gap: 8,
-          opacity: 0.55,
           flex: 1,
         }}
       >
@@ -895,11 +934,11 @@ function PlaygroundPreview() {
             key={i}
             style={{
               padding: "10px 14px",
-              background: "var(--surface)",
-              border: "1px solid var(--border)",
+              background: "rgba(28, 27, 25, 0.92)",
+              border: "1px solid rgba(245, 244, 242, 0.1)",
               borderRadius: 12,
-              transform: `rotate(${(i % 2 === 0 ? -1 : 1) * 0.4}deg)`,
-              boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+              transform: `rotate(${(i % 2 === 0 ? -1 : 1) * 0.5}deg)`,
+              boxShadow: "0 1px 2px rgba(0,0,0,0.25), 0 6px 16px rgba(0,0,0,0.3)",
             }}
           >
             <div
@@ -924,7 +963,7 @@ function PlaygroundPreview() {
                   fontFamily: "var(--font-data), monospace",
                   fontSize: 10,
                   letterSpacing: "0.04em",
-                  color: "var(--text-tertiary)",
+                  color: "rgba(245, 244, 242, 0.5)",
                 }}
               >
                 {c.handle}
@@ -933,7 +972,7 @@ function PlaygroundPreview() {
             <span
               style={{
                 fontSize: 13,
-                color: c.pending ? "var(--text-tertiary)" : "var(--text-primary)",
+                color: c.pending ? "rgba(245, 244, 242, 0.55)" : "rgba(245, 244, 242, 0.95)",
                 fontStyle: c.pending ? "italic" : undefined,
               }}
             >
@@ -948,8 +987,8 @@ function PlaygroundPreview() {
           marginTop: "auto",
           padding: "12px 14px",
           borderRadius: 12,
-          background: "var(--surface)",
-          border: "1px dashed var(--border)",
+          background: "rgba(245, 244, 242, 0.04)",
+          border: "1px dashed rgba(245, 244, 242, 0.18)",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -957,16 +996,17 @@ function PlaygroundPreview() {
           flexWrap: "wrap",
         }}
       >
-        <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+        <span style={{ fontSize: 13, color: "rgba(245, 244, 242, 0.78)" }}>
           Hit{" "}
           <span
             style={{
               fontFamily: "var(--font-data), monospace",
               padding: "2px 6px",
               borderRadius: 6,
-              background: "var(--accent-muted)",
-              color: "var(--accent)",
+              background: "var(--butter-deep)",
+              color: "var(--ink)",
               fontSize: 11,
+              fontWeight: 600,
             }}
           >
             run
@@ -977,9 +1017,9 @@ function PlaygroundPreview() {
           style={{
             fontFamily: "var(--font-data), monospace",
             fontSize: 10,
-            letterSpacing: "0.06em",
+            letterSpacing: "0.08em",
             textTransform: "uppercase",
-            color: "var(--text-tertiary)",
+            color: "rgba(245, 244, 242, 0.45)",
           }}
         >
           ~30s · {PLAYGROUND_PERSONA_CAP} agents

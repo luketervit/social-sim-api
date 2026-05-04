@@ -90,8 +90,8 @@ function MockAudience() {
               justifyContent: "space-between",
               padding: "8px 12px",
               borderRadius: 10,
-              background: i === 0 ? "var(--accent-muted)" : "transparent",
-              border: i === 0 ? "1px solid var(--accent)" : "1px solid var(--border)",
+              background: i === 0 ? "rgba(20, 20, 19, 0.05)" : "transparent",
+              border: i === 0 ? "1px solid var(--ink)" : "1px solid var(--border)",
             }}
           >
             <span
@@ -179,7 +179,7 @@ const STEPS: Step[] = [
     description:
       "Paste the launch tweet, the all-hands memo, the price-bump email — anything you'd normally throw into the void and hope.",
     background: "transparent",
-    numberColor: "var(--accent)",
+    numberColor: "var(--ink)",
     align: "left",
     mock: <MockMessage />,
   },
@@ -201,7 +201,7 @@ const STEPS: Step[] = [
     description:
       "Watch the simulated thread unfold: sentiment, aggression, virality, the whole receipts. Edit the post until the room actually wants what you're shipping.",
     background: "transparent",
-    numberColor: "var(--mint)",
+    numberColor: "var(--ink)",
     align: "left",
     mock: <MockReactions />,
   },
@@ -219,7 +219,7 @@ export default function HowItWorks() {
             maxWidth: 14 + "ch",
           }}
         >
-          Three steps. <span style={{ fontStyle: "italic", color: "var(--accent)" }}>No surprises.</span>
+          Three steps. <span style={{ fontStyle: "italic" }}>No surprises.</span>
         </h2>
       </div>
 
