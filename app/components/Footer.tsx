@@ -6,7 +6,6 @@ const LINK_GROUPS = [
     title: "Product",
     links: [
       { label: "Playground", href: "/#playground" },
-      { label: "Pricing", href: "/#pricing" },
       { label: "Docs", href: "/docs" },
       { label: "API keys", href: "/keys" },
     ],
@@ -22,8 +21,7 @@ const LINK_GROUPS = [
   {
     title: "Elsewhere",
     links: [
-      { label: "X / Twitter", href: "https://x.com/atharias" },
-      { label: "Contact", href: "mailto:hello@atharias.dev" },
+      { label: "Contact", href: "mailto:luke@atharias.dev" },
     ],
   },
 ];

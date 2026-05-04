@@ -418,24 +418,44 @@ export default async function SimulationPage({ params }: PageProps) {
       </div>
 
       <div
-        className="mt-12 rounded-xl p-6 text-center"
+        className="mt-12 rounded-2xl p-8 text-center"
         style={{
-          background:
-            "linear-gradient(180deg, rgba(39, 39, 42, 0.34), rgba(24, 24, 27, 0.16) 42%, transparent 100%)",
-          border: "1px solid rgba(39, 39, 42, 0.55)",
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
         }}
       >
-        <p style={{ fontSize: 15, color: "var(--text-primary)", fontWeight: 500 }}>
+        <p
+          style={{
+            fontFamily: "var(--font-display), Georgia, serif",
+            fontSize: 22,
+            letterSpacing: "-0.02em",
+            color: "var(--text-primary)",
+          }}
+        >
           Want to run your own simulation?
         </p>
-        <p className="mt-1" style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-          Start free in the dashboard, run the playground immediately, and join the API waitlist
-          separately when you need direct integration.
+        <p
+          className="mt-2"
+          style={{
+            fontSize: 14,
+            color: "var(--text-secondary)",
+            lineHeight: 1.6,
+            maxWidth: 480,
+            marginInline: "auto",
+          }}
+        >
+          Start free in the dashboard. The playground runs immediately — join the
+          API waitlist separately when you need direct integration.
         </p>
         <a
           href="/login?mode=signup"
-          className="btn-primary mt-4 inline-flex"
-          style={{ padding: "10px 24px", fontSize: 13 }}
+          className="btn-primary mt-5 inline-flex"
+          style={{
+            padding: "12px 26px",
+            fontSize: 14,
+            background: "var(--ink)",
+            color: "var(--butter-deep)",
+          }}
         >
           Start free
         </a>

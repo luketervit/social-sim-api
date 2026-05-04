@@ -42,94 +42,105 @@ export default function WaitlistPage() {
   }
 
   return (
-    <section style={{ padding: "72px 0 120px" }}>
-      <div className="mx-auto max-w-[1180px] px-6">
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,0.85fr)]">
-          <div className="section-shell border border-[rgba(39,39,42,0.55)]">
-            <span className="mono-label">API_WAITLIST</span>
+    <section style={{ padding: "clamp(64px, 9vh, 96px) 0 clamp(96px, 13vh, 160px)" }}>
+      <div className="mx-auto max-w-[1100px] px-6">
+        <div className="grid gap-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,0.85fr)] lg:items-start">
+          {/* Left: pitch */}
+          <div>
+            <span className="mono-label">Early access</span>
             <h1
               style={{
-                fontSize: 44,
-                lineHeight: 1,
+                fontFamily: "var(--font-display), Georgia, serif",
+                fontSize: "clamp(2.4rem, 5.5vw, 4rem)",
+                lineHeight: 1.02,
+                letterSpacing: "-0.035em",
                 color: "var(--text-primary)",
                 marginTop: 14,
-                maxWidth: 420,
+                maxWidth: 14 + "ch",
               }}
             >
-              Join the API waitlist
+              Get on the{" "}
+              <span style={{ fontStyle: "italic" }}>API waitlist.</span>
             </h1>
             <p
               style={{
                 color: "var(--text-secondary)",
-                fontSize: 15,
-                lineHeight: 1.7,
-                marginTop: 18,
-                maxWidth: 460,
+                fontSize: 17,
+                lineHeight: 1.6,
+                marginTop: 20,
+                maxWidth: 480,
               }}
             >
-              The free playground is live immediately. This page is only for
-              joining the queue for direct API keys and production integration
-              access.
+              The free playground is live the moment you sign up. This page is
+              for queueing direct API access — you&apos;ll hear back when keys
+              open up.
             </p>
 
             <div
-              className="panel"
               style={{
-                marginTop: 28,
-                padding: 20,
-                background:
-                  "linear-gradient(180deg, rgba(39, 39, 42, 0.28), rgba(24, 24, 27, 0.12) 55%, transparent 100%)",
+                marginTop: 32,
+                padding: "20px 22px",
+                background: "var(--bg-subtle)",
+                borderRadius: 14,
+                border: "1px solid var(--border)",
               }}
             >
-              <div className="mono-label" style={{ marginBottom: 10 }}>
-                ACCESS POLICY
-              </div>
-              <p style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.7 }}>
-                Accounts submitted here can use the dashboard and playground
-                immediately, but direct API key access remains pending approval
-                until the waitlist is cleared.
-              </p>
+              <span className="mono-label">What you get now</span>
+              <ul
+                style={{
+                  marginTop: 14,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                  padding: 0,
+                  listStyle: "none",
+                }}
+              >
+                {[
+                  "Dashboard + playground unlocked instantly",
+                  "5 free runs / day, 100-agent cap",
+                  "Direct API keys queued separately",
+                ].map((item) => (
+                  <li
+                    key={item}
+                    style={{
+                      display: "flex",
+                      gap: 10,
+                      alignItems: "flex-start",
+                      fontSize: 14,
+                      color: "var(--text-secondary)",
+                      lineHeight: 1.55,
+                    }}
+                  >
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        marginTop: 7,
+                        width: 6,
+                        height: 6,
+                        borderRadius: 999,
+                        background: "var(--butter-deep)",
+                        flexShrink: 0,
+                      }}
+                    />
+                    {item}
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
 
-          <div className="panel" style={{ padding: 28 }}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: 16,
-                marginBottom: 22,
-              }}
-            >
-              <div>
-                <div className="mono-label">ACCOUNT</div>
-                <div
-                  style={{
-                    color: "var(--text-primary)",
-                    fontSize: 22,
-                    marginTop: 8,
-                    letterSpacing: "-0.03em",
-                  }}
-                >
-                  API waitlist sign up
-                </div>
-              </div>
-              <span
-                className="mono-label"
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 999,
-                  border: "1px solid rgba(39, 39, 42, 0.75)",
-                  background: "rgba(24, 24, 27, 0.72)",
-                  color: "var(--text-tertiary)",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                API ACCESS
-              </span>
-            </div>
-
+          {/* Right: form */}
+          <div
+            style={{
+              padding: "clamp(24px, 3vw, 32px)",
+              borderRadius: 18,
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              boxShadow:
+                "0 0 0 1px rgba(0,0,0,0.02), 0 1px 3px rgba(0,0,0,0.04), 0 14px 40px rgba(20,20,19,0.05)",
+            }}
+          >
             {submittedEmail ? (
               <div className="waitlist-success-shell">
                 <div className="waitlist-success-mark" aria-hidden="true">
@@ -139,40 +150,34 @@ export default function WaitlistPage() {
                   </svg>
                 </div>
 
-                <div className="mono-label">SIGNED UP</div>
+                <span className="mono-label">You&apos;re in</span>
                 <div
                   style={{
+                    fontFamily: "var(--font-display), Georgia, serif",
                     color: "var(--text-primary)",
-                    fontSize: 34,
+                    fontSize: 36,
                     lineHeight: 0.96,
-                    letterSpacing: "-0.05em",
-                    marginTop: 14,
+                    letterSpacing: "-0.04em",
+                    marginTop: 12,
                   }}
                 >
-                  API waitlist joined.
+                  Waitlist joined.
                 </div>
                 <p
                   style={{
                     color: "var(--text-secondary)",
-                    fontSize: 14,
-                    lineHeight: 1.7,
+                    fontSize: 15,
+                    lineHeight: 1.6,
                     marginTop: 16,
                     maxWidth: 420,
                   }}
                 >
-                  <span style={{ color: "var(--text-primary)" }}>{submittedEmail}</span> can use the
-                  free dashboard now. Direct API access is queued separately and will unlock after
-                  approval.
+                  <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>
+                    {submittedEmail}
+                  </span>{" "}
+                  can use the dashboard and playground now. We&apos;ll email you
+                  when API keys open up.
                 </p>
-
-                <div className="waitlist-success-band">
-                  <span className="mono-label" style={{ color: "#86efac" }}>
-                    STATUS
-                  </span>
-                  <span style={{ color: "#dcfce7", fontSize: 13 }}>
-                    Playground unlocked. API waitlist recorded.
-                  </span>
-                </div>
 
                 <div
                   style={{
@@ -185,6 +190,7 @@ export default function WaitlistPage() {
                   <button
                     type="button"
                     className="btn-primary"
+                    style={{ background: "var(--ink)", color: "var(--butter-deep)" }}
                     onClick={() => {
                       setSubmittedEmail(null);
                       setSignedInAfterSubmit(false);
@@ -194,17 +200,46 @@ export default function WaitlistPage() {
                   >
                     Add another email
                   </button>
-                  <Link href={signedInAfterSubmit ? "/dashboard" : "/login"} className="btn-secondary">
+                  <Link
+                    href={signedInAfterSubmit ? "/dashboard" : "/login"}
+                    className="btn-secondary"
+                  >
                     {signedInAfterSubmit ? "Open dashboard" : "Go to sign in"}
                   </Link>
                 </div>
               </div>
             ) : (
               <>
-                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                <span className="mono-label">Sign up</span>
+                <h2
+                  style={{
+                    fontFamily: "var(--font-display), Georgia, serif",
+                    fontSize: 26,
+                    letterSpacing: "-0.025em",
+                    marginTop: 10,
+                    color: "var(--text-primary)",
+                  }}
+                >
+                  Create your account
+                </h2>
+
+                <form
+                  onSubmit={handleSubmit}
+                  className="flex flex-col gap-5"
+                  style={{ marginTop: 22 }}
+                >
                   <div>
-                    <label htmlFor="email" className="mono-label" style={{ display: "block", marginBottom: 10 }}>
-                      Work Email
+                    <label
+                      htmlFor="email"
+                      style={{
+                        display: "block",
+                        marginBottom: 8,
+                        fontSize: 13,
+                        color: "var(--text-secondary)",
+                        letterSpacing: "-0.01em",
+                      }}
+                    >
+                      Work email
                     </label>
                     <input
                       id="email"
@@ -220,7 +255,16 @@ export default function WaitlistPage() {
                   </div>
 
                   <div>
-                    <label htmlFor="password" className="mono-label" style={{ display: "block", marginBottom: 10 }}>
+                    <label
+                      htmlFor="password"
+                      style={{
+                        display: "block",
+                        marginBottom: 8,
+                        fontSize: 13,
+                        color: "var(--text-secondary)",
+                        letterSpacing: "-0.01em",
+                      }}
+                    >
                       Password
                     </label>
                     <input
@@ -228,7 +272,7 @@ export default function WaitlistPage() {
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Password (min 8 characters)"
+                      placeholder="At least 8 characters"
                       required
                       minLength={8}
                       autoComplete="new-password"
@@ -236,8 +280,17 @@ export default function WaitlistPage() {
                     />
                   </div>
 
-                  <button type="submit" disabled={loading} className="btn-primary" style={{ marginTop: 6 }}>
-                    {loading ? "Joining API waitlist…" : "Join API waitlist"}
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="btn-primary"
+                    style={{
+                      marginTop: 4,
+                      background: "var(--ink)",
+                      color: "var(--butter-deep)",
+                    }}
+                  >
+                    {loading ? "Joining…" : "Join waitlist →"}
                   </button>
                 </form>
 
@@ -245,24 +298,36 @@ export default function WaitlistPage() {
                   <div
                     className="mt-5 px-4 py-3 text-[13px]"
                     style={{
-                      background: "rgba(239, 68, 68, 0.08)",
-                      color: "#fca5a5",
-                      border: "1px solid rgba(239, 68, 68, 0.15)",
-                      borderRadius: 20,
+                      background: "var(--coral-muted)",
+                      color: "var(--coral)",
+                      border: "1px solid rgba(249, 112, 102, 0.2)",
+                      borderRadius: 12,
                     }}
                   >
                     {error}
                   </div>
                 )}
 
-                <div className="mt-6" style={{ color: "var(--text-secondary)", fontSize: 13 }}>
+                <div
+                  className="mt-6"
+                  style={{
+                    color: "var(--text-tertiary)",
+                    fontSize: 13,
+                    paddingTop: 16,
+                    borderTop: "1px solid var(--border)",
+                  }}
+                >
                   <p>
-                    Already have an account and just want the product?{" "}
+                    Already have an account?{" "}
                     <Link
                       href="/login"
-                      style={{ color: "var(--text-primary)", textDecoration: "underline", textUnderlineOffset: "3px" }}
+                      style={{
+                        color: "var(--text-primary)",
+                        textDecoration: "underline",
+                        textUnderlineOffset: "3px",
+                      }}
                     >
-                      Sign in to the dashboard
+                      Sign in
                     </Link>
                   </p>
                 </div>
