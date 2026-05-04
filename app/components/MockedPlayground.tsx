@@ -3,10 +3,9 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AgentMessage } from "@/lib/simulation/types";
-import Reveal from "./Reveal";
 
 const PLAYBACK_DURATION_MS = 15_000;
-const POST_COMPLETE_DELAY_MS = 400;
+const POST_COMPLETE_DELAY_MS = 350;
 
 interface MockedRun {
   slug: string;
@@ -23,8 +22,8 @@ interface MockedRun {
 interface MockedPlaygroundProps {
   /** /mocked-runs/{slug}.json under /public */
   slug: string;
-  /** Optional override of the prompt shown in the textarea. */
-  defaultPrompt?: string;
+  /** Whether the visitor is signed in (controls CTA target). Defaults false. */
+  isSignedIn?: boolean;
 }
 
 const PLATFORM_LABELS: Record<MockedRun["platform"], string> = {
@@ -33,24 +32,11 @@ const PLATFORM_LABELS: Record<MockedRun["platform"], string> = {
   slack: "Slack",
 };
 
-const PLATFORM_CONTEXT: Record<MockedRun["platform"], string> = {
-  twitter: "Short-form, fast spread, high signal",
-  reddit: "Long-form, threaded, technical scrutiny",
-  slack: "Corporate, internal, team dynamics",
-};
-
-const AGGRESSION_COLORS: Record<MockedRun["aggression_score"], string> = {
-  low: "#34D399",
-  moderate: "#F59E0B",
-  high: "#F97066",
-  critical: "#EF4444",
-};
-
 const SENTIMENT_COLORS: Record<AgentMessage["sentiment"], string> = {
-  positive: "#34D399",
-  neutral: "#9E9E9E",
-  negative: "#F97066",
-  hostile: "#EF4444",
+  positive: "#1F8A55",
+  neutral: "#6B6B6B",
+  negative: "#C8552B",
+  hostile: "#B23226",
 };
 
 const SENTIMENT_LABELS: Record<AgentMessage["sentiment"], string> = {
@@ -58,6 +44,13 @@ const SENTIMENT_LABELS: Record<AgentMessage["sentiment"], string> = {
   neutral: "Neutral",
   negative: "Negative",
   hostile: "Hostile",
+};
+
+const AGGRESSION_LABEL: Record<MockedRun["aggression_score"], string> = {
+  low: "low aggression",
+  moderate: "moderate aggression",
+  high: "high aggression",
+  critical: "critical aggression",
 };
 
 const HANDLE_PREFIX: Record<MockedRun["platform"], string> = {
@@ -72,28 +65,21 @@ function formatHandle(platform: MockedRun["platform"], archetype: string): strin
 }
 
 interface RoundSchedule {
-  /** Index into thread where this round's messages start. */
   startIndex: number;
-  /** Number of messages in this round. */
   count: number;
-  /** Round number from the AgentMessage. */
   round: number;
-  /** ms from playback start when this round begins revealing. */
   startTime: number;
-  /** ms from playback start when this round finishes revealing. */
   endTime: number;
 }
 
 /**
- * Group thread messages by round, then assign each round a slice of the total
- * playback window. Within each slice, messages stream in evenly so the round
- * arrives in a recognisable burst (matching dissertation §3.5.1 synchronous
- * activation).
+ * Group thread messages by round, then assign each round an equal slice of the
+ * total playback window. Within each slice messages reveal in order — feels
+ * like simultaneous activation per the dissertation §3.5.1.
  */
 function buildSchedule(thread: AgentMessage[]): RoundSchedule[] {
   if (thread.length === 0) return [];
   const rounds: RoundSchedule[] = [];
-  let cursor = 0;
   let currentRound = thread[0].round;
   let runStart = 0;
   for (let i = 0; i <= thread.length; i++) {
@@ -110,33 +96,29 @@ function buildSchedule(thread: AgentMessage[]): RoundSchedule[] {
       if (next) currentRound = next.round;
     }
   }
-  // Distribute time: each round gets a base slice + a small ramp-up bias toward
-  // earlier rounds (so the user doesn't wait long for the first replies).
   const base = PLAYBACK_DURATION_MS / rounds.length;
   let elapsed = 0;
   for (const r of rounds) {
     r.startTime = elapsed;
     r.endTime = elapsed + base;
     elapsed += base;
-    cursor += r.count;
   }
-  void cursor;
   return rounds;
 }
 
 export default function MockedPlayground({
   slug,
-  defaultPrompt,
+  isSignedIn = false,
 }: MockedPlaygroundProps) {
   const [run, setRun] = useState<MockedRun | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [input, setInput] = useState(defaultPrompt ?? "");
+  const [input, setInput] = useState("");
   const [status, setStatus] = useState<"idle" | "running" | "complete">("idle");
   const [revealedCount, setRevealedCount] = useState(0);
   const [activeRound, setActiveRound] = useState(0);
   const tickerRef = useRef<number | null>(null);
   const startedAtRef = useRef<number | null>(null);
-  const liveListRef = useRef<HTMLDivElement | null>(null);
+  const streamRef = useRef<HTMLDivElement | null>(null);
 
   const schedule = useMemo(() => (run ? buildSchedule(run.thread) : []), [run]);
   const totalRounds = schedule.length;
@@ -152,7 +134,7 @@ export default function MockedPlayground({
       .then((data: MockedRun) => {
         if (cancelled) return;
         setRun(data);
-        if (!defaultPrompt) setInput(data.input);
+        setInput(data.input);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -161,15 +143,16 @@ export default function MockedPlayground({
     return () => {
       cancelled = true;
     };
-  }, [slug, defaultPrompt]);
+  }, [slug]);
 
-  // Auto-scroll the streaming list as messages reveal.
+  // Auto-scroll the streaming list as new messages reveal.
   useEffect(() => {
-    if (!liveListRef.current) return;
-    liveListRef.current.scrollTop = liveListRef.current.scrollHeight;
+    if (!streamRef.current) return;
+    const el = streamRef.current;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [revealedCount]);
 
-  // Clean up timer on unmount.
+  // Cleanup the ticker on unmount.
   useEffect(() => {
     return () => {
       if (tickerRef.current != null) window.clearInterval(tickerRef.current);
@@ -188,7 +171,6 @@ export default function MockedPlayground({
       const now = performance.now();
       const elapsed = now - (startedAtRef.current ?? now);
 
-      // Find which round we're in and how far through it.
       let totalRevealed = 0;
       let currentRoundIdx = 0;
       for (let i = 0; i < schedule.length; i++) {
@@ -207,12 +189,8 @@ export default function MockedPlayground({
         break;
       }
 
-      setRevealedCount((prev) =>
-        totalRevealed > prev ? totalRevealed : prev
-      );
-
-      const liveRound = schedule[currentRoundIdx]?.round ?? schedule.at(-1)?.round ?? 0;
-      setActiveRound(liveRound);
+      setRevealedCount((prev) => (totalRevealed > prev ? totalRevealed : prev));
+      setActiveRound(schedule[currentRoundIdx]?.round ?? schedule.at(-1)?.round ?? 0);
 
       if (elapsed >= PLAYBACK_DURATION_MS) {
         if (tickerRef.current != null) window.clearInterval(tickerRef.current);
@@ -225,8 +203,7 @@ export default function MockedPlayground({
   }
 
   const sentimentBreakdown = useMemo(() => {
-    if (!run)
-      return { hostile: 0, negative: 0, neutral: 0, positive: 0 };
+    if (!run) return { hostile: 0, negative: 0, neutral: 0, positive: 0 };
     const visible = run.thread.slice(0, revealedCount);
     return {
       hostile: visible.filter((m) => m.sentiment === "hostile").length,
@@ -241,413 +218,409 @@ export default function MockedPlayground({
     return run.thread.slice(0, revealedCount);
   }, [run, revealedCount]);
 
-  const ctaHref = "/waitlist";
-  const ctaLabel = "Get early access";
+  const ctaHref = isSignedIn
+    ? "/dashboard"
+    : "/login?mode=signup&next=%2Fdashboard";
+  const ctaLabel = isSignedIn ? "Open dashboard" : "Get early access";
+
+  const submitLabel =
+    status === "running"
+      ? `streaming · round ${activeRound} / ${totalRounds || 10}`
+      : status === "complete" && run
+        ? `${run.aggression_score} · ${visibleMessages.length} replies`
+        : "Run simulation →";
 
   return (
     <section
       id="playground"
-      className="section-shell"
-      style={{ paddingTop: 48, paddingBottom: 64 }}
+      style={{ padding: "72px 0 96px", background: "var(--bg)" }}
     >
       <div
-        className="mx-auto max-w-[1200px] px-6"
-        style={{ display: "flex", flexDirection: "column", gap: 28 }}
+        className="mx-auto px-6"
+        style={{ maxWidth: 760 }}
       >
-        <Reveal as="div">
-          <div className="mono-label">THE PLAYGROUND</div>
-          <h2
-            style={{
-              fontSize: "clamp(36px, 5vw, 56px)",
-              lineHeight: 1.05,
-              letterSpacing: "-0.04em",
-              color: "var(--text-primary)",
-              fontFamily: "var(--font-display), Georgia, serif",
-              marginTop: 14,
-              maxWidth: 720,
-              textWrap: "balance",
-            }}
-          >
-            Try it on something{" "}
-            <span style={{ fontStyle: "italic" }}>you&rsquo;d actually post.</span>
-          </h2>
-        </Reveal>
+        <div className="mono-label" style={{ color: "var(--text-tertiary)" }}>
+          THE PLAYGROUND
+        </div>
+        <h2 className="atharias-mock-title">
+          Try it on something{" "}
+          <span style={{ fontStyle: "italic" }}>you&rsquo;d actually post.</span>
+        </h2>
+        <p className="atharias-mock-sub">
+          Drop a draft, pick an audience, watch {run?.persona_cap ?? 60} synthetic
+          users react across {totalRounds || 10} rounds in 15 seconds.
+        </p>
 
-        <Reveal
-          as="div"
-          className="grid gap-5"
-          style={{ gridTemplateColumns: "minmax(0, 0.95fr) minmax(0, 1.1fr)" }}
-        >
-          {/* Left: form */}
-          <div
-            style={{
-              background: "var(--surface)",
-              borderRadius: 14,
-              padding: "26px 26px 22px",
-              border: "1px solid var(--border)",
-            }}
-          >
-            <label
-              htmlFor={`mock-input-${slug}`}
-              className="mono-label"
-              style={{ display: "block", marginBottom: 10 }}
-            >
-              Your post
-            </label>
-            <textarea
-              id={`mock-input-${slug}`}
-              value={input}
-              readOnly
-              aria-readonly="true"
-              className="input"
-              rows={6}
-              style={{
-                width: "100%",
-                minHeight: 160,
-                resize: "none",
-                fontSize: 15,
-                lineHeight: 1.5,
-                cursor: "default",
-              }}
-            />
-
-            <div
-              className="grid gap-4 mt-5"
-              style={{ gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)" }}
-            >
-              <div>
-                <span
-                  className="mono-label"
-                  style={{ display: "block", marginBottom: 8 }}
-                >
-                  Audience
-                </span>
-                <div
-                  style={{
-                    border: "1px solid var(--border)",
-                    borderRadius: 10,
-                    padding: "11px 14px",
-                    fontSize: 14,
-                    color: "var(--text-primary)",
-                  }}
-                >
-                  {run?.audience_name ?? "Loading…"}
-                </div>
-              </div>
-
-              <div>
-                <span
-                  className="mono-label"
-                  style={{ display: "block", marginBottom: 8 }}
-                >
-                  Environment
-                </span>
-                <div
-                  style={{
-                    border: "1px solid var(--border)",
-                    borderRadius: 10,
-                    padding: "11px 14px",
-                    fontSize: 14,
-                    color: "var(--text-primary)",
-                  }}
-                >
-                  {run ? PLATFORM_LABELS[run.platform] : "Loading…"}
-                </div>
-              </div>
-            </div>
-
-            <p
-              className="mt-4 text-[12px]"
-              style={{
-                color: "var(--text-tertiary)",
-                fontFamily: "var(--font-data), monospace",
-                lineHeight: 1.6,
-              }}
-            >
-              Instant queueing &nbsp;·&nbsp; {run?.persona_cap ?? 60}-agent sample &nbsp;·&nbsp;{" "}
-              {run ? PLATFORM_CONTEXT[run.platform] : "loading…"}
-            </p>
-
-            <div className="mt-5 flex gap-3 flex-wrap">
-              <button
-                type="button"
-                onClick={startPlayback}
-                disabled={!run || status === "running"}
-                className="btn-primary"
-                style={{ minHeight: 44, padding: "10px 22px" }}
-              >
-                {status === "idle"
-                  ? "Run simulation →"
-                  : status === "running"
-                    ? "Streaming…"
-                    : "Run again"}
-              </button>
-              <Link
-                href={ctaHref}
-                className="btn-secondary"
-                style={{ minHeight: 44, padding: "10px 18px" }}
-              >
-                {ctaLabel}
-              </Link>
-            </div>
-
-            {loadError ? (
-              <p
-                className="mt-3 text-[12px]"
-                style={{ color: "var(--coral)" }}
-              >
-                {loadError}
-              </p>
-            ) : null}
+        {/* Composer */}
+        <div className="atharias-mock-composer">
+          <div className="atharias-mock-meta">
+            <span className="mono-label" style={{ color: "var(--text-tertiary)" }}>
+              {run?.audience_name ?? "Loading…"}
+            </span>
+            <span aria-hidden="true" className="atharias-mock-dot">
+              ·
+            </span>
+            <span className="mono-label" style={{ color: "var(--text-tertiary)" }}>
+              {run ? PLATFORM_LABELS[run.platform] : ""}
+            </span>
           </div>
 
-          {/* Right: live stream */}
-          <div
-            style={{
-              background: "var(--bg-subtle, var(--surface))",
-              borderRadius: 14,
-              padding: "26px 26px 22px",
-              border: "1px solid var(--border)",
-              minHeight: 540,
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div>
-                <div className="mono-label">Live Output</div>
-                <p
-                  style={{
-                    color: "var(--text-primary)",
-                    fontSize: 18,
-                    marginTop: 6,
-                    letterSpacing: "-0.02em",
-                    fontFamily: "var(--font-display), Georgia, serif",
-                  }}
-                >
-                  {run?.audience_name ?? "—"}
-                </p>
-              </div>
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            className="atharias-mock-textarea"
+            rows={3}
+            maxLength={2000}
+            aria-label="Post draft"
+          />
+
+          <div className="atharias-mock-actions">
+            <button
+              type="button"
+              onClick={startPlayback}
+              disabled={!run || status === "running"}
+              className="atharias-mock-run"
+              aria-busy={status === "running"}
+              aria-live="polite"
+            >
+              {submitLabel}
+            </button>
+            <Link href={ctaHref} className="atharias-mock-cta">
+              {ctaLabel}
+            </Link>
+          </div>
+
+          {loadError ? (
+            <p className="atharias-mock-error" role="alert">
+              {loadError}
+            </p>
+          ) : null}
+        </div>
+
+        {/* Stream */}
+        {status !== "idle" && run ? (
+          <div className="atharias-mock-stream-wrap">
+            <div className="atharias-mock-stream-header">
+              <span className="mono-label" style={{ color: "var(--text-tertiary)" }}>
+                LIVE THREAD
+              </span>
               <span
-                className="rounded-full px-3 py-1"
-                style={{
-                  border: "1px solid var(--border)",
-                  background: "var(--surface)",
-                  color:
-                    status === "complete" && run
-                      ? AGGRESSION_COLORS[run.aggression_score]
-                      : status === "running"
-                        ? "var(--accent, #7C5CFC)"
-                        : "var(--text-tertiary)",
-                  fontSize: 12,
-                  fontWeight: 500,
-                  fontFamily: "var(--font-data), monospace",
-                  letterSpacing: "0.04em",
-                  fontVariantNumeric: "tabular-nums",
-                  minWidth: 132,
-                  textAlign: "center",
-                }}
+                className="atharias-mock-stats"
+                aria-live="polite"
               >
-                {status === "idle"
-                  ? "ready"
-                  : status === "running"
-                    ? `round ${activeRound} / ${totalRounds || 10}`
-                    : run
-                      ? `${run.aggression_score} aggression`
-                      : "complete"}
+                <Stat
+                  count={sentimentBreakdown.positive}
+                  label="positive"
+                  color={SENTIMENT_COLORS.positive}
+                />
+                <Stat
+                  count={sentimentBreakdown.neutral}
+                  label="neutral"
+                  color={SENTIMENT_COLORS.neutral}
+                />
+                <Stat
+                  count={sentimentBreakdown.negative}
+                  label="negative"
+                  color={SENTIMENT_COLORS.negative}
+                />
+                <Stat
+                  count={sentimentBreakdown.hostile}
+                  label="hostile"
+                  color={SENTIMENT_COLORS.hostile}
+                />
+                {status === "complete" ? (
+                  <span className="atharias-mock-aggregate">
+                    {AGGRESSION_LABEL[run.aggression_score]}
+                  </span>
+                ) : null}
               </span>
             </div>
 
-            {/* Live stats strip — visible during running and complete */}
-            {(status === "running" || status === "complete") && run ? (
-              <div
-                className="mt-4 grid gap-2"
-                style={{
-                  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-                }}
-              >
-                <StatChip
-                  label="Pos"
-                  value={sentimentBreakdown.positive}
-                  color={SENTIMENT_COLORS.positive}
-                />
-                <StatChip
-                  label="Neu"
-                  value={sentimentBreakdown.neutral}
-                  color={SENTIMENT_COLORS.neutral}
-                />
-                <StatChip
-                  label="Neg"
-                  value={sentimentBreakdown.negative}
-                  color={SENTIMENT_COLORS.negative}
-                />
-                <StatChip
-                  label="Host"
-                  value={sentimentBreakdown.hostile}
-                  color={SENTIMENT_COLORS.hostile}
-                />
-              </div>
-            ) : null}
-
-            {/* Idle-state hint */}
-            {status === "idle" && run ? (
-              <div
-                className="mt-6"
-                style={{
-                  padding: "20px 18px",
-                  borderRadius: 10,
-                  border: "1px dashed var(--border)",
-                  background: "var(--surface)",
-                  color: "var(--text-tertiary)",
-                  fontSize: 13,
-                  lineHeight: 1.6,
-                }}
-              >
-                Hit <strong style={{ color: "var(--text-primary)" }}>Run simulation</strong>{" "}
-                to play back a pre-recorded run — {run.persona_cap} synthetic
-                users across {totalRounds || 10} rounds.
-              </div>
-            ) : null}
-
-            {/* mocked-playback note */}
-            {status === "idle" && run ? (
-              <div
-                style={{
-                  marginTop: 8,
-                  fontFamily: "var(--font-data), monospace",
-                  fontSize: 10,
-                  letterSpacing: "0.06em",
-                  textTransform: "uppercase",
-                  color: "var(--text-tertiary)",
-                }}
-              >
-                Demo · sample run · sign up to run your own
-              </div>
-            ) : null}
-
-            {/* Stream */}
-            {(status === "running" || status === "complete") && run ? (
-              <div
-                ref={liveListRef}
-                className="mt-4"
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 8,
-                  flex: 1,
-                  maxHeight: 420,
-                  overflowY: "auto",
-                  paddingRight: 4,
-                  scrollBehavior: "smooth",
-                }}
-              >
-                {/* Root post — what they're reacting to */}
+            <div ref={streamRef} className="atharias-mock-stream">
+              {/* Replies */}
+              {visibleMessages.map((msg) => (
                 <div
-                  style={{
-                    background: "var(--surface)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 10,
-                    padding: "12px 14px",
-                    fontSize: 13,
-                    lineHeight: 1.5,
-                    position: "sticky",
-                    top: 0,
-                    zIndex: 1,
-                    backdropFilter: "blur(6px)",
-                  }}
+                  key={msg.id}
+                  className="atharias-mock-reply"
+                  style={{ borderLeftColor: SENTIMENT_COLORS[msg.sentiment] }}
                 >
-                  <div
-                    className="mono-label"
-                    style={{ fontSize: 10, color: "var(--text-tertiary)" }}
-                  >
-                    ROOT POST
-                  </div>
-                  <div
-                    style={{
-                      color: "var(--text-primary)",
-                      marginTop: 6,
-                      fontStyle: "italic",
-                      textWrap: "pretty",
-                    }}
-                  >
-                    &ldquo;{run.input}&rdquo;
-                  </div>
-                </div>
-
-                {/* Replies */}
-                {visibleMessages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className="atharias-reply"
-                    style={{
-                      background: "var(--surface)",
-                      border: `1px solid ${SENTIMENT_COLORS[msg.sentiment]}33`,
-                      borderLeft: `3px solid ${SENTIMENT_COLORS[msg.sentiment]}`,
-                      borderRadius: 10,
-                      padding: "10px 12px",
-                      fontSize: 13,
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    <div
-                      className="flex items-center justify-between gap-2"
-                      style={{ marginBottom: 4 }}
+                  <div className="atharias-mock-reply-head">
+                    <span className="atharias-mock-handle">
+                      {formatHandle(run.platform, msg.archetype)}
+                    </span>
+                    <span className="atharias-mock-round">R{msg.round}</span>
+                    <span
+                      className="atharias-mock-sentiment"
+                      style={{ color: SENTIMENT_COLORS[msg.sentiment] }}
                     >
-                      <span
-                        className="mono-label"
-                        style={{
-                          fontSize: 10,
-                          color: "var(--text-tertiary)",
-                          letterSpacing: "0.04em",
-                        }}
-                      >
-                        {formatHandle(run.platform, msg.archetype)} · R{msg.round}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 9,
-                          color: SENTIMENT_COLORS[msg.sentiment],
-                          fontFamily: "var(--font-data), monospace",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.06em",
-                        }}
-                      >
-                        {SENTIMENT_LABELS[msg.sentiment]}
-                      </span>
-                    </div>
-                    <div style={{ color: "var(--text-primary)" }}>
-                      {msg.message}
-                    </div>
+                      {SENTIMENT_LABELS[msg.sentiment]}
+                    </span>
                   </div>
-                ))}
+                  <p className="atharias-mock-body">{msg.message}</p>
+                </div>
+              ))}
 
-                {/* Typing-indicator-style placeholder for the next round */}
-                {status === "running" && visibleMessages.length > 0 ? (
-                  <div
-                    aria-hidden="true"
-                    style={{
-                      padding: "10px 12px",
-                      color: "var(--text-tertiary)",
-                      fontSize: 11,
-                      fontFamily: "var(--font-data), monospace",
-                      letterSpacing: "0.04em",
-                      pointerEvents: "none",
-                      userSelect: "none",
-                      fontVariantNumeric: "tabular-nums",
-                    }}
-                  >
-                    <span className="atharias-pulse">round {activeRound} streaming…</span>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
+              {/* Pulsing placeholder while a round is in progress */}
+              {status === "running" && visibleMessages.length > 0 ? (
+                <div
+                  aria-hidden="true"
+                  className="atharias-mock-streaming-tail"
+                >
+                  <span className="atharias-mock-pulse">
+                    round {activeRound} streaming…
+                  </span>
+                </div>
+              ) : null}
+            </div>
           </div>
-        </Reveal>
+        ) : null}
       </div>
 
       <style jsx global>{`
-        @keyframes atharias-fade-in {
+        .atharias-mock-title {
+          font-family: var(--font-display), Georgia, serif;
+          font-size: clamp(36px, 5vw, 56px);
+          line-height: 1.05;
+          letter-spacing: -0.04em;
+          color: var(--text-primary);
+          margin-top: 12px;
+          text-wrap: balance;
+        }
+        .atharias-mock-sub {
+          color: var(--text-secondary);
+          font-size: 16px;
+          line-height: 1.55;
+          margin-top: 16px;
+          max-width: 580px;
+          font-variant-numeric: tabular-nums;
+          text-wrap: pretty;
+        }
+
+        .atharias-mock-composer {
+          margin-top: 32px;
+          padding: 22px 24px 20px;
+          background: var(--bg-element, #ffffff);
+          border-radius: 18px;
+          box-shadow:
+            0 0 0 1px rgba(0, 0, 0, 0.05),
+            0 1px 3px rgba(0, 0, 0, 0.03),
+            0 12px 32px rgba(0, 0, 0, 0.04);
+        }
+        .atharias-mock-meta {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding-bottom: 14px;
+          border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+        }
+        .atharias-mock-dot {
+          color: var(--text-tertiary);
+          font-family: var(--font-data), monospace;
+        }
+        .atharias-mock-textarea {
+          width: 100%;
+          margin-top: 14px;
+          padding: 4px 0;
+          font-family: var(--font-display), Georgia, serif;
+          font-size: 22px;
+          line-height: 1.4;
+          color: var(--text-primary);
+          background: transparent;
+          border: none;
+          resize: none;
+          outline: none;
+          letter-spacing: -0.01em;
+          min-height: 96px;
+        }
+        .atharias-mock-textarea::placeholder {
+          color: var(--text-tertiary);
+        }
+
+        .atharias-mock-actions {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-top: 18px;
+          flex-wrap: wrap;
+        }
+        .atharias-mock-run {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 12px 22px;
+          border-radius: 999px;
+          background: var(--ink, #141413);
+          color: var(--butter-deep, #e8d27a);
+          font-size: 14px;
+          font-weight: 500;
+          font-family: inherit;
+          font-variant-numeric: tabular-nums;
+          letter-spacing: 0.01em;
+          border: none;
+          cursor: pointer;
+          min-width: 200px;
+          transition:
+            background 160ms cubic-bezier(0.215, 0.61, 0.355, 1),
+            transform 80ms cubic-bezier(0.215, 0.61, 0.355, 1);
+        }
+        @media (hover: hover) and (pointer: fine) {
+          .atharias-mock-run:hover {
+            background: #1f1f1d;
+          }
+        }
+        .atharias-mock-run:active {
+          transform: scale(0.99);
+        }
+        .atharias-mock-run:disabled {
+          opacity: 0.85;
+          cursor: progress;
+        }
+        .atharias-mock-run:focus-visible {
+          outline: 2px solid var(--ink, #141413);
+          outline-offset: 3px;
+        }
+
+        .atharias-mock-cta {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 12px 18px;
+          border-radius: 999px;
+          background: transparent;
+          color: var(--text-primary);
+          font-size: 14px;
+          font-weight: 500;
+          text-decoration: none;
+          box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+          transition:
+            background 160ms cubic-bezier(0.215, 0.61, 0.355, 1),
+            box-shadow 160ms cubic-bezier(0.215, 0.61, 0.355, 1);
+        }
+        @media (hover: hover) and (pointer: fine) {
+          .atharias-mock-cta:hover {
+            background: var(--bg-subtle, #f5f4f2);
+            box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+          }
+        }
+        .atharias-mock-cta:focus-visible {
+          outline: 2px solid var(--ink, #141413);
+          outline-offset: 3px;
+        }
+
+        .atharias-mock-error {
+          margin-top: 14px;
+          font-size: 13px;
+          color: #b1311a;
+        }
+
+        .atharias-mock-stream-wrap {
+          margin-top: 28px;
+        }
+        .atharias-mock-stream-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          flex-wrap: wrap;
+          padding-bottom: 12px;
+          border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+        }
+        .atharias-mock-stats {
+          display: inline-flex;
+          align-items: center;
+          gap: 14px;
+          flex-wrap: wrap;
+          font-family: var(--font-data), monospace;
+          font-size: 12px;
+          color: var(--text-tertiary);
+          font-variant-numeric: tabular-nums;
+        }
+        .atharias-mock-stat {
+          display: inline-flex;
+          align-items: baseline;
+          gap: 4px;
+          min-width: 56px;
+        }
+        .atharias-mock-stat-num {
+          font-variant-numeric: tabular-nums;
+          font-weight: 600;
+          font-size: 13px;
+        }
+        .atharias-mock-aggregate {
+          padding: 4px 10px;
+          border-radius: 999px;
+          background: var(--bg-subtle, #f5f4f2);
+          color: var(--text-primary);
+          font-family: var(--font-data), monospace;
+          font-size: 11px;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+        }
+
+        .atharias-mock-stream {
+          margin-top: 14px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          max-height: 480px;
+          overflow-y: auto;
+          padding-right: 6px;
+        }
+        .atharias-mock-reply {
+          padding: 12px 14px;
+          background: var(--bg-element, #ffffff);
+          border-radius: 12px;
+          border-left: 3px solid;
+          box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04);
+          animation: atharias-mock-fade-in 220ms cubic-bezier(0.215, 0.61, 0.355, 1)
+            both;
+        }
+        .atharias-mock-reply-head {
+          display: flex;
+          align-items: baseline;
+          gap: 10px;
+          flex-wrap: wrap;
+          font-family: var(--font-data), monospace;
+          font-size: 11px;
+          letter-spacing: 0.04em;
+        }
+        .atharias-mock-handle {
+          color: var(--text-primary);
+          font-weight: 600;
+        }
+        .atharias-mock-round {
+          color: var(--text-tertiary);
+          font-variant-numeric: tabular-nums;
+        }
+        .atharias-mock-sentiment {
+          margin-left: auto;
+          text-transform: uppercase;
+          font-size: 10px;
+          letter-spacing: 0.06em;
+        }
+        .atharias-mock-body {
+          margin-top: 6px;
+          font-size: 14px;
+          line-height: 1.5;
+          color: var(--text-primary);
+          text-wrap: pretty;
+        }
+
+        .atharias-mock-streaming-tail {
+          padding: 6px 4px 0;
+          font-family: var(--font-data), monospace;
+          font-size: 11px;
+          color: var(--text-tertiary);
+          font-variant-numeric: tabular-nums;
+          pointer-events: none;
+          user-select: none;
+        }
+        .atharias-mock-pulse {
+          animation: atharias-mock-pulse 1.2s
+            cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
+        }
+
+        @keyframes atharias-mock-fade-in {
           from {
             opacity: 0;
             transform: translateY(6px);
@@ -657,7 +630,7 @@ export default function MockedPlayground({
             transform: translateY(0);
           }
         }
-        @keyframes atharias-pulse-anim {
+        @keyframes atharias-mock-pulse {
           0%,
           100% {
             opacity: 0.55;
@@ -666,19 +639,15 @@ export default function MockedPlayground({
             opacity: 1;
           }
         }
-        .atharias-pulse {
-          animation: atharias-pulse-anim 1.2s
-            cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
-        }
-        .atharias-reply {
-          animation: atharias-fade-in 220ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
-        }
+
         @media (prefers-reduced-motion: reduce) {
-          .atharias-pulse {
+          .atharias-mock-reply,
+          .atharias-mock-pulse {
             animation: none;
           }
-          .atharias-reply {
-            animation: none;
+          .atharias-mock-run,
+          .atharias-mock-cta {
+            transition: none;
           }
         }
       `}</style>
@@ -686,52 +655,21 @@ export default function MockedPlayground({
   );
 }
 
-function StatChip({
+function Stat({
+  count,
   label,
-  value,
   color,
 }: {
+  count: number;
   label: string;
-  value: number;
   color: string;
 }) {
   return (
-    <div
-      style={{
-        background: "var(--surface)",
-        border: "1px solid var(--border)",
-        borderRadius: 10,
-        padding: "8px 10px",
-        textAlign: "center",
-        // Specific properties only — never `transition: all` (Emil §UI Polish).
-        transition:
-          "color 160ms cubic-bezier(0.215, 0.61, 0.355, 1), border-color 160ms cubic-bezier(0.215, 0.61, 0.355, 1)",
-      }}
-    >
-      <div
-        style={{
-          fontSize: 9,
-          color: "var(--text-tertiary)",
-          fontFamily: "var(--font-data), monospace",
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-        }}
-      >
-        {label}
-      </div>
-      <div
-        style={{
-          fontSize: 22,
-          color,
-          fontFamily: "var(--font-display), Georgia, serif",
-          marginTop: 2,
-          fontWeight: 500,
-          fontVariantNumeric: "tabular-nums",
-          minHeight: 28,
-        }}
-      >
-        {value}
-      </div>
-    </div>
+    <span className="atharias-mock-stat">
+      <span className="atharias-mock-stat-num" style={{ color }}>
+        {count}
+      </span>
+      <span>{label}</span>
+    </span>
   );
 }
