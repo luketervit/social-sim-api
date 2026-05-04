@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 
-type Sentiment = "hostile" | "positive" | "noise";
+export type Sentiment = "hostile" | "positive" | "noise";
 
-type Reaction = {
+export type Reaction = {
   body: string;
   handle: string;
   sentiment: Sentiment;
@@ -14,7 +14,7 @@ type Reaction = {
   delay: number;
 };
 
-const REACTIONS: Reaction[] = [
+const DEFAULT_REACTIONS: Reaction[] = [
   { body: "ratio", handle: "@dril_lite", sentiment: "hostile", x: 6, y: 10, rotate: -3, delay: 600 },
   { body: "this is so out of touch", handle: "@notgenz", sentiment: "hostile", x: 72, y: 4, rotate: 2, delay: 800 },
   { body: "based actually", handle: "@buildlogs", sentiment: "positive", x: 78, y: 30, rotate: -1, delay: 1100 },
@@ -31,7 +31,21 @@ const REACTIONS: Reaction[] = [
 
 type Theme = "light" | "dark";
 
-export default function ReactionSwarm({ theme = "light" }: { theme?: Theme }) {
+type Props = {
+  theme?: Theme;
+  reactions?: Reaction[];
+  postLabel?: string;
+  postAuthor?: string;
+  postBody?: string;
+};
+
+export default function ReactionSwarm({
+  theme = "light",
+  reactions = DEFAULT_REACTIONS,
+  postLabel = "your launch post",
+  postAuthor = "@you · drafted 2m ago",
+  postBody = "we're sunsetting the free tier next month",
+}: Props) {
   const [mounted, setMounted] = useState(false);
   const [reduced, setReduced] = useState(false);
 
@@ -105,10 +119,10 @@ export default function ReactionSwarm({ theme = "light" }: { theme?: Theme }) {
           />
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <span style={{ fontSize: 13, fontWeight: 500, color: text }}>
-              your launch post
+              {postLabel}
             </span>
             <span style={{ fontSize: 11, color: muted }}>
-              @you · drafted 2m ago
+              {postAuthor}
             </span>
           </div>
         </div>
@@ -120,12 +134,12 @@ export default function ReactionSwarm({ theme = "light" }: { theme?: Theme }) {
             margin: 0,
           }}
         >
-          we&apos;re sunsetting the free tier next month
+          {postBody}
         </p>
       </div>
 
       {/* Reaction chips */}
-      {REACTIONS.map((r, i) => {
+      {reactions.map((r, i) => {
         const visible = reduced ? true : mounted;
         const delay = reduced ? 0 : r.delay;
         return (
