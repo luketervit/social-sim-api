@@ -74,16 +74,6 @@ const SPECS: MockSpec[] = [
       "Team — starting June, we're moving back to 5 days in-office. Details and FAQ in the doc below.",
     persona_cap: 60,
   },
-  {
-    slug: "emil-design-engineering",
-    audience_file: "engineers.json",
-    audience_id: "engineers",
-    audience_name: "Engineers",
-    platform: "twitter",
-    input:
-      "shipped a new component library today — fully typed, RSC-friendly, animations baked in, MIT licensed",
-    persona_cap: 60,
-  },
 ];
 
 function loadPersonas(file: string, cap: number): Persona[] {

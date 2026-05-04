@@ -161,41 +161,6 @@ export const ALIGNMENT_CONFIG: IndustryHeroConfig = {
   ]),
 };
 
-export const EMIL_CONFIG: IndustryHeroConfig = {
-  ...DEFAULT_CTA,
-  kicker: "Hey Emil — built this for you.",
-  headline: (
-    <>
-      Ship the component library.{" "}
-      <span style={{ fontStyle: "italic", color: "var(--butter-deep)" }}>
-        Then watch dev-twitter
-      </span>{" "}
-      decide if it lives or dies.
-    </>
-  ),
-  italicSubline:
-    "Design engineers ship to a brutal audience. Pre-test the launch tweet against 60 synthetic engineers — see the dunks, the actually-fire crowd, and the bikeshedders before the real thread starts forming.",
-  postLabel: "your launch tweet",
-  postAuthor: "@emil · scheduled for tomorrow",
-  postBody:
-    "shipped a new component library today — fully typed, RSC-friendly, animations baked in, MIT licensed",
-  sentiment: { hostile: 30, positive: 45, noise: 25 },
-  reactions: mk([
-    { handle: "@bikeshedder", body: "another one?", sentiment: "hostile" },
-    { handle: "@radix_stan", body: "is this just radix", sentiment: "hostile" },
-    { handle: "@buildlogs", body: "the API is clean tho", sentiment: "positive" },
-    { handle: "@og_user", body: "finally someone who gets RSC", sentiment: "positive" },
-    { handle: "@reply_guy", body: "what about a11y", sentiment: "hostile" },
-    { handle: "@anon", body: "starring", sentiment: "positive" },
-    { handle: "@designsys_diehard", body: "tokens?", sentiment: "noise" },
-    { handle: "@power_user", body: "ssr just works?", sentiment: "positive" },
-    { handle: "@fontnerd", body: "shadcn killer", sentiment: "positive" },
-    { handle: "@noopinion", body: "ok", sentiment: "noise" },
-    { handle: "@dx_andy", body: "pure CSS or styled?", sentiment: "noise" },
-    { handle: "@receipts", body: "the docs slap", sentiment: "positive" },
-  ]),
-};
-
 export const COMMS_CONFIG: IndustryHeroConfig = {
   ...DEFAULT_CTA,
   kicker: "For internal comms",
