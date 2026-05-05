@@ -32,6 +32,7 @@ import {
   formatHandle,
   inferPlatformFromFilename,
   makeChat,
+  renderChatTitle,
   sentimentBreakdown,
   summariseArchetypes,
   variantId,
@@ -43,6 +44,7 @@ export type { AudienceSummary };
 interface DashboardClientProps {
   email: string;
   audiences: AudienceSummary[];
+  initialChats?: ChatState[];
 }
 
 const ACCEPTED_EXTENSIONS = [".csv", ".json", ".ndjson"];
@@ -59,9 +61,12 @@ interface ConvoMessage {
 export default function DashboardClient({
   email,
   audiences: initialAudiences,
+  initialChats,
 }: DashboardClientProps) {
   const [audiences, setAudiences] = useState<AudienceSummary[]>(initialAudiences);
-  const [chats, setChats] = useState<ChatState[]>(() => [makeChat()]);
+  const [chats, setChats] = useState<ChatState[]>(() =>
+    initialChats && initialChats.length > 0 ? initialChats : [makeChat()]
+  );
   const [activeChatId, setActiveChatId] = useState<string>(() => chats[0].id);
   const [view, setView] = useState<"chat" | "audience">("chat");
   const [viewedAudienceId, setViewedAudienceId] = useState<string | null>(null);
@@ -104,6 +109,114 @@ export default function DashboardClient({
     []
   );
 
+  // ---------------- Chat persistence ----------------
+
+  // Debounce-save each chat to the DB whenever a meaningful field changes.
+  // We hash the persistable shape so transient state (loading flags, errors)
+  // doesn't trigger writes.
+  const persistableHash = chats
+    .map((c) =>
+      JSON.stringify({
+        id: c.id,
+        title: renderChatTitle(c),
+        audienceId: c.audienceId,
+        audienceName: c.audienceName,
+        audienceRowCount: c.audienceRowCount,
+        platform: c.platform,
+        post: c.post,
+        personaCap: c.personaCap,
+        mode: c.mode,
+        variantsLen: c.variants.length,
+        variantsStatus: c.variants.map((v) => v.status).join(","),
+      })
+    )
+    .join("|");
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      for (const c of chats) {
+        const variantsForWire = c.variants.map((v) => ({
+          id: v.id,
+          label: v.label,
+          hook: v.hook,
+          rationale: v.rationale,
+          post: v.post,
+          simulationId: v.simulationId,
+          status: v.status,
+          // Drop thread on save — it can be huge and is recoverable from
+          // the simulations table via simulationId. Keep aggression so the
+          // verdict block reads correctly on reload.
+          thread: [],
+          aggression: v.aggression,
+          error: v.error,
+        }));
+        void fetch("/api/v1/chats", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: c.id,
+            title: renderChatTitle(c),
+            audienceId: c.audienceId,
+            audienceName: c.audienceName,
+            audienceRowCount: c.audienceRowCount,
+            platform: c.platform,
+            post: c.post,
+            personaCap: c.personaCap,
+            mode: c.mode,
+            variants: variantsForWire,
+          }),
+        }).catch(() => {});
+      }
+    }, 600);
+    return () => window.clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [persistableHash]);
+
+  // On hydration: any chat that has an audienceId but no personas loaded yet
+  // (server didn't fetch them) needs to fetch them now.
+  const audiencesById = useMemo(() => {
+    const map = new Map<string, AudienceSummary>();
+    for (const a of audiences) map.set(a.id, a);
+    return map;
+  }, [audiences]);
+
+  useEffect(() => {
+    let cancelled = false;
+    for (const c of chats) {
+      if (
+        c.audienceId &&
+        c.audiencePersonas.length === 0 &&
+        !c.audienceLoading
+      ) {
+        const audience = audiencesById.get(c.audienceId);
+        if (!audience || audience.status !== "ready") continue;
+        const chatId = c.id;
+        const audienceId = c.audienceId;
+        void (async () => {
+          try {
+            const res = await fetch(`/api/v1/audiences/${audienceId}?full=1`);
+            if (!res.ok) return;
+            const data = await res.json();
+            const personas = Array.isArray(data?.personas)
+              ? (data.personas as Persona[])
+              : [];
+            if (cancelled) return;
+            updateChatById(chatId, {
+              audiencePersonas: personas,
+              audienceLoading: false,
+            });
+          } catch {
+            /* ignore */
+          }
+        })();
+      }
+    }
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audiencesById]);
+
   // ---------------- Sidebar handlers ----------------
 
   function handleNewChat() {
@@ -131,6 +244,8 @@ export default function DashboardClient({
       }
       return next;
     });
+    // Fire-and-forget delete in DB.
+    void fetch(`/api/v1/chats/${id}`, { method: "DELETE" }).catch(() => {});
   }
 
   // Pick an audience for whatever chat is active. Loads personas.
