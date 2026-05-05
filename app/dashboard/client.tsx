@@ -111,53 +111,38 @@ export default function DashboardClient({
 
   return (
     <div style={{ background: "var(--bg)", minHeight: "100vh" }}>
-      {/* Top bar */}
-      <header
-        className="header"
-        style={{ display: "flex", alignItems: "center" }}
-      >
-        <div
-          className="mx-auto px-6"
-          style={{
-            width: "100%",
-            maxWidth: 1200,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 16,
-            padding: "14px 24px",
-          }}
-        >
-          <Link href="/" className="logo" aria-label="Atharias home">
-            Atharias
-          </Link>
-
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              fontFamily: "var(--font-data), monospace",
-              fontSize: 11,
-              color: "var(--text-tertiary)",
-              letterSpacing: "0.04em",
-            }}
-          >
-            <span>{email}</span>
-            <Link href="/audiences" className="nav-link">
-              Audiences
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      <main
+      <div
         className="mx-auto px-6"
         style={{
           maxWidth: 1100,
           padding: "clamp(36px, 5vh, 64px) 24px clamp(72px, 10vh, 120px)",
         }}
       >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            gap: 14,
+            marginBottom: 18,
+            fontFamily: "var(--font-data), monospace",
+            fontSize: 11,
+            color: "var(--text-tertiary)",
+            letterSpacing: "0.04em",
+          }}
+        >
+          <span>{email}</span>
+          <span aria-hidden="true">·</span>
+          <Link
+            href="/audiences"
+            style={{
+              color: "var(--text-secondary)",
+              textDecoration: "none",
+            }}
+          >
+            Audiences
+          </Link>
+        </div>
         {/* Audience switcher */}
         {audiences.length > 0 ? (
           <div
@@ -288,7 +273,7 @@ export default function DashboardClient({
             </details>
           </div>
         ) : null}
-      </main>
+      </div>
     </div>
   );
 }
