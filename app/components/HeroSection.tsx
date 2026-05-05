@@ -38,9 +38,12 @@ export default function HeroSection() {
       style={{
         background: "var(--ink)",
         color: "rgba(245, 244, 242, 0.95)",
-        padding: "clamp(64px, 10vh, 112px) 0 clamp(56px, 9vh, 96px)",
+        padding: "clamp(32px, 5vh, 64px) 0 clamp(28px, 4vh, 56px)",
         position: "relative",
         overflow: "hidden",
+        minHeight: "calc(100svh - 56px)",
+        display: "flex",
+        alignItems: "center",
       }}
     >
       <div
@@ -63,15 +66,16 @@ export default function HeroSection() {
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
+          width: "100%",
         }}
       >
         <MascotVideo
           variant="idle"
-          size={128}
+          size={88}
           ariaLabel="Atharias mascot, watching"
           style={{
-            marginBottom: 18,
-            filter: "drop-shadow(0 12px 28px rgba(0, 0, 0, 0.45))",
+            marginBottom: 10,
+            filter: "drop-shadow(0 8px 22px rgba(0, 0, 0, 0.45))",
           }}
         />
 
@@ -91,8 +95,8 @@ export default function HeroSection() {
         <h1
           style={{
             fontFamily: "var(--font-display), Georgia, serif",
-            fontSize: "clamp(2.6rem, 6.4vw, 4.8rem)",
-            marginTop: 16,
+            fontSize: "clamp(2.2rem, 5.2vw, 4rem)",
+            marginTop: 12,
             lineHeight: 1.0,
             letterSpacing: "-0.035em",
             fontWeight: 400,
@@ -109,10 +113,10 @@ export default function HeroSection() {
 
         <p
           style={{
-            marginTop: 18,
+            marginTop: 12,
             fontFamily: "var(--font-display), Georgia, serif",
             fontStyle: "italic",
-            fontSize: "clamp(1.1rem, 1.6vw, 1.4rem)",
+            fontSize: "clamp(1rem, 1.4vw, 1.25rem)",
             color: "rgba(245, 244, 242, 0.7)",
             letterSpacing: "-0.01em",
             lineHeight: 1.4,
@@ -127,7 +131,7 @@ export default function HeroSection() {
             flexWrap: "wrap",
             justifyContent: "center",
             gap: 12,
-            marginTop: 32,
+            marginTop: 20,
           }}
         >
           <Link
@@ -174,7 +178,13 @@ export default function HeroSection() {
         </div>
 
         {/* Swarm demo */}
-        <div style={{ marginTop: 48, width: "100%" }}>
+        <div
+          style={{
+            width: "100%",
+            maxWidth: 480,
+            margin: "24px auto 0",
+          }}
+        >
           <ReactionSwarm theme="dark" />
         </div>
 
@@ -182,7 +192,7 @@ export default function HeroSection() {
         <div
           className="tabular-nums"
           style={{
-            marginTop: 20,
+            marginTop: 14,
             display: "inline-flex",
             flexWrap: "wrap",
             justifyContent: "center",
