@@ -1113,7 +1113,10 @@ function ChatConversation(props: ChatConversationProps) {
           });
         }
 
-        if (chat.mode !== null && chat.variants.some((v) => v.simulationId !== null)) {
+        if (
+          chat.mode !== null &&
+          chat.variants.some((v) => v.status !== "idle")
+        ) {
           if (chat.mode === "single" && chat.variants[0]) {
             messages.push({
               id: "user-post-single",
@@ -2571,104 +2574,14 @@ function VariationReview({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {variants.map((v, i) => (
-        <div
+        <VariationCard
           key={v.id}
-          style={{
-            padding: "16px 18px",
-            borderRadius: 14,
-            background: "var(--surface)",
-            border: "1px solid var(--border)",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "baseline",
-              gap: 10,
-              flexWrap: "wrap",
-              marginBottom: 8,
-            }}
-          >
-            <span
-              style={{
-                fontFamily: "var(--font-data), monospace",
-                fontSize: 11,
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-                color: "var(--text-tertiary)",
-              }}
-            >
-              {i === 0 ? "Original" : `Variant ${i}`}
-            </span>
-            <strong style={{ fontSize: 14, color: "var(--text-primary)" }}>
-              {v.label}
-            </strong>
-            {variants.length > 1 ? (
-              <button
-                type="button"
-                onClick={() => onRemove(v.id)}
-                style={{
-                  marginLeft: "auto",
-                  background: "transparent",
-                  border: "none",
-                  color: "var(--text-tertiary)",
-                  fontSize: 12,
-                  cursor: "pointer",
-                  padding: 0,
-                }}
-                aria-label="Remove variant"
-              >
-                Remove
-              </button>
-            ) : null}
-          </div>
-          {v.hook ? (
-            <p
-              style={{
-                fontSize: 12,
-                color: "var(--text-tertiary)",
-                marginBottom: 8,
-                fontStyle: "italic",
-              }}
-            >
-              {v.hook}
-            </p>
-          ) : null}
-          <textarea
-            value={v.post}
-            onChange={(e) => onEdit(v.id, e.target.value)}
-            rows={3}
-            maxLength={2000}
-            aria-label={`Edit ${v.label}`}
-            style={{
-              width: "100%",
-              padding: "10px 12px",
-              borderRadius: 10,
-              border: "1px solid var(--border)",
-              background: "var(--bg-subtle)",
-              fontFamily: "var(--font-body), system-ui, sans-serif",
-              fontSize: 14,
-              lineHeight: 1.5,
-              color: "var(--text-primary)",
-              outline: "none",
-              resize: "vertical",
-              minHeight: 70,
-            }}
-          />
-          {v.rationale ? (
-            <p
-              style={{
-                marginTop: 8,
-                fontSize: 11,
-                color: "var(--text-tertiary)",
-                fontFamily: "var(--font-data), monospace",
-                letterSpacing: "0.02em",
-              }}
-            >
-              {v.rationale}
-            </p>
-          ) : null}
-        </div>
+          variant={v}
+          index={i}
+          canRemove={variants.length > 1}
+          onEdit={onEdit}
+          onRemove={onRemove}
+        />
       ))}
 
       <div
@@ -2737,6 +2650,199 @@ function VariationReview({
   );
 }
 
+function Dot({ pulse }: { pulse?: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        width: 6,
+        height: 6,
+        borderRadius: 999,
+        background: "currentColor",
+        animation: pulse ? "pulse-soft 1.4s ease-in-out infinite" : "none",
+      }}
+    />
+  );
+}
+
+function VariationCard({
+  variant,
+  index,
+  canRemove,
+  onEdit,
+  onRemove,
+}: {
+  variant: VariantRun;
+  index: number;
+  canRemove: boolean;
+  onEdit: (id: string, post: string) => void;
+  onRemove: (id: string) => void;
+}) {
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Auto-size the textarea so the full draft is visible without an inner
+  // scroll bar — feels more like document editing than form filling.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [variant.post]);
+
+  return (
+    <div
+      style={{
+        padding: "18px 20px",
+        borderRadius: 16,
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+        transition: "border-color 200ms cubic-bezier(0.215, 0.61, 0.355, 1)",
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLDivElement).style.borderColor =
+          "var(--border-hover)";
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border)";
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          gap: 10,
+          flexWrap: "wrap",
+          marginBottom: 10,
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "var(--font-data), monospace",
+            fontSize: 10,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: index === 0 ? "var(--text-secondary)" : "var(--accent)",
+          }}
+        >
+          {index === 0 ? "Your draft" : `Variant ${index}`}
+        </span>
+        {index !== 0 ? (
+          <strong
+            style={{
+              fontFamily: "var(--font-display), Georgia, serif",
+              fontSize: 17,
+              letterSpacing: "-0.01em",
+              color: "var(--text-primary)",
+              fontWeight: 500,
+            }}
+          >
+            {variant.label}
+          </strong>
+        ) : null}
+        {canRemove ? (
+          <button
+            type="button"
+            onClick={() => onRemove(variant.id)}
+            style={{
+              marginLeft: "auto",
+              background: "transparent",
+              border: "none",
+              color: "var(--text-tertiary)",
+              fontSize: 11,
+              fontFamily: "var(--font-data), monospace",
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+              cursor: "pointer",
+              padding: "2px 6px",
+              borderRadius: 6,
+              transition: "color 150ms ease, background 150ms ease",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.color =
+                "var(--coral)";
+              (e.currentTarget as HTMLButtonElement).style.background =
+                "var(--coral-muted)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.color =
+                "var(--text-tertiary)";
+              (e.currentTarget as HTMLButtonElement).style.background =
+                "transparent";
+            }}
+            aria-label="Remove variant"
+          >
+            Remove
+          </button>
+        ) : null}
+      </div>
+
+      {variant.hook && index !== 0 ? (
+        <p
+          style={{
+            fontSize: 13,
+            color: "var(--text-secondary)",
+            marginBottom: 10,
+            fontFamily: "var(--font-display), Georgia, serif",
+            fontStyle: "italic",
+            lineHeight: 1.5,
+          }}
+        >
+          {variant.hook}
+        </p>
+      ) : null}
+
+      <textarea
+        ref={textareaRef}
+        value={variant.post}
+        onChange={(e) => onEdit(variant.id, e.target.value)}
+        maxLength={2000}
+        aria-label={`Edit ${variant.label}`}
+        style={{
+          width: "100%",
+          padding: "12px 14px",
+          borderRadius: 12,
+          border: "1px solid transparent",
+          background: "var(--bg-subtle)",
+          fontFamily: "var(--font-body), system-ui, sans-serif",
+          fontSize: 14,
+          lineHeight: 1.6,
+          color: "var(--text-primary)",
+          outline: "none",
+          resize: "none",
+          overflow: "hidden",
+          minHeight: 72,
+          transition:
+            "border-color 200ms ease, background 200ms ease",
+        }}
+        onFocus={(e) => {
+          e.currentTarget.style.borderColor = "var(--border-hover)";
+          e.currentTarget.style.background = "var(--surface)";
+        }}
+        onBlur={(e) => {
+          e.currentTarget.style.borderColor = "transparent";
+          e.currentTarget.style.background = "var(--bg-subtle)";
+        }}
+      />
+
+      {variant.rationale && index !== 0 ? (
+        <p
+          style={{
+            marginTop: 10,
+            paddingTop: 10,
+            borderTop: "1px solid var(--border)",
+            fontSize: 12,
+            color: "var(--text-tertiary)",
+            lineHeight: 1.55,
+          }}
+        >
+          {variant.rationale}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function VariantList({
   variants,
   platform,
@@ -2798,28 +2904,45 @@ function VariantCard({
         }}
       >
         {showLabel ? (
-          <>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "baseline",
+              gap: 10,
+              flexWrap: "wrap",
+            }}
+          >
             <span
               style={{
                 fontFamily: "var(--font-data), monospace",
-                fontSize: 11,
-                letterSpacing: "0.06em",
+                fontSize: 10,
+                letterSpacing: "0.08em",
                 textTransform: "uppercase",
-                color: "var(--text-tertiary)",
+                color: index === 0 ? "var(--text-secondary)" : "var(--accent)",
               }}
             >
-              {index === 0 ? "Original" : `Variant ${index}`}
+              {index === 0 ? "Your draft" : `Variant ${index}`}
             </span>
-            <strong style={{ fontSize: 14, color: "var(--text-primary)" }}>
-              {variant.label}
-            </strong>
-          </>
+            {index !== 0 ? (
+              <strong
+                style={{
+                  fontFamily: "var(--font-display), Georgia, serif",
+                  fontSize: 17,
+                  letterSpacing: "-0.01em",
+                  color: "var(--text-primary)",
+                  fontWeight: 500,
+                }}
+              >
+                {variant.label}
+              </strong>
+            ) : null}
+          </div>
         ) : (
           <span
             style={{
               fontFamily: "var(--font-data), monospace",
-              fontSize: 11,
-              letterSpacing: "0.06em",
+              fontSize: 10,
+              letterSpacing: "0.08em",
               textTransform: "uppercase",
               color: "var(--text-tertiary)",
             }}
@@ -2832,38 +2955,59 @@ function VariantCard({
           style={{
             marginLeft: "auto",
             fontFamily: "var(--font-data), monospace",
-            fontSize: 11,
-            letterSpacing: "0.04em",
+            fontSize: 10,
+            letterSpacing: "0.06em",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "3px 10px",
+            borderRadius: 999,
             color:
               variant.status === "completed"
                 ? "var(--mint)"
                 : variant.status === "failed"
                   ? "var(--coral)"
                   : "var(--accent)",
+            background:
+              variant.status === "completed"
+                ? "var(--mint-muted)"
+                : variant.status === "failed"
+                  ? "var(--coral-muted)"
+                  : "var(--accent-muted)",
             textTransform: "uppercase",
+            fontWeight: 500,
           }}
         >
-          {variant.status === "queued"
-            ? "queued"
-            : variant.status === "running"
-              ? `running · ${variant.thread.length}`
-              : variant.status === "completed"
-                ? `done · ${variant.thread.length} replies`
-                : variant.status === "failed"
-                  ? "failed"
-                  : "idle"}
+          {variant.status === "queued" ? (
+            <>
+              <Dot />
+              queued
+            </>
+          ) : variant.status === "running" ? (
+            <>
+              <Dot pulse />
+              running · {variant.thread.length}
+            </>
+          ) : variant.status === "completed" ? (
+            <>done · {variant.thread.length} replies</>
+          ) : variant.status === "failed" ? (
+            "failed"
+          ) : (
+            "idle"
+          )}
         </span>
       </div>
 
       {showLabel ? (
         <p
           style={{
-            marginTop: 12,
+            marginTop: 14,
             fontFamily: "var(--font-display), Georgia, serif",
-            fontSize: 16,
-            lineHeight: 1.45,
+            fontSize: 17,
+            lineHeight: 1.5,
             color: "var(--text-primary)",
             whiteSpace: "pre-wrap",
+            letterSpacing: "-0.005em",
           }}
         >
           {variant.post}
