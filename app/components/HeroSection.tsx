@@ -1,38 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { MascotVideo } from "./Mascot";
 import ReactionSwarm from "./ReactionSwarm";
 
-const SENTIMENT_TARGET = { hostile: 42, positive: 18, noise: 40 };
-
 export default function HeroSection() {
-  const [counts, setCounts] = useState({ hostile: 0, positive: 0, noise: 0 });
-
-  useEffect(() => {
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduced) {
-      setCounts(SENTIMENT_TARGET);
-      return;
-    }
-    const start = performance.now();
-    const duration = 2200;
-    let raf = 0;
-    const tick = (t: number) => {
-      const p = Math.min(1, (t - start) / duration);
-      const eased = 1 - Math.pow(1 - p, 3);
-      setCounts({
-        hostile: Math.round(SENTIMENT_TARGET.hostile * eased),
-        positive: Math.round(SENTIMENT_TARGET.positive * eased),
-        noise: Math.round(SENTIMENT_TARGET.noise * eased),
-      });
-      if (p < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, []);
-
   return (
     <>
     <section
@@ -75,7 +47,7 @@ export default function HeroSection() {
           size={88}
           ariaLabel="Atharias mascot, watching"
           style={{
-            marginBottom: 10,
+            marginBottom: 28,
             filter: "drop-shadow(0 8px 22px rgba(0, 0, 0, 0.45))",
           }}
         />
@@ -97,7 +69,7 @@ export default function HeroSection() {
           style={{
             fontFamily: "var(--font-display), Georgia, serif",
             fontSize: "clamp(2.2rem, 5.2vw, 4rem)",
-            marginTop: 12,
+            marginTop: 32,
             lineHeight: 1.0,
             letterSpacing: "-0.035em",
             fontWeight: 400,
@@ -114,7 +86,7 @@ export default function HeroSection() {
 
         <p
           style={{
-            marginTop: 12,
+            marginTop: 28,
             fontFamily: "var(--font-display), Georgia, serif",
             fontStyle: "italic",
             fontSize: "clamp(1rem, 1.4vw, 1.25rem)",
@@ -132,7 +104,7 @@ export default function HeroSection() {
             flexWrap: "wrap",
             justifyContent: "center",
             gap: 12,
-            marginTop: 20,
+            marginTop: 44,
           }}
         >
           <Link
@@ -176,43 +148,6 @@ export default function HeroSection() {
           >
             Sign in
           </Link>
-        </div>
-
-        {/* Live sentiment readout */}
-        <div
-          className="tabular-nums"
-          style={{
-            marginTop: 14,
-            display: "inline-flex",
-            flexWrap: "wrap",
-            justifyContent: "center",
-            gap: 24,
-            fontFamily: "var(--font-data), monospace",
-            fontSize: 11,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            color: "rgba(245, 244, 242, 0.6)",
-          }}
-        >
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <span style={{ width: 7, height: 7, borderRadius: 999, background: "var(--coral)" }} />
-            {counts.hostile}% hostile
-          </span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <span style={{ width: 7, height: 7, borderRadius: 999, background: "var(--mint)" }} />
-            {counts.positive}% positive
-          </span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <span
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: 999,
-                background: "rgba(245, 244, 242, 0.45)",
-              }}
-            />
-            {counts.noise}% noise
-          </span>
         </div>
       </div>
     </section>
