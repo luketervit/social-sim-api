@@ -1,17 +1,15 @@
-import OpenAI from "openai";
-import { getDeepSeekEnv } from "@/lib/env";
+import Anthropic from "@anthropic-ai/sdk";
+import { getAnthropicEnv } from "@/lib/env";
 
-let client: OpenAI | null = null;
+const MODEL = "claude-haiku-4-5-20251001";
 
-function getClient() {
-  if (client) return client;
-
-  client = new OpenAI({
-    baseURL: "https://api.deepseek.com",
-    apiKey: getDeepSeekEnv().DEEPSEEK_API_KEY,
-  });
-
-  return client;
+let _client: Anthropic | null = null;
+function getClient(): Anthropic | null {
+  if (_client) return _client;
+  const env = getAnthropicEnv();
+  if (!env) return null;
+  _client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  return _client;
 }
 
 export interface ViralIdeaInput {
@@ -37,109 +35,142 @@ const PLATFORM_LIMITS: Record<ViralIdeaInput["platform"], number> = {
   linkedin: 1000,
 };
 
-function fallbackIdeas({
-  topic,
-  context,
-  brand,
-  platform,
-}: ViralIdeaInput): ViralIdea[] {
-  const brandPrefix = brand?.trim() ? `${brand.trim()} ` : "";
-  const contextSuffix = context?.trim() ? ` Context: ${context.trim()}` : "";
-  const maxLen = PLATFORM_LIMITS[platform];
+const PLATFORM_TONE: Record<ViralIdeaInput["platform"], string> = {
+  twitter:
+    "Punchy, 1-3 sentences max. No hashtags. Internet voice. The tweet should feel like a real account posted it, not a marketing template.",
+  reddit:
+    "Title-style first line, then 1-3 sentences of context. Sound like a regular Redditor — flat, specific, slightly self-deprecating where natural. No hashtags.",
+  slack:
+    "Professional but human, like a senior employee in a company channel. 1-3 sentences. No emoji unless they're load-bearing.",
+  linkedin:
+    "Real-name voice. 2-5 short sentences, one-line-per-thought broetry style is fine. 0-1 hashtags max. Confident but not corny.",
+};
 
-  const variants = [
+function fallbackIdeas(input: ViralIdeaInput): ViralIdea[] {
+  // Last-resort templates only — no raw context appended. The post text is
+  // generic on purpose so a broken LLM call still returns *something* without
+  // injecting the user's draft text twice.
+  const max = PLATFORM_LIMITS[input.platform];
+  const items = [
     {
-      label: "Hot take",
+      label: "Sharp take",
       hook: "Lead with a strong opinion to invite pushback quickly.",
-      post: `${brandPrefix}hot take: ${topic} is going to split the internet faster than people expect.${contextSuffix}`.trim(),
-      rationale: "Useful when you want to test whether a sharp claim triggers ridicule or rallying behavior.",
-    },
-    {
-      label: "Insider drop",
-      hook: "Frame it like new information people will repeat.",
-      post: `${brandPrefix}we've been hearing the same thing all day: ${topic}. If this holds, the conversation is going to move fast.${contextSuffix}`.trim(),
-      rationale: "Good for measuring how rumor-like framing amplifies urgency and quote-post behavior.",
-    },
-    {
-      label: "Question bait",
-      hook: "Ask the audience to take a side instead of just reading.",
-      post: `${brandPrefix}${topic} feels like a turning point. Are people overreacting, or is this actually the start of something bigger?${contextSuffix}`.trim(),
-      rationale: "Questions often create more replies from neutral lurkers and surface polarization.",
-    },
-    {
-      label: "Contrarian memo",
-      hook: "State the unpopular interpretation and make people argue.",
-      post: `${brandPrefix}contrarian view: the real story behind ${topic} is not the headline everyone is fighting over.${contextSuffix}`.trim(),
-      rationale: "This format helps test whether a corrective angle calms the thread or attracts hostility.",
+      post: input.topic.slice(0, max),
+      rationale:
+        "Variations couldn't be drafted right now — using your original. Re-run when the model is back up.",
     },
   ];
-
-  return variants.map((idea, index) => ({
-    ...idea,
-    id: `idea-${index + 1}`,
-    post: idea.post.slice(0, maxLen),
-  }));
+  return items.map((idea, index) => ({ ...idea, id: `idea-${index + 1}` }));
 }
 
-export async function generateViralIdeas(input: ViralIdeaInput): Promise<ViralIdea[]> {
-  const maxLen = PLATFORM_LIMITS[input.platform];
-
+function safeParseJSON(text: string): unknown {
+  const fenced = text.trim().replace(/^```(?:json)?\s*|```\s*$/g, "").trim();
   try {
-    const response = await getClient().chat.completions.create({
-      model: "deepseek-chat",
-      temperature: 0.9,
-      max_tokens: 900,
-      messages: [
-        {
-          role: "system",
-          content: `You create social post variations for internal simulation testing.
+    return JSON.parse(fenced);
+  } catch {
+    const match = fenced.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    try {
+      return JSON.parse(match[0]);
+    } catch {
+      return null;
+    }
+  }
+}
 
-Return JSON only in this format:
+export async function generateViralIdeas(
+  input: ViralIdeaInput
+): Promise<ViralIdea[]> {
+  const client = getClient();
+  if (!client) return fallbackIdeas(input);
+
+  const maxLen = PLATFORM_LIMITS[input.platform];
+  const platformTone = PLATFORM_TONE[input.platform];
+
+  const systemPrompt = `You are a copywriter helping someone test 3 alternative drafts of a social post against a simulated audience before they ship the original.
+
+Return JSON only, in this exact shape:
 {"ideas":[{"label":"...","hook":"...","post":"...","rationale":"..."}]}
 
 Rules:
-- Return exactly 4 ideas.
-- Each label must be 2-4 words.
-- Each hook must be one sentence and under 90 characters.
-- Each rationale must be one sentence and under 160 characters.
-- Each post must feel native to ${input.platform}.
-- Each post must stay under ${maxLen} characters.
-- Vary the strategic angle across the 4 ideas: one sharp/hot take, one informational, one curiosity-driven, one contrarian.
-- Make each post specific enough to simulate realistically. Avoid placeholders and generic marketing fluff.`,
-        },
-        {
-          role: "user",
-          content: `Topic: ${input.topic}
-Audience: ${input.audienceId}
+- Return EXACTLY 3 ideas, all rewriting the same underlying message — never the same wording, never the same angle.
+- Each idea has its own strategic angle. Suggested angles: sharp/hot take, informational/explainer, curiosity-driven question, contrarian reframe, story/anecdote, frame as data point. Pick 3 that genuinely differ.
+- Each "post" is the FULL rewritten draft, ready to paste. NEVER include the user's original text verbatim, NEVER append "Context:" or any meta tag, NEVER mention the audience by name.
+- Posts must stay under ${maxLen} characters and feel native to ${input.platform}. ${platformTone}
+- Each "label" is 1-3 words naming the angle (e.g. "Hot take", "Insider drop", "Curiosity gap"). Title case. No quotes.
+- Each "hook" is ONE sentence under 90 characters describing why this angle works against this audience.
+- Each "rationale" is ONE sentence under 160 characters describing what behaviour the angle is testing for.
+- No emoji unless the platform demands them. No hashtags unless the platform demands them.`;
+
+  const userPrompt = `Original draft (rewrite this):
+"""
+${input.topic.trim()}
+"""
+
 Platform: ${input.platform}
-Brand or account voice: ${input.brand?.trim() || "None provided"}
-Context: ${input.context?.trim() || "None provided"}`,
-        },
-      ],
+${input.brand?.trim() ? `Brand voice: ${input.brand.trim()}` : ""}
+
+Return 3 alternative drafts of this same post, each taking a different strategic angle.`;
+
+  try {
+    const response = await client.messages.create({
+      model: MODEL,
+      max_tokens: 1200,
+      temperature: 0.85,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userPrompt }],
     });
 
-    const raw = response.choices[0]?.message?.content?.trim() || "";
-    const parsed = JSON.parse(raw) as {
-      ideas?: Array<{
-        label?: string;
-        hook?: string;
-        post?: string;
-        rationale?: string;
-      }>;
-    };
+    const text = response.content
+      .filter((b) => b.type === "text")
+      .map((b) => ("text" in b ? b.text : ""))
+      .join("\n");
 
-    if (!Array.isArray(parsed.ideas) || parsed.ideas.length === 0) {
+    const parsed = safeParseJSON(text);
+    if (!parsed || typeof parsed !== "object") {
       return fallbackIdeas(input);
     }
 
-    return parsed.ideas.slice(0, 4).map((idea, index) => ({
-      id: `idea-${index + 1}`,
-      label: String(idea.label || `Variant ${index + 1}`).slice(0, 40),
-      hook: String(idea.hook || "").slice(0, 120),
-      post: String(idea.post || "").slice(0, maxLen),
-      rationale: String(idea.rationale || "").slice(0, 180),
-    }));
-  } catch {
+    const ideas = (parsed as { ideas?: unknown }).ideas;
+    if (!Array.isArray(ideas) || ideas.length === 0) {
+      return fallbackIdeas(input);
+    }
+
+    const cleaned = ideas
+      .slice(0, 3)
+      .map((raw, index) => {
+        const obj = raw as {
+          label?: unknown;
+          hook?: unknown;
+          post?: unknown;
+          rationale?: unknown;
+        };
+        const post = typeof obj.post === "string" ? obj.post.trim() : "";
+        if (!post) return null;
+        return {
+          id: `idea-${index + 1}`,
+          label:
+            typeof obj.label === "string" && obj.label.trim().length > 0
+              ? obj.label.trim().slice(0, 40)
+              : `Variant ${index + 1}`,
+          hook:
+            typeof obj.hook === "string" ? obj.hook.trim().slice(0, 140) : "",
+          post: post.slice(0, maxLen),
+          rationale:
+            typeof obj.rationale === "string"
+              ? obj.rationale.trim().slice(0, 200)
+              : "",
+        };
+      })
+      .filter((v): v is ViralIdea => v !== null);
+
+    if (cleaned.length === 0) return fallbackIdeas(input);
+    return cleaned;
+  } catch (err) {
+    console.error(
+      "generateViralIdeas failed:",
+      err instanceof Error ? err.message : err
+    );
     return fallbackIdeas(input);
   }
 }
