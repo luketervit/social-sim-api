@@ -42,7 +42,7 @@ export default function HeroSection() {
         padding: "clamp(32px, 5vh, 64px) 0 clamp(28px, 4vh, 56px)",
         position: "relative",
         overflow: "hidden",
-        minHeight: "calc(100svh - 56px)",
+        minHeight: "calc(100vh - 56px)",
         display: "flex",
         alignItems: "center",
       }}
@@ -220,7 +220,7 @@ export default function HeroSection() {
     <section
       style={{
         background: "var(--ink)",
-        padding: "clamp(48px, 8vh, 96px) 0 clamp(64px, 10vh, 120px)",
+        padding: "clamp(120px, 20vh, 240px) 0 clamp(80px, 12vh, 160px)",
         position: "relative",
         overflow: "hidden",
       }}
