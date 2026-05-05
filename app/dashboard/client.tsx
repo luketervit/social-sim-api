@@ -694,17 +694,17 @@ export default function DashboardClient({
 
   function handleDownloadReport() {
     if (!activeChat) return;
-    const md = buildReportMarkdown(activeChat);
-    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${activeChat.audienceName ?? "atharias"}-report.md`.replace(
-      /\s+/g,
-      "-"
-    );
-    a.click();
-    URL.revokeObjectURL(url);
+    const html = buildReportHtml(activeChat);
+    const win = window.open("", "_blank", "width=820,height=900");
+    if (!win) {
+      window.alert(
+        "Pop-up blocked. Allow pop-ups for atharias.dev to download the report."
+      );
+      return;
+    }
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
   }
 
   // ---------------- Render ----------------
@@ -1214,7 +1214,7 @@ function ChatConversation(props: ChatConversationProps) {
                       cursor: "pointer",
                     }}
                   >
-                    Download report (.md) ↓
+                    Download report (.pdf) ↓
                   </button>
                 </div>
               ),
@@ -2405,25 +2405,24 @@ function PostComposer({
           flexWrap: "wrap",
         }}
       >
-        <button
-          type="button"
-          onClick={onChangePlatform}
+        <span
           style={{
             background: "var(--bg-subtle)",
             border: "1px solid var(--border)",
             borderRadius: 999,
-            padding: "5px 10px 5px 12px",
+            padding: "5px 12px",
             fontSize: 12,
             color: "var(--text-secondary)",
-            cursor: "pointer",
             display: "inline-flex",
             alignItems: "center",
             gap: 6,
+            fontFamily: "var(--font-data), monospace",
+            letterSpacing: "0.04em",
+            textTransform: "uppercase",
           }}
         >
           {platformLabel}
-          <span style={{ fontSize: 14, lineHeight: 1, opacity: 0.6 }}>×</span>
-        </button>
+        </span>
 
         <label
           style={{
@@ -3334,6 +3333,297 @@ function Stat({
 // =====================================================================
 // Markdown report
 // =====================================================================
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function buildReportHtml(chat: ChatState): string {
+  const date = new Date().toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  const audienceName = chat.audienceName ?? "—";
+  const platformLabel = chat.platform ? PLATFORM_LABELS[chat.platform] : "—";
+  const personaCount = Math.min(
+    chat.personaCap,
+    chat.audiencePersonas.length
+  );
+
+  const archetypes = summariseArchetypes(chat.audiencePersonas).slice(0, 6);
+
+  const completed = chat.variants.filter((v) => v.status === "completed");
+  const ranked =
+    chat.mode === "variations" && completed.length > 1
+      ? [...completed].sort((a, b) => variantScore(a) - variantScore(b))
+      : completed;
+  const winner = ranked[0] ?? null;
+  const winnerIdx = winner
+    ? chat.variants.findIndex((v) => v.id === winner.id)
+    : -1;
+
+  const variantSections = chat.variants
+    .map((v, i) => {
+      const heading =
+        chat.mode === "variations"
+          ? `${i === 0 ? "Original" : `Variant ${i}`} · ${escapeHtml(v.label)}`
+          : "Simulation";
+      const hook = v.hook
+        ? `<p class="hook">${escapeHtml(v.hook)}</p>`
+        : "";
+      const post = `<div class="post">${escapeHtml(v.post)}</div>`;
+
+      if (v.status !== "completed") {
+        return `
+          <section class="variant">
+            <h2>${heading}</h2>
+            ${hook}
+            ${post}
+            <p class="status">Status: ${escapeHtml(v.status)}${
+              v.error ? ` — ${escapeHtml(v.error)}` : ""
+            }</p>
+          </section>`;
+      }
+
+      const b = sentimentBreakdown(v.thread);
+      const total = v.thread.length || 1;
+      const bars = `
+        <div class="bars">
+          <div class="bar"><span class="bar-label">Positive</span>
+            <span class="bar-track"><span class="bar-fill" style="width:${(b.positive / total) * 100}%; background:#1F8A55"></span></span>
+            <span class="bar-count">${b.positive}</span>
+          </div>
+          <div class="bar"><span class="bar-label">Neutral</span>
+            <span class="bar-track"><span class="bar-fill" style="width:${(b.neutral / total) * 100}%; background:#9E9E9E"></span></span>
+            <span class="bar-count">${b.neutral}</span>
+          </div>
+          <div class="bar"><span class="bar-label">Negative</span>
+            <span class="bar-track"><span class="bar-fill" style="width:${(b.negative / total) * 100}%; background:#C8552B"></span></span>
+            <span class="bar-count">${b.negative}</span>
+          </div>
+          <div class="bar"><span class="bar-label">Hostile</span>
+            <span class="bar-track"><span class="bar-fill" style="width:${(b.hostile / total) * 100}%; background:#B23226"></span></span>
+            <span class="bar-count">${b.hostile}</span>
+          </div>
+        </div>`;
+
+      // Pick a representative sample of replies — first 3 + most recent 3.
+      const sample =
+        v.thread.length <= 8
+          ? v.thread
+          : [...v.thread.slice(0, 4), ...v.thread.slice(-4)];
+      const replies = sample
+        .map((msg) => {
+          const handle = formatHandle(
+            (chat.platform ?? "twitter") as Platform,
+            msg.archetype
+          );
+          return `
+            <div class="reply" style="border-left-color:${SENTIMENT_COLORS[msg.sentiment]}">
+              <div class="reply-meta">
+                <span class="reply-handle">${escapeHtml(handle)}</span>
+                <span class="reply-round">R${msg.round}</span>
+                <span class="reply-sentiment" style="color:${SENTIMENT_COLORS[msg.sentiment]}">${escapeHtml(SENTIMENT_LABELS[msg.sentiment])}</span>
+              </div>
+              <p>${escapeHtml(msg.message)}</p>
+            </div>`;
+        })
+        .join("");
+
+      return `
+        <section class="variant">
+          <h2>${heading}</h2>
+          ${hook}
+          ${post}
+          <div class="meta-line">
+            <span><strong>${v.thread.length}</strong> replies</span>
+            ${v.aggression ? `<span><strong>${escapeHtml(v.aggression)}</strong> aggression</span>` : ""}
+          </div>
+          ${bars}
+          <h3>Selected replies</h3>
+          ${replies}
+        </section>`;
+    })
+    .join("");
+
+  const recommendation =
+    winner && winnerIdx !== -1 && chat.variants.length > 1
+      ? `
+        <section class="recommendation">
+          <span class="eyebrow">Recommendation</span>
+          <h2>Ship ${
+            winnerIdx === 0
+              ? "<em>the original</em>"
+              : `<em>Variant ${winnerIdx} — ${escapeHtml(winner.label)}</em>`
+          }.</h2>
+          <p>It draws the cleanest reaction from this audience.</p>
+          <table>
+            <thead>
+              <tr><th>Variant</th><th>Title</th><th class="num">Negative share</th><th class="num">Aggression</th><th class="num">Replies</th></tr>
+            </thead>
+            <tbody>
+              ${ranked
+                .map((v) => {
+                  const idx = chat.variants.findIndex((x) => x.id === v.id);
+                  const b = sentimentBreakdown(v.thread);
+                  const total = v.thread.length || 1;
+                  const bad = (((b.hostile + b.negative) / total) * 100).toFixed(0);
+                  return `<tr ${v.id === winner.id ? 'class="winner"' : ""}>
+                    <td>${idx === 0 ? "Original" : `Variant ${idx}`}</td>
+                    <td>${escapeHtml(v.label)}</td>
+                    <td class="num">${bad}%</td>
+                    <td class="num">${escapeHtml(v.aggression ?? "—")}</td>
+                    <td class="num">${v.thread.length}</td>
+                  </tr>`;
+                })
+                .join("")}
+            </tbody>
+          </table>
+        </section>`
+      : "";
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Atharias simulation report — ${escapeHtml(audienceName)}</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  :root {
+    --ink: #141413;
+    --butter: #E8D27A;
+    --bg: #FAF9F7;
+    --surface: #FFFFFF;
+    --border: #E5E2DC;
+    --text: #1A1A1A;
+    --muted: #6B6B6B;
+    --tertiary: #9E9E9E;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); }
+  body { font-family: -apple-system, "PP Neue Montreal", BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; font-size: 13px; line-height: 1.55; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .page { max-width: 720px; margin: 0 auto; padding: 32px 0 48px; }
+  header.brand { display: flex; align-items: center; gap: 16px; padding-bottom: 22px; border-bottom: 1px solid var(--border); }
+  header.brand img { width: 56px; height: 56px; object-fit: contain; }
+  header.brand .word { font-family: "Fraunces", Georgia, serif; font-size: 30px; letter-spacing: -0.02em; color: var(--text); margin: 0; }
+  header.brand .tag { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--tertiary); }
+  .title { margin-top: 28px; }
+  .title h1 { font-family: "Fraunces", Georgia, serif; font-size: 34px; letter-spacing: -0.025em; line-height: 1.05; margin: 0; }
+  .title h1 em { font-style: italic; color: var(--muted); font-weight: 400; }
+  .meta { margin-top: 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 28px; padding: 14px 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+  .meta dt { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tertiary); margin: 0 0 2px; }
+  .meta dd { margin: 0; font-size: 14px; color: var(--text); font-weight: 500; }
+  .archetypes { margin-top: 28px; }
+  .archetypes h3 { font-family: "Fraunces", Georgia, serif; font-size: 16px; letter-spacing: -0.01em; margin: 0 0 10px; color: var(--text); }
+  .archetypes ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  .archetypes li { padding: 4px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; font-size: 12px; }
+  .archetypes li .count { color: var(--tertiary); margin-left: 6px; font-family: "SF Mono", Menlo, monospace; font-size: 11px; }
+  .recommendation { margin-top: 32px; padding: 24px 26px; background: var(--ink); color: rgba(245, 244, 242, 0.95); border-radius: 16px; page-break-inside: avoid; }
+  .recommendation .eyebrow { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--butter); }
+  .recommendation h2 { font-family: "Fraunces", Georgia, serif; font-size: 22px; letter-spacing: -0.02em; margin: 12px 0 4px; color: rgba(245, 244, 242, 0.95); font-weight: 400; line-height: 1.3; }
+  .recommendation h2 em { color: var(--butter); font-style: italic; }
+  .recommendation p { color: rgba(245, 244, 242, 0.7); margin: 6px 0 16px; }
+  .recommendation table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .recommendation th { text-align: left; font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(245, 244, 242, 0.5); padding: 8px 10px; border-bottom: 1px solid rgba(245, 244, 242, 0.12); font-weight: 500; }
+  .recommendation td { padding: 9px 10px; border-bottom: 1px solid rgba(245, 244, 242, 0.06); }
+  .recommendation tr.winner td { background: rgba(232, 210, 122, 0.1); color: var(--butter); }
+  .recommendation .num { text-align: right; font-family: "SF Mono", Menlo, monospace; }
+  .variant { margin-top: 28px; padding: 22px 24px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; page-break-inside: avoid; }
+  .variant h2 { font-family: "Fraunces", Georgia, serif; font-size: 19px; letter-spacing: -0.02em; margin: 0 0 8px; font-weight: 500; color: var(--text); }
+  .variant h3 { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; margin: 18px 0 8px; color: var(--tertiary); font-weight: 500; }
+  .variant .hook { font-family: "Fraunces", Georgia, serif; font-style: italic; font-size: 14px; color: var(--muted); margin: 0 0 12px; }
+  .variant .post { background: var(--bg); border-radius: 10px; padding: 14px 16px; font-family: "Fraunces", Georgia, serif; font-size: 15px; line-height: 1.55; color: var(--text); white-space: pre-wrap; }
+  .variant .meta-line { margin-top: 14px; display: flex; gap: 18px; font-size: 12px; color: var(--muted); font-family: "SF Mono", Menlo, monospace; letter-spacing: 0.04em; text-transform: uppercase; }
+  .variant .meta-line strong { color: var(--text); font-weight: 600; }
+  .bars { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+  .bar { display: grid; grid-template-columns: 80px 1fr 32px; align-items: center; gap: 10px; font-size: 11px; color: var(--muted); font-family: "SF Mono", Menlo, monospace; letter-spacing: 0.04em; text-transform: uppercase; }
+  .bar-track { height: 5px; background: var(--border); border-radius: 999px; overflow: hidden; }
+  .bar-fill { display: block; height: 100%; border-radius: 999px; }
+  .bar-count { text-align: right; color: var(--text); font-weight: 600; }
+  .reply { padding: 10px 12px; background: var(--bg); border-left: 3px solid var(--border); border-radius: 8px; margin: 8px 0; }
+  .reply-meta { display: flex; gap: 12px; align-items: baseline; font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--tertiary); }
+  .reply-handle { color: var(--text); font-weight: 600; }
+  .reply-sentiment { margin-left: auto; }
+  .reply p { margin: 4px 0 0; font-size: 13px; line-height: 1.5; color: var(--text); }
+  .status { color: var(--muted); font-style: italic; }
+  footer { margin-top: 36px; padding-top: 18px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--tertiary); }
+  .actions { display: flex; gap: 8px; margin-top: 22px; }
+  .actions button { padding: 8px 16px; border-radius: 999px; border: none; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; }
+  .actions .save { background: var(--ink); color: var(--butter); }
+  .actions .close { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  @media print {
+    .actions { display: none; }
+    .page { padding: 0; }
+    body { background: white; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="brand">
+    <img src="${typeof window !== "undefined" ? window.location.origin : ""}/mascot/lion.png" alt="Atharias mascot" />
+    <div>
+      <h1 class="word">Atharias</h1>
+      <span class="tag">Social Simulation Report</span>
+    </div>
+  </header>
+
+  <div class="title">
+    <h1>${escapeHtml(audienceName)} <em>·</em> ${escapeHtml(platformLabel)}</h1>
+  </div>
+
+  <dl class="meta">
+    <div><dt>Audience</dt><dd>${escapeHtml(audienceName)}</dd></div>
+    <div><dt>Platform</dt><dd>${escapeHtml(platformLabel)}</dd></div>
+    <div><dt>Personas tested</dt><dd>${personaCount} of ${chat.audiencePersonas.length}</dd></div>
+    <div><dt>Generated</dt><dd>${escapeHtml(date)}</dd></div>
+  </dl>
+
+  ${
+    archetypes.length > 0
+      ? `
+    <div class="archetypes">
+      <h3>Audience composition</h3>
+      <ul>
+        ${archetypes
+          .map(
+            (a) =>
+              `<li>${escapeHtml(a.archetype)}<span class="count">×${a.count}</span></li>`
+          )
+          .join("")}
+      </ul>
+    </div>`
+      : ""
+  }
+
+  ${recommendation}
+
+  ${variantSections}
+
+  <footer>
+    <span>Atharias · Social Simulation Engine</span>
+    <span>${escapeHtml(date)}</span>
+  </footer>
+
+  <div class="actions">
+    <button class="save" onclick="window.print()">Save as PDF</button>
+    <button class="close" onclick="window.close()">Close</button>
+  </div>
+</div>
+<script>
+  window.addEventListener("load", function () {
+    setTimeout(function () { window.print(); }, 350);
+  });
+</script>
+</body>
+</html>`;
+}
 
 function buildReportMarkdown(chat: ChatState): string {
   const lines: string[] = [];
