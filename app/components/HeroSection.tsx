@@ -177,12 +177,18 @@ export default function HeroSection() {
           </Link>
         </div>
 
-        {/* Swarm demo */}
+        {/* Swarm demo — anchored behind the hero content so comments orbit the buttons */}
         <div
+          aria-hidden="true"
           style={{
-            width: "100%",
-            maxWidth: 480,
-            margin: "24px auto 0",
+            position: "absolute",
+            left: "50%",
+            top: "50%",
+            transform: "translate(-50%, -50%)",
+            width: "min(640px, 92%)",
+            zIndex: 0,
+            pointerEvents: "none",
+            opacity: 0.9,
           }}
         >
           <ReactionSwarm theme="dark" />
