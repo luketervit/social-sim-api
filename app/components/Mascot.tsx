@@ -1,10 +1,11 @@
+/* eslint-disable @next/next/no-img-element */
 import Image from "next/image";
 
 type Variant = "idle" | "listening";
 
 const SRC: Record<Variant, string> = {
-  idle: "/mascot/idle.webm",
-  listening: "/mascot/listening.webm",
+  idle: "/mascot/idle.webp",
+  listening: "/mascot/listening.webp",
 };
 
 export function MascotImage({
@@ -49,17 +50,11 @@ export function MascotVideo({
   ariaLabel?: string;
 }) {
   return (
-    <video
+    <img
       src={SRC[variant]}
+      alt={ariaLabel ?? ""}
       width={size}
       height={size}
-      autoPlay
-      loop
-      muted
-      playsInline
-      preload="metadata"
-      aria-label={ariaLabel}
-      aria-hidden={ariaLabel ? undefined : true}
       className={className}
       style={{
         display: "block",
