@@ -32,6 +32,7 @@ export async function GET(
   }
 
   const { id } = await params;
+  const includeFull = request.nextUrl.searchParams.get("full") === "1";
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("audiences")
@@ -49,13 +50,13 @@ export async function GET(
     return Response.json({ error: "Audience not found." }, { status: 404 });
   }
 
-  // Trim personas in the status response to keep payloads small. Full persona
-  // JSON is only loaded by the simulation routes.
-  const personasPreview = Array.isArray(data.personas)
-    ? data.personas.slice(0, 6)
-    : [];
+  // Trim personas in the status response to keep payloads small. Pass
+  // ?full=1 to get the full array (used by the dashboard chat to drive
+  // the audience analysis + simulation cap).
+  const personasArray = Array.isArray(data.personas) ? data.personas : [];
+  const personasPreview = personasArray.slice(0, 6);
 
-  return Response.json({
+  const response: Record<string, unknown> = {
     id: data.id,
     name: data.name,
     platform: data.platform,
@@ -66,7 +67,12 @@ export async function GET(
     created_at: data.created_at,
     processed_at: data.processed_at,
     personas_preview: personasPreview,
-  });
+  };
+  if (includeFull) {
+    response.personas = personasArray;
+  }
+
+  return Response.json(response);
 }
 
 export async function DELETE(

@@ -123,19 +123,15 @@ export default function DashboardClient({
   // Pick an audience for whatever chat is active. Loads personas.
   const fetchPersonasForAudience = useCallback(
     async (audience: AudienceSummary) => {
-      try {
-        const res = await fetch(`/api/v1/audiences/${audience.id}`);
-        if (!res.ok) {
-          throw new Error("Could not load audience.");
-        }
-        const data = await res.json();
-        const personas = Array.isArray(data?.personas)
-          ? (data.personas as Persona[])
-          : [];
-        return { personas, platform: data?.platform as string | null };
-      } catch (err) {
-        throw err;
+      const res = await fetch(`/api/v1/audiences/${audience.id}?full=1`);
+      if (!res.ok) {
+        throw new Error("Could not load audience.");
       }
+      const data = await res.json();
+      const personas = Array.isArray(data?.personas)
+        ? (data.personas as Persona[])
+        : [];
+      return { personas, platform: data?.platform as string | null };
     },
     []
   );
