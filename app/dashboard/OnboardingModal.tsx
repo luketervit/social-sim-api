@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { MascotVideo } from "@/app/components/Mascot";
 
 const ONBOARDING_KEY = "atharias_onboarded_v1";
 
@@ -22,7 +23,7 @@ const CARDS: CardSpec[] = [
     eyebrow: "Step 1",
     title: "Upload an audience",
     body: "Drop a CSV — LinkedIn connections, customer messages, support tickets, anything text-based. We pick the useful columns automatically and turn each row into a persona you can simulate against.",
-    illustration: <UploadIllustration />,
+    illustration: <MascotGreeting />,
   },
   {
     eyebrow: "Step 2",
@@ -372,6 +373,16 @@ function CardSwitcher({ step }: { step: number }) {
         }
       `}</style>
     </div>
+  );
+}
+
+function MascotGreeting() {
+  return (
+    <MascotVideo
+      variant="idle"
+      size={120}
+      ariaLabel="Atharias mascot greeting you"
+    />
   );
 }
 

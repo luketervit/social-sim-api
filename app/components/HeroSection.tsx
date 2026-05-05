@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { MascotVideo } from "./Mascot";
 import ReactionSwarm from "./ReactionSwarm";
 
 const SENTIMENT_TARGET = { hostile: 42, positive: 18, noise: 40 };
@@ -64,6 +65,20 @@ export default function HeroSection() {
           alignItems: "center",
         }}
       >
+        <MascotVideo
+          variant="idle"
+          size={140}
+          ariaLabel="Atharias mascot, watching"
+          style={{
+            position: "absolute",
+            top: -28,
+            right: "clamp(8px, 4vw, 56px)",
+            zIndex: 2,
+            pointerEvents: "none",
+            filter: "drop-shadow(0 8px 24px rgba(20, 20, 19, 0.35))",
+          }}
+        />
+
         <span
           style={{
             fontFamily: "var(--font-data), monospace",

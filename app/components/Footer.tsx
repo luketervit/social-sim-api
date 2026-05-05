@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MascotImage } from "./Mascot";
 import Reveal from "./Reveal";
 
 const LINK_GROUPS = [
@@ -47,12 +48,26 @@ export default function Footer() {
           }}
         >
           <div>
-            <span
-              className="mono-label"
-              style={{ color: "var(--butter-deep)" }}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 14,
+                marginBottom: 14,
+              }}
             >
-              Atharias · 2026
-            </span>
+              <MascotImage
+                size={56}
+                alt="Atharias mascot"
+                style={{ flexShrink: 0 }}
+              />
+              <span
+                className="mono-label"
+                style={{ color: "var(--butter-deep)" }}
+              >
+                Atharias · 2026
+              </span>
+            </div>
             <p
               style={{
                 marginTop: 18,

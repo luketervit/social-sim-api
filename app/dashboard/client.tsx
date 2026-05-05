@@ -11,6 +11,7 @@ import {
 } from "react";
 import type { Persona } from "@/lib/schemas";
 import type { AgentMessage } from "@/lib/simulation/types";
+import { MascotVideo } from "@/app/components/Mascot";
 import AudienceTable, { buildPersonaCsv } from "./AudienceTable";
 import OnboardingModal from "./OnboardingModal";
 import Sidebar from "./Sidebar";
@@ -1507,7 +1508,7 @@ function UploadDropzone({
       aria-label="Upload a CSV file"
       style={{
         marginTop: 4,
-        padding: "32px 24px",
+        padding: "28px 24px 32px",
         borderRadius: 18,
         background: dragActive ? "var(--accent-subtle)" : "var(--surface)",
         border: `1.5px dashed ${dragActive ? "var(--accent)" : "var(--border)"}`,
@@ -1519,6 +1520,12 @@ function UploadDropzone({
         transform: dragActive ? "scale(1.005)" : "scale(1)",
       }}
     >
+      <MascotVideo
+        variant="idle"
+        size={96}
+        ariaLabel="Atharias mascot, waiting for your audience"
+        style={{ margin: "0 auto 8px" }}
+      />
       <div
         style={{
           fontFamily: "var(--font-display), Georgia, serif",
@@ -1529,7 +1536,7 @@ function UploadDropzone({
           transition: "font-style 200ms ease",
         }}
       >
-        {dragActive ? "Drop to upload" : "Drop a .csv or click to browse"}
+        {dragActive ? "Drop to upload" : "Drop a .csv and I'll bring the room"}
       </div>
       <div
         style={{
@@ -1655,31 +1662,39 @@ function ProcessingCard({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 10,
+          gap: 14,
           marginBottom: 14,
         }}
       >
-        <span
-          aria-hidden="true"
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: 999,
-            background: "var(--accent)",
-            animation: "pulse-soft 1.4s ease-in-out infinite",
-          }}
+        <MascotVideo
+          variant="listening"
+          size={56}
+          ariaLabel="Atharias mascot, listening to your data"
+          style={{ flexShrink: 0 }}
         />
-        <span
-          style={{
-            fontFamily: "var(--font-data), monospace",
-            fontSize: 11,
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-            color: "var(--text-secondary)",
-          }}
-        >
-          Processing {name}
-        </span>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <span
+            style={{
+              fontFamily: "var(--font-data), monospace",
+              fontSize: 11,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              color: "var(--text-secondary)",
+            }}
+          >
+            Listening to {name}
+          </span>
+          <span
+            style={{
+              fontSize: 13,
+              color: "var(--text-tertiary)",
+              fontStyle: "italic",
+              fontFamily: "var(--font-display), Georgia, serif",
+            }}
+          >
+            getting to know the room…
+          </span>
+        </div>
       </div>
       <ol
         style={{
