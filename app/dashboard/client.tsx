@@ -2244,7 +2244,7 @@ function PlatformChips({
   suggested: Platform;
   onPick: (p: Platform) => void;
 }) {
-  const opts: Platform[] = ["twitter", "reddit", "slack"];
+  const opts: Platform[] = ["twitter", "linkedin", "reddit", "slack"];
   return (
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
       {opts.map((p) => (

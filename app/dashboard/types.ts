@@ -1,7 +1,7 @@
 import type { Persona } from "@/lib/schemas";
 import type { AgentMessage } from "@/lib/simulation/types";
 
-export type Platform = "twitter" | "reddit" | "slack";
+export type Platform = "twitter" | "reddit" | "slack" | "linkedin";
 export type RunMode = "single" | "variations";
 export type VariantStatus =
   | "idle"
@@ -14,12 +14,14 @@ export const PLATFORM_LABELS: Record<Platform, string> = {
   twitter: "Twitter / X",
   reddit: "Reddit",
   slack: "Slack",
+  linkedin: "LinkedIn",
 };
 
 export const PLATFORM_HANDLE: Record<Platform, string> = {
   twitter: "@",
   reddit: "u/",
   slack: "",
+  linkedin: "",
 };
 
 export const SENTIMENT_COLORS: Record<AgentMessage["sentiment"], string> = {
@@ -105,7 +107,7 @@ export function makeChat(): ChatState {
 
 export function inferPlatformFromFilename(name: string): Platform {
   const lower = name.toLowerCase();
-  if (lower.includes("linkedin")) return "twitter";
+  if (lower.includes("linkedin")) return "linkedin";
   if (lower.includes("discord") || lower.includes("slack")) return "slack";
   if (lower.includes("reddit")) return "reddit";
   return "twitter";

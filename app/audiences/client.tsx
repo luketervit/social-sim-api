@@ -47,7 +47,7 @@ function statusColor(status: string): string {
 export default function AudiencesClient({ initialAudiences }: AudiencesClientProps) {
   const [audiences, setAudiences] = useState<AudienceRow[]>(initialAudiences);
   const [name, setName] = useState("");
-  const [platform, setPlatform] = useState<"twitter" | "reddit" | "slack">(
+  const [platform, setPlatform] = useState<"twitter" | "reddit" | "slack" | "linkedin">(
     "twitter"
   );
   const [file, setFile] = useState<File | null>(null);
@@ -311,12 +311,13 @@ export default function AudiencesClient({ initialAudiences }: AudiencesClientPro
               id="audience-platform"
               value={platform}
               onChange={(e) =>
-                setPlatform(e.target.value as "twitter" | "reddit" | "slack")
+                setPlatform(e.target.value as "twitter" | "reddit" | "slack" | "linkedin")
               }
               className="input"
               style={{ width: "100%", minHeight: 42 }}
             >
               <option value="twitter">Twitter / X</option>
+              <option value="linkedin">LinkedIn</option>
               <option value="reddit">Reddit</option>
               <option value="slack">Slack</option>
             </select>

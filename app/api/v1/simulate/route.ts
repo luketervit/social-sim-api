@@ -9,7 +9,7 @@ import { CREDITS_PER_MESSAGE, SIMULATION_ROUNDS } from "@/lib/credits";
 
 export const maxDuration = 300;
 
-const ALLOWED_PLATFORMS = new Set(["twitter", "reddit", "slack"]);
+const ALLOWED_PLATFORMS = new Set(["twitter", "reddit", "slack", "linkedin"]);
 const MAX_INPUT_LENGTH = 2000;
 const MIN_PERSONA_CAP = 5;
 const MAX_PERSONA_CAP = 200;
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     typeof payload.platform === "string" ? payload.platform.toLowerCase() : "";
   if (!ALLOWED_PLATFORMS.has(platform)) {
     return Response.json(
-      { error: "platform must be twitter, reddit, or slack." },
+      { error: "platform must be twitter, linkedin, reddit, or slack." },
       { status: 400 }
     );
   }

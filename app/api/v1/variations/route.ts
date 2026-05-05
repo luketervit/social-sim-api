@@ -6,10 +6,11 @@ import { generateViralIdeas } from "@/lib/simulation/ideate";
 
 export const maxDuration = 60;
 
-const ALLOWED_PLATFORMS = new Set<"twitter" | "reddit" | "slack">([
+const ALLOWED_PLATFORMS = new Set<"twitter" | "reddit" | "slack" | "linkedin">([
   "twitter",
   "reddit",
   "slack",
+  "linkedin",
 ]);
 const MAX_INPUT = 2000;
 
@@ -68,13 +69,13 @@ export async function POST(request: NextRequest) {
 
   const platformRaw =
     typeof payload.platform === "string" ? payload.platform.toLowerCase() : "";
-  if (!ALLOWED_PLATFORMS.has(platformRaw as "twitter" | "reddit" | "slack")) {
+  if (!ALLOWED_PLATFORMS.has(platformRaw as "twitter" | "reddit" | "slack" | "linkedin")) {
     return Response.json(
-      { error: "platform must be twitter, reddit, or slack." },
+      { error: "platform must be twitter, linkedin, reddit, or slack." },
       { status: 400 }
     );
   }
-  const platform = platformRaw as "twitter" | "reddit" | "slack";
+  const platform = platformRaw as "twitter" | "reddit" | "slack" | "linkedin";
 
   const post = typeof payload.post === "string" ? payload.post.trim() : "";
   if (post.length === 0) {

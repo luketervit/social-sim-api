@@ -14,7 +14,7 @@ export type Persona = z.infer<typeof PersonaSchema>;
 
 export const SimulateInputSchema = z.object({
   audience_id: z.string().min(1),
-  platform: z.enum(["twitter", "slack", "reddit"]),
+  platform: z.enum(["twitter", "slack", "reddit", "linkedin"]),
   input: z.string().min(1).max(2000),
 });
 

@@ -11,7 +11,7 @@ import { processAudienceUpload } from "@/lib/audiences/process";
 
 export const maxDuration = 300;
 
-const ALLOWED_PLATFORMS = new Set(["twitter", "reddit", "slack"]);
+const ALLOWED_PLATFORMS = new Set(["twitter", "reddit", "slack", "linkedin"]);
 const NAME_MAX_CHARS = 80;
 
 async function getUser(request: NextRequest) {

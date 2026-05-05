@@ -18,7 +18,7 @@ export interface ViralIdeaInput {
   topic: string;
   context?: string;
   brand?: string;
-  platform: "twitter" | "reddit" | "slack";
+  platform: "twitter" | "reddit" | "slack" | "linkedin";
   audienceId: string;
 }
 
@@ -34,6 +34,7 @@ const PLATFORM_LIMITS: Record<ViralIdeaInput["platform"], number> = {
   twitter: 280,
   reddit: 520,
   slack: 320,
+  linkedin: 1000,
 };
 
 function fallbackIdeas({

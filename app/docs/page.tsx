@@ -364,8 +364,8 @@ function Step({
       <div
         className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[12px] tabular-nums"
         style={{
-          background: "var(--accent-muted)",
-          color: "var(--accent-hover)",
+          background: "var(--butter-deep)",
+          color: "var(--ink)",
           fontWeight: "var(--font-weight-semibold)" as unknown as number,
           marginTop: 2,
         }}
@@ -395,7 +395,7 @@ function EndpointCard({ method, path, detail }: { method: string; path: string; 
       <div className="flex items-center gap-3">
         <code
           className="rounded px-2 py-0.5 text-[12px]"
-          style={{ background: "var(--bg-element)", color: "var(--accent-hover)" }}
+          style={{ background: "var(--ink)", color: "var(--butter-deep)" }}
         >
           {method}
         </code>
@@ -434,8 +434,8 @@ function RefRow({ code, label }: { code: string; label: string }) {
       <code
         className="rounded px-2 py-0.5 text-[12px]"
         style={{
-          background: "var(--bg-element)",
-          color: "var(--accent-hover)",
+          background: "var(--ink)",
+          color: "var(--butter-deep)",
         }}
       >
         {code}

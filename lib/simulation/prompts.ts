@@ -166,6 +166,13 @@ const PLATFORM_VOCAB_BANKS: Record<string, Record<ToneTier, string[]>> = {
     combative: ["per my last message", "as I mentioned earlier", "to be clear", ".", "👍", "happy to discuss offline", "let me know what's blocking this"],
     confrontational: ["frankly this is concerning", "I'm not aligned on this", "we've been here before", "this sets a bad precedent", "I'd appreciate a real answer"],
   },
+  linkedin: {
+    casual: ["love this", "great share", "well said", "100%", "this!", "exactly", "spot on"],
+    measured: ["to add to this", "in my experience", "worth noting", "great point — I'd add", "this resonates", "thoughtful take", "agreed — and one nuance"],
+    assertive: ["respectfully disagree", "I'd offer a different perspective", "this misses an important angle", "let me push back gently", "I see it differently"],
+    combative: ["this is just plain wrong", "respectfully, no", "I think you're conflating two things", "this oversimplifies it", "I have to disagree strongly"],
+    confrontational: ["with respect, this is misguided", "I'm surprised to see this take from someone in your position", "this is the kind of thinking that gets people hurt", "honestly disappointing"],
+  },
 };
 
 function buildVocab(platform: string, tier: ToneTier, persona: Persona): string[] {
@@ -231,11 +238,79 @@ PLATFORM NORMS:
 - Real candid reactions often happen in DMs. What people say publicly in Slack is filtered.
 - Silence is itself a signal — a controversial announcement with few reactions means people are uncomfortable, not that they agree.
 - DO NOT use hashtags or Twitter-style language. This is a professional environment.`,
+
+  linkedin: `You are a real professional commenting on LinkedIn under your real name and headline. You write in the authentic voice and format of LinkedIn.
+
+PLATFORM NORMS:
+- Your name and current role are visible on every comment, so reputation is at stake. Most people stay constructive even when they disagree.
+- Common behaviors: agreement spam ("Couldn't agree more", "Well said", "100% this"), name-tagging colleagues ("@Jane have you seen this?"), reposting with a one-line take, performative thoughtfulness, lessons-learned framings.
+- Disagreement is softened: "Respectfully disagree because…", "I'd offer a different perspective…", "Worth noting that…". Direct hostility is rare and gets noticed.
+- The "broetry" format is real for original posts (one short sentence per line) but comments are usually 1-3 sentences in normal prose.
+- Hashtags appear at the end of original posts, 0-2 max — never in comments. Don't use them.
+- Lines like "Unpopular opinion:" or "I'll say it…" are common preambles for mildly contrarian takes.
+- Hot takes get dressed up as "lessons" or "things every founder/PM/leader needs to hear".
+- LinkedIn is performative — replies are as much for *your* network seeing you engage thoughtfully as they are for the OP.
+- Engagement floor is high (likes, congrats, generic praise) but real arguments get fewer responses than on Twitter.
+- DO NOT use Twitter-style ratios, dunks, or slang. DO NOT write essays — comments are short.`,
 };
 
 // ---------------------------------------------------------------------------
 // Platform-specific user prompts
 // ---------------------------------------------------------------------------
+
+function buildLinkedInUserPrompt(
+  input: string,
+  thread: AgentMessage[],
+  targetSentiment: TargetSentiment,
+  replyTarget: AgentMessage | null,
+  respondToRoot: boolean
+): string {
+  if (thread.length === 0) {
+    return `Someone in your network just posted this on LinkedIn:\n\n"${input}"\n\nWrite your comment reacting to it. Keep it 1-3 sentences. Use your real-name voice.\n\n${buildAudienceReminder(targetSentiment)}`;
+  }
+
+  const fullContext = thread
+    .slice(-8)
+    .map(
+      (m, index) =>
+        `R${m.round}.${index + 1} ${m.archetype.replace(/\s+/g, " ")}: "${m.message}"`
+    )
+    .join("\n");
+
+  if (replyTarget) {
+    return `Original LinkedIn post: "${input}"
+
+Recent comments in the thread:
+${fullContext}
+
+You're replying to ${replyTarget.archetype.replace(/\s+/g, " ")} who said:
+"${replyTarget.message}"
+
+Write your reply comment. Engage with what they said. 1-3 sentences. Keep the LinkedIn-professional tone — name-tagging colleagues is fine, dunks are not.
+
+${buildAudienceReminder(targetSentiment)}`;
+  }
+
+  if (respondToRoot) {
+    return `Original LinkedIn post: "${input}"
+
+Recent comments in the thread:
+${fullContext}
+
+You're commenting directly on the original post, not on a specific reply. 1-3 sentences.
+
+${buildAudienceReminder(targetSentiment)}`;
+  }
+
+  return `Original LinkedIn post: "${input}"
+
+Recent comments:
+${fullContext}
+
+Write a fresh top-level comment. 1-3 sentences. Keep it professional.
+
+${buildAudienceReminder(targetSentiment)}`;
+}
 
 function buildTwitterUserPrompt(
   input: string,
@@ -463,6 +538,8 @@ export function buildUserPrompt(
       return buildRedditUserPrompt(input, thread, targetSentiment, replyTarget, respondToRoot);
     case "slack":
       return buildSlackUserPrompt(input, thread, targetSentiment, replyTarget, respondToRoot);
+    case "linkedin":
+      return buildLinkedInUserPrompt(input, thread, targetSentiment, replyTarget, respondToRoot);
     case "twitter":
     default:
       return buildTwitterUserPrompt(input, thread, targetSentiment, replyTarget, respondToRoot);
