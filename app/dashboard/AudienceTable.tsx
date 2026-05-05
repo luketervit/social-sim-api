@@ -32,6 +32,60 @@ function describeAffinity(affinity: number): { label: string; color: string } {
   return { label: "supportive", color: "var(--mint)" };
 }
 
+function cleanVoice(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const stripped = raw
+    .replace(/^You write things like:\s*/i, "")
+    .replace(/^"|"$/g, "")
+    .trim();
+  if (!stripped) return null;
+  // Synthetic uploads concat fields with " · " — drop noisy parts.
+  const parts = stripped.split(/\s·\s/);
+  if (parts.length > 1) {
+    const useful = parts.filter((p) => {
+      const trimmed = p.trim();
+      if (/^URL:/i.test(trimmed)) return false;
+      if (/^Email Address:/i.test(trimmed)) return false;
+      if (/^Connected On:/i.test(trimmed)) return false;
+      if (/https?:\/\//i.test(trimmed)) return false;
+      if (/^[\w.+-]+@[\w-]+(\.[\w-]+)+$/.test(trimmed)) return false;
+      return true;
+    });
+    if (useful.length > 0) {
+      return useful
+        .map((p) =>
+          p
+            .replace(/^First Name:\s*/i, "")
+            .replace(/^Last Name:\s*/i, "")
+            .trim()
+        )
+        .filter(Boolean)
+        .join(" · ");
+    }
+  }
+  return stripped;
+}
+
+function dropMechanicalCoreValues(values: string[] | undefined): string[] {
+  if (!values || values.length === 0) return [];
+  // Synthetic-text personas often produce noise like ["name", "patra", "urairat"]
+  // — these are first/last name parts pulled from the row, not real values.
+  return values.filter((v) => {
+    const t = v.trim().toLowerCase();
+    if (!t) return false;
+    if (/^(name|first|last|email|url|connected|company)$/.test(t)) return false;
+    return true;
+  });
+}
+
+function looksStale(personas: Persona[]): boolean {
+  if (personas.length < 8) return false;
+  const archetypes = new Set(personas.map((p) => p.archetype));
+  // Old pipeline produced one tier label for every row. New pipeline produces
+  // role-based labels with high diversity.
+  return archetypes.size <= 3;
+}
+
 export default function AudienceTable({
   audience,
   personas,
@@ -248,6 +302,43 @@ export default function AudienceTable({
         </div>
       ) : (
         <>
+          {looksStale(personas) ? (
+            <div
+              style={{
+                padding: "14px 18px",
+                borderRadius: 14,
+                background: "var(--butter)",
+                border: "1px solid var(--butter-deep)",
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                flexWrap: "wrap",
+                fontSize: 13,
+                lineHeight: 1.5,
+                color: "var(--ink)",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-data), monospace",
+                  fontSize: 11,
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  color: "var(--ink)",
+                  opacity: 0.65,
+                }}
+              >
+                Heads up
+              </span>
+              <span style={{ flex: 1, minWidth: 240 }}>
+                These personas were derived before the latest analysis update.
+                Re-upload the CSV to get richer role-based archetypes
+                (Senior Comms Director, Founder, etc.) instead of generic
+                tiers.
+              </span>
+            </div>
+          ) : null}
+
           <div
             style={{
               display: "flex",
@@ -300,10 +391,11 @@ export default function AudienceTable({
 
           <div
             style={{
-              borderRadius: 14,
+              borderRadius: 18,
               background: "var(--surface)",
               border: "1px solid var(--border)",
               overflow: "hidden",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.02), 0 8px 24px rgba(0,0,0,0.02)",
             }}
           >
             <div style={{ overflowX: "auto" }}>
@@ -318,12 +410,13 @@ export default function AudienceTable({
                 <thead>
                   <tr
                     style={{
-                      background: "var(--bg-subtle)",
+                      borderBottom: "1px solid var(--border)",
                       fontFamily: "var(--font-data), monospace",
                       fontSize: 10,
-                      letterSpacing: "0.06em",
+                      letterSpacing: "0.08em",
                       textTransform: "uppercase",
                       color: "var(--text-tertiary)",
+                      background: "transparent",
                     }}
                   >
                     <Th
@@ -374,31 +467,33 @@ export default function AudienceTable({
                 <tbody>
                   {pageRows.map((p, i) => {
                     const aff = describeAffinity(p.brand_affinity);
-                    const voice = p.persona_prompt
-                      ?.replace(/^You write things like:\s*/i, "")
-                      .replace(/^"|"$/g, "")
-                      .trim();
+                    const voice = cleanVoice(p.persona_prompt);
+                    const cleanValues = dropMechanicalCoreValues(p.core_values);
                     return (
                       <tr
                         key={p.id ?? `${pageStart + i}`}
                         style={{
-                          borderTop: "1px solid var(--border)",
-                          transition: "background 120ms ease",
+                          borderTop:
+                            i === 0 ? "none" : "1px solid var(--border)",
+                          transition:
+                            "background 160ms cubic-bezier(0.215, 0.61, 0.355, 1)",
                         }}
                         onMouseEnter={(e) => {
                           (e.currentTarget as HTMLTableRowElement).style.background =
-                            "var(--bg-subtle)";
+                            "rgba(124, 92, 252, 0.025)";
                         }}
                         onMouseLeave={(e) => {
                           (e.currentTarget as HTMLTableRowElement).style.background =
                             "transparent";
                         }}
                       >
-                        <td style={{ padding: "12px 14px", verticalAlign: "top" }}>
+                        <td style={{ padding: "14px 18px", verticalAlign: "top" }}>
                           <div
                             style={{
                               fontWeight: 500,
                               color: "var(--text-primary)",
+                              fontSize: 14,
+                              lineHeight: 1.35,
                             }}
                           >
                             {p.archetype || "Unlabelled"}
@@ -406,12 +501,12 @@ export default function AudienceTable({
                           {voice ? (
                             <div
                               style={{
-                                marginTop: 4,
+                                marginTop: 6,
                                 fontSize: 12,
                                 color: "var(--text-tertiary)",
                                 fontStyle: "italic",
                                 fontFamily: "var(--font-display), Georgia, serif",
-                                lineHeight: 1.4,
+                                lineHeight: 1.45,
                                 display: "-webkit-box",
                                 WebkitLineClamp: 2,
                                 WebkitBoxOrient: "vertical",
@@ -425,10 +520,12 @@ export default function AudienceTable({
                         <td
                           className="tabular-nums"
                           style={{
-                            padding: "12px 14px",
+                            padding: "14px 12px",
                             textAlign: "right",
                             color: "var(--text-primary)",
                             fontFamily: "var(--font-data), monospace",
+                            fontSize: 13,
+                            verticalAlign: "top",
                           }}
                         >
                           {Math.round(p.reactivity_baseline * 100)}
@@ -436,10 +533,12 @@ export default function AudienceTable({
                         <td
                           className="tabular-nums"
                           style={{
-                            padding: "12px 14px",
+                            padding: "14px 12px",
                             textAlign: "right",
                             color: "var(--text-primary)",
                             fontFamily: "var(--font-data), monospace",
+                            fontSize: 13,
+                            verticalAlign: "top",
                           }}
                         >
                           {Math.round(p.sophistication * 100)}
@@ -447,54 +546,71 @@ export default function AudienceTable({
                         <td
                           className="tabular-nums"
                           style={{
-                            padding: "12px 14px",
+                            padding: "14px 12px",
                             textAlign: "right",
-                            color: aff.color,
                             fontFamily: "var(--font-data), monospace",
                             whiteSpace: "nowrap",
+                            verticalAlign: "top",
                           }}
                         >
-                          {p.brand_affinity > 0 ? "+" : ""}
-                          {p.brand_affinity.toFixed(2)}
+                          <span style={{ color: aff.color, fontSize: 13 }}>
+                            {p.brand_affinity > 0 ? "+" : ""}
+                            {p.brand_affinity.toFixed(2)}
+                          </span>
                           <div
                             style={{
                               fontSize: 10,
-                              letterSpacing: "0.04em",
+                              letterSpacing: "0.06em",
                               textTransform: "uppercase",
                               color: aff.color,
                               fontWeight: 500,
-                              marginTop: 2,
+                              marginTop: 3,
                             }}
                           >
                             {aff.label}
                           </div>
                         </td>
-                        <td style={{ padding: "12px 14px" }}>
-                          <div
-                            style={{
-                              display: "flex",
-                              gap: 4,
-                              flexWrap: "wrap",
-                            }}
-                          >
-                            {(p.core_values ?? []).slice(0, 4).map((v) => (
-                              <span
-                                key={v}
-                                style={{
-                                  padding: "2px 8px",
-                                  borderRadius: 999,
-                                  background: "var(--bg-subtle)",
-                                  border: "1px solid var(--border)",
-                                  fontSize: 11,
-                                  color: "var(--text-secondary)",
-                                  fontFamily: "var(--font-data), monospace",
-                                  letterSpacing: "0.02em",
-                                }}
-                              >
-                                {v}
-                              </span>
-                            ))}
-                          </div>
+                        <td
+                          style={{ padding: "14px 18px", verticalAlign: "top" }}
+                        >
+                          {cleanValues.length === 0 ? (
+                            <span
+                              style={{
+                                fontSize: 11,
+                                color: "var(--text-tertiary)",
+                                fontFamily: "var(--font-data), monospace",
+                                letterSpacing: "0.04em",
+                              }}
+                            >
+                              —
+                            </span>
+                          ) : (
+                            <div
+                              style={{
+                                display: "flex",
+                                gap: 4,
+                                flexWrap: "wrap",
+                              }}
+                            >
+                              {cleanValues.slice(0, 3).map((v) => (
+                                <span
+                                  key={v}
+                                  style={{
+                                    padding: "2px 9px",
+                                    borderRadius: 999,
+                                    background: "var(--bg-subtle)",
+                                    border: "1px solid var(--border)",
+                                    fontSize: 11,
+                                    color: "var(--text-secondary)",
+                                    fontFamily: "var(--font-data), monospace",
+                                    letterSpacing: "0.02em",
+                                  }}
+                                >
+                                  {v}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );
@@ -652,17 +768,15 @@ export function buildPersonaCsv(
   ];
   const rows = personas.map((p) => {
     const aff = describeAffinity(p.brand_affinity);
-    const voice = p.persona_prompt
-      ?.replace(/^You write things like:\s*/i, "")
-      .replace(/^"|"$/g, "")
-      .trim();
+    const voice = cleanVoice(p.persona_prompt);
+    const values = dropMechanicalCoreValues(p.core_values);
     return [
       p.archetype ?? "",
       Math.round(p.reactivity_baseline * 100),
       Math.round(p.sophistication * 100),
       p.brand_affinity.toFixed(3),
       aff.label,
-      (p.core_values ?? []).join("; "),
+      values.join("; "),
       voice ?? "",
     ]
       .map(escape)
