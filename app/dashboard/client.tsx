@@ -11,6 +11,7 @@ import {
 } from "react";
 import type { Persona } from "@/lib/schemas";
 import type { AgentMessage } from "@/lib/simulation/types";
+import type { ChatAnalysis } from "@/lib/simulation/analyze-chat";
 import { MascotImage, MascotVideo } from "@/app/components/Mascot";
 import AudienceTable, { buildPersonaCsv } from "./AudienceTable";
 import OnboardingModal from "./OnboardingModal";
@@ -50,6 +51,23 @@ interface DashboardClientProps {
 const ACCEPTED_EXTENSIONS = [".csv", ".json", ".ndjson"];
 const POLL_INTERVAL_MS = 2000;
 const SIM_POLL_INTERVAL_MS = 1500;
+
+const LOADING_REPORT_HTML = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8" />
+<title>Generating analysis…</title>
+<style>
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; background: #FAF9F7; color: #1A1A1A; height: 100vh; display: flex; align-items: center; justify-content: center; }
+  .wrap { text-align: center; max-width: 360px; padding: 0 24px; }
+  .pulse { width: 10px; height: 10px; border-radius: 999px; background: #7C5CFC; margin: 0 auto 18px; animation: p 1.4s ease-in-out infinite; }
+  h1 { font-family: "Fraunces", Georgia, serif; font-size: 22px; margin: 0 0 10px; font-weight: 500; letter-spacing: -0.02em; }
+  p { font-size: 13px; color: #6B6B6B; line-height: 1.55; margin: 0; }
+  @keyframes p { 0%, 100% { opacity: 0.5; transform: scale(0.9);} 50% { opacity: 1; transform: scale(1.05);} }
+</style></head>
+<body><div class="wrap">
+  <div class="pulse"></div>
+  <h1>Building your report</h1>
+  <p>Claude is reading every reply and writing a strategic analysis. Usually 8–15 seconds.</p>
+</div></body></html>`;
 
 interface ConvoMessage {
   id: string;
@@ -807,19 +825,85 @@ export default function DashboardClient({
 
   // ---------------- Download report ----------------
 
-  function handleDownloadReport() {
+  const [reportLoading, setReportLoading] = useState(false);
+
+  async function handleDownloadReport() {
     if (!activeChat) return;
-    const html = buildReportHtml(activeChat);
+    if (reportLoading) return;
+    setReportLoading(true);
+
+    // Open the window immediately with a placeholder so popup blockers
+    // don't fire later (browsers block window.open after async work).
     const win = window.open("", "_blank", "width=820,height=900");
     if (!win) {
+      setReportLoading(false);
       window.alert(
         "Pop-up blocked. Allow pop-ups for atharias.dev to download the report."
       );
       return;
     }
-    win.document.open();
-    win.document.write(html);
+    win.document.write(LOADING_REPORT_HTML);
     win.document.close();
+
+    try {
+      const archetypes = summariseArchetypes(activeChat.audiencePersonas).slice(
+        0,
+        8
+      );
+      const audienceTone =
+        activeChat.audiencePersonas.length > 0
+          ? describeAffinity(avgAffinity(activeChat.audiencePersonas))
+          : null;
+
+      const analyzePayload = {
+        audienceName: activeChat.audienceName,
+        audienceTone,
+        topArchetypes: archetypes,
+        platform: activeChat.platform,
+        variants: activeChat.variants
+          .filter((v) => v.status === "completed")
+          .map((v, idx) => {
+            const variantIdx = activeChat.variants.findIndex(
+              (x) => x.id === v.id
+            );
+            return {
+              index: variantIdx >= 0 ? variantIdx : idx,
+              label: v.label,
+              post: v.post,
+              thread: v.thread,
+              aggression: v.aggression,
+            };
+          }),
+      };
+
+      let analysis: ChatAnalysis | null = null;
+      if (analyzePayload.variants.length > 0) {
+        try {
+          const res = await fetch("/api/v1/chat-analysis", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(analyzePayload),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            analysis = (data?.analysis as ChatAnalysis | undefined) ?? null;
+          }
+        } catch {
+          /* fall through to local-only report */
+        }
+      }
+
+      const html = buildReportHtml(activeChat, analysis);
+      try {
+        win.document.open();
+        win.document.write(html);
+        win.document.close();
+      } catch {
+        /* window may have been closed by user */
+      }
+    } finally {
+      setReportLoading(false);
+    }
   }
 
   // ---------------- Render ----------------
@@ -3552,10 +3636,6 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function pluralReplies(n: number): string {
-  return `${n} ${n === 1 ? "reply" : "replies"}`;
-}
-
 function affinityWord(affinity: number): string {
   if (affinity <= -0.4) return "skeptical";
   if (affinity <= -0.1) return "cool";
@@ -3564,102 +3644,10 @@ function affinityWord(affinity: number): string {
   return "supportive";
 }
 
-function buildVariantAnalysis(
-  variant: VariantRun,
-  audienceName: string
-): string {
-  const breakdown = sentimentBreakdown(variant.thread);
-  const total = variant.thread.length || 1;
-  const positivePct = (breakdown.positive / total) * 100;
-  const negativePct = (breakdown.negative / total) * 100;
-  const hostilePct = (breakdown.hostile / total) * 100;
-  const neutralPct = (breakdown.neutral / total) * 100;
-  const ratio = breakdown.hostile + breakdown.negative > breakdown.positive;
-
-  const dominant =
-    [
-      { label: "positive", pct: positivePct },
-      { label: "neutral", pct: neutralPct },
-      { label: "negative", pct: negativePct },
-      { label: "hostile", pct: hostilePct },
-    ].sort((a, b) => b.pct - a.pct)[0];
-
-  const sentences: string[] = [];
-
-  sentences.push(
-    `Across ${pluralReplies(variant.thread.length)} from ${audienceName}, the response leaned ${dominant.label} (${dominant.pct.toFixed(0)}%).`
-  );
-
-  if (hostilePct >= 15) {
-    sentences.push(
-      `Hostility ran high — ${hostilePct.toFixed(0)}% of replies turned aggressive, which is the early signature of a ratio.`
-    );
-  } else if (negativePct >= 30) {
-    sentences.push(
-      `Pushback was substantial: ${negativePct.toFixed(0)}% of replies were negative without crossing into hostility, suggesting the room disagrees but isn't out for blood.`
-    );
-  } else if (positivePct >= 35) {
-    sentences.push(
-      `Reception was net-positive (${positivePct.toFixed(0)}%) — the framing landed for the audience the way you intended.`
-    );
-  } else {
-    sentences.push(
-      `The room mostly hovered in neutral territory (${neutralPct.toFixed(0)}%), with no single reaction taking over.`
-    );
-  }
-
-  if (variant.aggression) {
-    sentences.push(
-      `Overall aggression scored ${variant.aggression}.`
-    );
-  }
-
-  if (ratio) {
-    sentences.push(
-      `Bottom line: this draft would likely get ratio'd. Consider rewriting before shipping.`
-    );
-  } else if (positivePct > negativePct + hostilePct) {
-    sentences.push(
-      `Bottom line: ships clean. The negative voices stay in the minority.`
-    );
-  } else {
-    sentences.push(
-      `Bottom line: shippable but not safe. Expect criticism alongside agreement.`
-    );
-  }
-
-  return sentences.join(" ");
-}
-
-function buildOverallAnalysis(
+function buildReportHtml(
   chat: ChatState,
-  ranked: VariantRun[]
-): string | null {
-  if (ranked.length === 0) return null;
-  if (ranked.length === 1) return null;
-
-  const winner = ranked[0];
-  const winnerIdx = chat.variants.findIndex((v) => v.id === winner.id);
-  const loser = ranked[ranked.length - 1];
-  const loserIdx = chat.variants.findIndex((v) => v.id === loser.id);
-
-  const winnerB = sentimentBreakdown(winner.thread);
-  const loserB = sentimentBreakdown(loser.thread);
-  const winnerTotal = winner.thread.length || 1;
-  const loserTotal = loser.thread.length || 1;
-  const winnerBad = ((winnerB.negative + winnerB.hostile) / winnerTotal) * 100;
-  const loserBad = ((loserB.negative + loserB.hostile) / loserTotal) * 100;
-
-  return `Across ${ranked.length} variants tested against ${escapeHtml(
-    chat.audienceName ?? "this audience"
-  )}, ${
-    winnerIdx === 0 ? "the original" : `Variant ${winnerIdx} — ${escapeHtml(winner.label)}`
-  } drew the cleanest response (${winnerBad.toFixed(0)}% negative or hostile), while ${
-    loserIdx === 0 ? "the original" : `Variant ${loserIdx} — ${escapeHtml(loser.label)}`
-  } drew the harshest (${loserBad.toFixed(0)}%). The gap between best and worst draft was ${(loserBad - winnerBad).toFixed(0)} percentage points — meaningful enough to be worth picking deliberately.`;
-}
-
-function buildReportHtml(chat: ChatState): string {
+  analysis: ChatAnalysis | null
+): string {
   const date = new Date().toLocaleDateString("en-US", {
     year: "numeric",
     month: "long",
@@ -3673,119 +3661,62 @@ function buildReportHtml(chat: ChatState): string {
   );
 
   const archetypes = summariseArchetypes(chat.audiencePersonas).slice(0, 6);
-
-  const completed = chat.variants.filter((v) => v.status === "completed");
-  const ranked =
-    chat.mode === "variations" && completed.length > 1
-      ? [...completed].sort((a, b) => variantScore(a) - variantScore(b))
-      : completed;
-  const winner = ranked[0] ?? null;
-  const winnerIdx = winner
-    ? chat.variants.findIndex((v) => v.id === winner.id)
-    : -1;
-
-  const overallAnalysis = buildOverallAnalysis(chat, ranked);
-
-  const variantSections = chat.variants
-    .map((v, i) => {
-      const heading =
-        chat.mode === "variations"
-          ? `${i === 0 ? "Original" : `Variant ${i}`} · ${escapeHtml(v.label)}`
-          : "Simulation";
-
-      if (v.status !== "completed") {
-        return `
-          <section class="variant">
-            <h2>${heading}</h2>
-            <div class="post">${escapeHtml(v.post)}</div>
-            <p class="status">Status: ${escapeHtml(v.status)}${
-              v.error ? ` — ${escapeHtml(v.error)}` : ""
-            }</p>
-          </section>`;
-      }
-
-      const b = sentimentBreakdown(v.thread);
-      const total = v.thread.length || 1;
-      const analysis = buildVariantAnalysis(v, audienceName);
-      const bars = `
-        <div class="bars">
-          <div class="bar"><span class="bar-label">Positive</span>
-            <span class="bar-track"><span class="bar-fill" style="width:${(b.positive / total) * 100}%; background:#1F8A55"></span></span>
-            <span class="bar-count">${b.positive}</span>
-          </div>
-          <div class="bar"><span class="bar-label">Neutral</span>
-            <span class="bar-track"><span class="bar-fill" style="width:${(b.neutral / total) * 100}%; background:#9E9E9E"></span></span>
-            <span class="bar-count">${b.neutral}</span>
-          </div>
-          <div class="bar"><span class="bar-label">Negative</span>
-            <span class="bar-track"><span class="bar-fill" style="width:${(b.negative / total) * 100}%; background:#C8552B"></span></span>
-            <span class="bar-count">${b.negative}</span>
-          </div>
-          <div class="bar"><span class="bar-label">Hostile</span>
-            <span class="bar-track"><span class="bar-fill" style="width:${(b.hostile / total) * 100}%; background:#B23226"></span></span>
-            <span class="bar-count">${b.hostile}</span>
-          </div>
-        </div>`;
-
-      return `
-        <section class="variant">
-          <h2>${heading}</h2>
-          <span class="eyebrow">Root post</span>
-          <div class="post">${escapeHtml(v.post)}</div>
-
-          <span class="eyebrow">Analysis</span>
-          <p class="analysis">${analysis}</p>
-
-          <div class="meta-line">
-            <span><strong>${v.thread.length}</strong> total replies</span>
-            ${v.aggression ? `<span><strong>${escapeHtml(v.aggression)}</strong> aggression</span>` : ""}
-          </div>
-          ${bars}
-        </section>`;
-    })
-    .join("");
-
-  const recommendation =
-    winner && winnerIdx !== -1 && chat.variants.length > 1
-      ? `
-        <section class="recommendation">
-          <span class="eyebrow">Recommendation</span>
-          <h2>Ship ${
-            winnerIdx === 0
-              ? "<em>the original</em>"
-              : `<em>Variant ${winnerIdx} — ${escapeHtml(winner.label)}</em>`
-          }.</h2>
-          <p>It draws the cleanest reaction from this audience.</p>
-          ${overallAnalysis ? `<p class="overall">${overallAnalysis}</p>` : ""}
-          <table>
-            <thead>
-              <tr><th>Variant</th><th>Title</th><th class="num">Negative + hostile</th><th class="num">Aggression</th><th class="num">Replies</th></tr>
-            </thead>
-            <tbody>
-              ${ranked
-                .map((v) => {
-                  const idx = chat.variants.findIndex((x) => x.id === v.id);
-                  const b = sentimentBreakdown(v.thread);
-                  const total = v.thread.length || 1;
-                  const bad = (((b.hostile + b.negative) / total) * 100).toFixed(0);
-                  return `<tr ${v.id === winner.id ? 'class="winner"' : ""}>
-                    <td>${idx === 0 ? "Original" : `Variant ${idx}`}</td>
-                    <td>${escapeHtml(v.label)}</td>
-                    <td class="num">${bad}%</td>
-                    <td class="num">${escapeHtml(v.aggression ?? "—")}</td>
-                    <td class="num">${v.thread.length}</td>
-                  </tr>`;
-                })
-                .join("")}
-            </tbody>
-          </table>
-        </section>`
-      : "";
-
   const audienceTone =
     chat.audiencePersonas.length > 0
       ? affinityWord(avgAffinity(chat.audiencePersonas))
       : null;
+
+  const completed = chat.variants.filter((v) => v.status === "completed");
+
+  // Pick which variant to feature. If Claude returned an analysis, use its
+  // recommendedIndex. Otherwise fall back to lowest-score completed variant.
+  let recommendedIdx = 0;
+  if (analysis && analysis.recommendedIndex >= 0) {
+    recommendedIdx = analysis.recommendedIndex;
+  } else if (completed.length > 0) {
+    const ranked = [...completed].sort(
+      (a, b) => variantScore(a) - variantScore(b)
+    );
+    recommendedIdx = chat.variants.findIndex((v) => v.id === ranked[0].id);
+  }
+  const recommended =
+    chat.variants[recommendedIdx] ?? chat.variants[0] ?? null;
+
+  const recommendedHeadline =
+    analysis?.recommendedHeadline ??
+    (recommendedIdx === 0
+      ? "Ship the original"
+      : `Ship Variant ${recommendedIdx}${
+          recommended?.label && recommendedIdx !== 0
+            ? ` — ${recommended.label}`
+            : ""
+        }`);
+
+  const sectionRecommendation =
+    recommended && recommended.status === "completed"
+      ? buildRecommendationSection({
+          recommended,
+          recommendedIdx,
+          recommendedHeadline,
+          analysis,
+        })
+      : "";
+
+  const sectionAlternates =
+    completed.length > 1
+      ? buildAlternatesSection({
+          chat,
+          completed,
+          recommendedId: recommended?.id ?? null,
+          analysis,
+        })
+      : "";
+
+  const sectionEvidence = buildEvidenceSection({
+    chat,
+    completed,
+    recommendedId: recommended?.id ?? null,
+  });
 
   return `<!doctype html>
 <html lang="en">
@@ -3803,6 +3734,8 @@ function buildReportHtml(chat: ChatState): string {
     --text: #1A1A1A;
     --muted: #6B6B6B;
     --tertiary: #9E9E9E;
+    --mint: #34D399;
+    --coral: #C8552B;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); }
@@ -3812,43 +3745,68 @@ function buildReportHtml(chat: ChatState): string {
   header.brand img { width: 56px; height: 56px; object-fit: contain; }
   header.brand .word { font-family: "Fraunces", Georgia, serif; font-size: 30px; letter-spacing: -0.02em; color: var(--text); margin: 0; font-weight: 500; }
   header.brand .tag { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--tertiary); }
-  .title { margin-top: 28px; }
-  .title h1 { font-family: "Fraunces", Georgia, serif; font-size: 34px; letter-spacing: -0.025em; line-height: 1.05; margin: 0; font-weight: 400; }
-  .title h1 em { font-style: italic; color: var(--muted); }
-  .meta { margin-top: 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 28px; padding: 14px 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
-  .meta dt { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tertiary); margin: 0 0 2px; }
-  .meta dd { margin: 0; font-size: 14px; color: var(--text); font-weight: 500; }
-  .archetypes { margin-top: 24px; }
-  .archetypes h3 { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tertiary); margin: 0 0 10px; font-weight: 500; }
-  .archetypes ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
-  .archetypes li { padding: 4px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; font-size: 12px; }
-  .archetypes li .count { color: var(--tertiary); margin-left: 6px; font-family: "SF Mono", Menlo, monospace; font-size: 11px; }
-  .room-tone { margin-top: 12px; font-size: 13px; color: var(--muted); font-style: italic; }
-  .recommendation { margin-top: 32px; padding: 24px 26px; background: var(--ink); color: rgba(245, 244, 242, 0.95); border-radius: 16px; page-break-inside: avoid; }
-  .recommendation .eyebrow { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--butter); }
-  .recommendation h2 { font-family: "Fraunces", Georgia, serif; font-size: 22px; letter-spacing: -0.02em; margin: 12px 0 4px; color: rgba(245, 244, 242, 0.95); font-weight: 400; line-height: 1.3; }
-  .recommendation h2 em { color: var(--butter); font-style: italic; }
-  .recommendation p { color: rgba(245, 244, 242, 0.78); margin: 6px 0 12px; line-height: 1.55; }
-  .recommendation p.overall { font-size: 13px; color: rgba(245, 244, 242, 0.62); margin-bottom: 16px; }
-  .recommendation table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  .recommendation th { text-align: left; font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(245, 244, 242, 0.5); padding: 8px 10px; border-bottom: 1px solid rgba(245, 244, 242, 0.12); font-weight: 500; }
-  .recommendation td { padding: 9px 10px; border-bottom: 1px solid rgba(245, 244, 242, 0.06); }
-  .recommendation tr.winner td { background: rgba(232, 210, 122, 0.1); color: var(--butter); }
-  .recommendation .num { text-align: right; font-family: "SF Mono", Menlo, monospace; }
-  .variant { margin-top: 28px; padding: 22px 24px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; page-break-inside: avoid; }
-  .variant h2 { font-family: "Fraunces", Georgia, serif; font-size: 19px; letter-spacing: -0.02em; margin: 0 0 16px; font-weight: 500; color: var(--text); }
-  .variant .eyebrow { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tertiary); display: block; margin: 16px 0 8px; }
-  .variant .eyebrow:first-of-type { margin-top: 0; }
-  .variant .post { background: var(--bg); border-radius: 10px; padding: 14px 16px; font-family: "Fraunces", Georgia, serif; font-size: 15px; line-height: 1.55; color: var(--text); white-space: pre-wrap; }
-  .variant .analysis { font-size: 14px; line-height: 1.6; color: var(--text); margin: 0; }
-  .variant .meta-line { margin-top: 18px; display: flex; gap: 18px; font-size: 11px; color: var(--muted); font-family: "SF Mono", Menlo, monospace; letter-spacing: 0.06em; text-transform: uppercase; }
-  .variant .meta-line strong { color: var(--text); font-weight: 600; }
-  .bars { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+  .meta-line { margin-top: 12px; font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tertiary); }
+  .meta-line strong { color: var(--text); font-weight: 500; }
+
+  /* Recommendation hero */
+  .hero { margin-top: 28px; padding: 32px 32px 30px; background: var(--ink); color: rgba(245, 244, 242, 0.95); border-radius: 18px; page-break-inside: avoid; }
+  .hero .eyebrow { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--butter); }
+  .hero h1 { font-family: "Fraunces", Georgia, serif; font-size: 30px; letter-spacing: -0.02em; line-height: 1.15; margin: 12px 0 18px; font-weight: 500; }
+  .hero h1 em { color: var(--butter); font-style: italic; font-weight: 400; }
+  .hero .post-card { background: rgba(245, 244, 242, 0.07); border: 1px solid rgba(245, 244, 242, 0.14); border-radius: 12px; padding: 18px 20px; font-family: "Fraunces", Georgia, serif; font-size: 16px; line-height: 1.55; color: rgba(245, 244, 242, 0.95); white-space: pre-wrap; }
+  .hero .why-block { margin-top: 22px; }
+  .hero .why-label { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(245, 244, 242, 0.5); margin-bottom: 6px; }
+  .hero .why-text { font-size: 14px; line-height: 1.6; color: rgba(245, 244, 242, 0.9); margin: 0; }
+  .hero .breakdown { margin-top: 22px; padding-top: 18px; border-top: 1px solid rgba(245, 244, 242, 0.12); display: flex; flex-wrap: wrap; gap: 22px; font-family: "SF Mono", Menlo, monospace; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: rgba(245, 244, 242, 0.55); }
+  .hero .breakdown strong { color: rgba(245, 244, 242, 0.95); font-weight: 600; }
+
+  /* Standard sections */
+  .section { margin-top: 32px; padding: 24px 26px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; page-break-inside: avoid; }
+  .section .eyebrow { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--tertiary); }
+  .section h2 { font-family: "Fraunces", Georgia, serif; font-size: 21px; letter-spacing: -0.02em; line-height: 1.2; margin: 8px 0 14px; font-weight: 500; }
+  .section p { margin: 0 0 12px; font-size: 14px; line-height: 1.6; color: var(--text); }
+  .section p:last-child { margin-bottom: 0; }
+
+  /* Risk list */
+  ul.risks { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+  ul.risks li { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; background: var(--bg); border-radius: 10px; font-size: 13px; line-height: 1.55; color: var(--text); }
+  ul.risks li::before { content: "▲"; color: var(--coral); font-size: 9px; line-height: 22px; flex-shrink: 0; }
+
+  /* Alternates */
+  .alternates { margin-top: 32px; }
+  .alternates h2 { font-family: "Fraunces", Georgia, serif; font-size: 19px; letter-spacing: -0.02em; margin: 0 0 16px; font-weight: 500; color: var(--text); }
+  .alt-card { padding: 18px 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 12px; page-break-inside: avoid; }
+  .alt-card .alt-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .alt-card .alt-eyebrow { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tertiary); }
+  .alt-card .alt-label { font-family: "Fraunces", Georgia, serif; font-size: 16px; font-weight: 500; color: var(--text); }
+  .alt-card .alt-stat { margin-left: auto; font-family: "SF Mono", Menlo, monospace; font-size: 11px; letter-spacing: 0.04em; color: var(--coral); text-transform: uppercase; }
+  .alt-card .alt-post { font-family: "Fraunces", Georgia, serif; font-size: 14px; line-height: 1.5; color: var(--muted); padding: 10px 12px; background: var(--bg); border-radius: 8px; margin: 0 0 10px; white-space: pre-wrap; }
+  .alt-card .alt-summary { font-size: 13px; line-height: 1.55; color: var(--text); margin: 0; }
+
+  /* Evidence appendix */
+  .evidence { margin-top: 36px; padding-top: 22px; border-top: 1px solid var(--border); }
+  .evidence .eyebrow { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tertiary); margin-bottom: 12px; display: block; }
+  .ev-row { padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 10px; page-break-inside: avoid; }
+  .ev-row .ev-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+  .ev-row .ev-eyebrow { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tertiary); }
+  .ev-row .ev-label { font-size: 13px; font-weight: 500; color: var(--text); }
+  .ev-row.is-winner { background: rgba(232, 210, 122, 0.12); border-color: rgba(232, 210, 122, 0.4); }
+  .ev-row.is-winner .ev-eyebrow { color: var(--ink); }
+  .bars { display: flex; flex-direction: column; gap: 6px; }
   .bar { display: grid; grid-template-columns: 80px 1fr 32px; align-items: center; gap: 10px; font-size: 11px; color: var(--muted); font-family: "SF Mono", Menlo, monospace; letter-spacing: 0.04em; text-transform: uppercase; }
   .bar-track { height: 5px; background: var(--border); border-radius: 999px; overflow: hidden; }
   .bar-fill { display: block; height: 100%; border-radius: 999px; }
   .bar-count { text-align: right; color: var(--text); font-weight: 600; }
-  .status { color: var(--muted); font-style: italic; }
+
+  /* Audience strip */
+  .audience-strip { margin-top: 22px; padding: 16px 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+  .audience-strip .eyebrow { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tertiary); }
+  .audience-strip .name { font-family: "Fraunces", Georgia, serif; font-size: 17px; font-weight: 500; margin-top: 6px; color: var(--text); }
+  .audience-strip .meta { margin-top: 8px; font-size: 12px; color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; font-family: "SF Mono", Menlo, monospace; letter-spacing: 0.04em; text-transform: uppercase; }
+  .audience-strip .chips { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .audience-strip .chips li { padding: 3px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 999px; font-size: 11px; color: var(--text); list-style: none; }
+  .audience-strip .chips li .count { color: var(--tertiary); margin-left: 6px; font-family: "SF Mono", Menlo, monospace; font-size: 10px; }
+
   footer { margin-top: 36px; padding-top: 18px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--tertiary); }
   .actions { display: flex; gap: 8px; margin-top: 22px; }
   .actions button { padding: 8px 16px; border-radius: 999px; border: none; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; }
@@ -3871,38 +3829,33 @@ function buildReportHtml(chat: ChatState): string {
     </div>
   </header>
 
-  <div class="title">
-    <h1>${escapeHtml(audienceName)} <em>·</em> ${escapeHtml(platformLabel)}</h1>
+  <p class="meta-line">For <strong>${escapeHtml(audienceName)}</strong> on <strong>${escapeHtml(platformLabel)}</strong> · ${personaCount}${chat.audienceRowCount ? `/${chat.audienceRowCount}` : ""} personas tested${chat.variants.length > 1 ? ` · ${chat.variants.length} drafts compared` : ""}</p>
+
+  ${sectionRecommendation}
+
+  <div class="audience-strip">
+    <span class="eyebrow">Audience</span>
+    <div class="name">${escapeHtml(audienceName)}</div>
+    <div class="meta">
+      <span>${chat.audienceRowCount ?? chat.audiencePersonas.length} personas</span>
+      ${audienceTone ? `<span>Skews ${escapeHtml(audienceTone)}</span>` : ""}
+      <span>${escapeHtml(platformLabel)}</span>
+    </div>
+    ${
+      archetypes.length > 0
+        ? `<ul class="chips">${archetypes
+            .map(
+              (a) =>
+                `<li>${escapeHtml(a.archetype)}<span class="count">×${a.count}</span></li>`
+            )
+            .join("")}</ul>`
+        : ""
+    }
   </div>
 
-  <dl class="meta">
-    <div><dt>Audience</dt><dd>${escapeHtml(audienceName)}</dd></div>
-    <div><dt>Platform</dt><dd>${escapeHtml(platformLabel)}</dd></div>
-    <div><dt>Personas tested</dt><dd>${personaCount}${chat.audienceRowCount ? ` of ${chat.audienceRowCount}` : ""}</dd></div>
-    <div><dt>Drafts simulated</dt><dd>${chat.variants.length}</dd></div>
-  </dl>
+  ${sectionAlternates}
 
-  ${
-    archetypes.length > 0
-      ? `
-    <div class="archetypes">
-      <h3>Audience composition</h3>
-      <ul>
-        ${archetypes
-          .map(
-            (a) =>
-              `<li>${escapeHtml(a.archetype)}<span class="count">×${a.count}</span></li>`
-          )
-          .join("")}
-      </ul>
-      ${audienceTone ? `<p class="room-tone">The room skews <strong>${audienceTone}</strong> on average.</p>` : ""}
-    </div>`
-      : ""
-  }
-
-  ${recommendation}
-
-  ${variantSections}
+  ${sectionEvidence}
 
   <footer>
     <span>Atharias · Social Simulation Engine</span>
@@ -3921,6 +3874,181 @@ function buildReportHtml(chat: ChatState): string {
 </script>
 </body>
 </html>`;
+}
+
+function buildRecommendationSection({
+  recommended,
+  recommendedIdx,
+  recommendedHeadline,
+  analysis,
+}: {
+  recommended: VariantRun;
+  recommendedIdx: number;
+  recommendedHeadline: string;
+  analysis: ChatAnalysis | null;
+}): string {
+  const breakdown = sentimentBreakdown(recommended.thread);
+  const total = recommended.thread.length || 1;
+  const positivePct = ((breakdown.positive / total) * 100).toFixed(0);
+  const negativePct = ((breakdown.negative / total) * 100).toFixed(0);
+  const hostilePct = ((breakdown.hostile / total) * 100).toFixed(0);
+
+  const headline = analysis?.recommendedHeadline ?? recommendedHeadline;
+  const headlineHtml = (() => {
+    // Highlight everything after "Ship " in butter italic.
+    const match = headline.match(/^(Ship\s+)(.+)$/i);
+    if (match) {
+      return `${escapeHtml(match[1])}<em>${escapeHtml(match[2])}</em>`;
+    }
+    return `<em>${escapeHtml(headline)}</em>`;
+  })();
+
+  const whyHtml = analysis?.whyThisWins
+    ? `<div class="why-block">
+        <div class="why-label">Why this draft wins</div>
+        <p class="why-text">${escapeHtml(analysis.whyThisWins)}</p>
+      </div>`
+    : "";
+
+  const expectationHtml = analysis?.expectedReaction
+    ? `<div class="why-block">
+        <div class="why-label">What to expect when you ship it</div>
+        <p class="why-text">${escapeHtml(analysis.expectedReaction)}</p>
+      </div>`
+    : "";
+
+  const risksHtml =
+    analysis?.risksToWatch && analysis.risksToWatch.length > 0
+      ? `<section class="section">
+          <span class="eyebrow">Risks to watch</span>
+          <h2>Where the pushback comes from</h2>
+          <ul class="risks">
+            ${analysis.risksToWatch
+              .map((r) => `<li>${escapeHtml(r)}</li>`)
+              .join("")}
+          </ul>
+        </section>`
+      : "";
+
+  return `
+    <section class="hero">
+      <span class="eyebrow">Recommendation${recommendedIdx === 0 ? "" : ` · Variant ${recommendedIdx}`}</span>
+      <h1>${headlineHtml}</h1>
+      <div class="post-card">${escapeHtml(recommended.post)}</div>
+      ${whyHtml}
+      ${expectationHtml}
+      <div class="breakdown">
+        <span><strong>${recommended.thread.length}</strong> total replies</span>
+        <span><strong>${positivePct}%</strong> positive</span>
+        <span><strong>${negativePct}%</strong> negative</span>
+        <span><strong>${hostilePct}%</strong> hostile</span>
+        ${recommended.aggression ? `<span><strong>${escapeHtml(recommended.aggression)}</strong> aggression</span>` : ""}
+      </div>
+    </section>
+    ${risksHtml}
+  `;
+}
+
+function buildAlternatesSection({
+  chat,
+  completed,
+  recommendedId,
+  analysis,
+}: {
+  chat: ChatState;
+  completed: VariantRun[];
+  recommendedId: string | null;
+  analysis: ChatAnalysis | null;
+}): string {
+  const others = completed.filter((v) => v.id !== recommendedId);
+  if (others.length === 0) return "";
+
+  const altNoteByIndex = new Map<number, string>();
+  if (analysis) {
+    for (const note of analysis.alternateNotes) {
+      altNoteByIndex.set(note.index, note.summary);
+    }
+  }
+
+  const cards = others
+    .map((v) => {
+      const idx = chat.variants.findIndex((x) => x.id === v.id);
+      const b = sentimentBreakdown(v.thread);
+      const total = v.thread.length || 1;
+      const bad = (((b.hostile + b.negative) / total) * 100).toFixed(0);
+      const summary = altNoteByIndex.get(idx);
+      return `
+        <div class="alt-card">
+          <div class="alt-head">
+            <span class="alt-eyebrow">${idx === 0 ? "Original" : `Variant ${idx}`}</span>
+            <span class="alt-label">${escapeHtml(v.label)}</span>
+            <span class="alt-stat">${bad}% negative + hostile</span>
+          </div>
+          <p class="alt-post">${escapeHtml(v.post)}</p>
+          ${summary ? `<p class="alt-summary">${escapeHtml(summary)}</p>` : ""}
+        </div>`;
+    })
+    .join("");
+
+  return `
+    <div class="alternates">
+      <h2>Why not the others</h2>
+      ${cards}
+    </div>`;
+}
+
+function buildEvidenceSection({
+  chat,
+  completed,
+  recommendedId,
+}: {
+  chat: ChatState;
+  completed: VariantRun[];
+  recommendedId: string | null;
+}): string {
+  if (completed.length === 0) return "";
+
+  const rows = completed
+    .map((v) => {
+      const idx = chat.variants.findIndex((x) => x.id === v.id);
+      const b = sentimentBreakdown(v.thread);
+      const total = v.thread.length || 1;
+      const isWinner = v.id === recommendedId;
+      const bars = `
+        <div class="bars">
+          <div class="bar"><span class="bar-label">Positive</span>
+            <span class="bar-track"><span class="bar-fill" style="width:${(b.positive / total) * 100}%; background:#1F8A55"></span></span>
+            <span class="bar-count">${b.positive}</span>
+          </div>
+          <div class="bar"><span class="bar-label">Neutral</span>
+            <span class="bar-track"><span class="bar-fill" style="width:${(b.neutral / total) * 100}%; background:#9E9E9E"></span></span>
+            <span class="bar-count">${b.neutral}</span>
+          </div>
+          <div class="bar"><span class="bar-label">Negative</span>
+            <span class="bar-track"><span class="bar-fill" style="width:${(b.negative / total) * 100}%; background:#C8552B"></span></span>
+            <span class="bar-count">${b.negative}</span>
+          </div>
+          <div class="bar"><span class="bar-label">Hostile</span>
+            <span class="bar-track"><span class="bar-fill" style="width:${(b.hostile / total) * 100}%; background:#B23226"></span></span>
+            <span class="bar-count">${b.hostile}</span>
+          </div>
+        </div>`;
+      return `
+        <div class="ev-row${isWinner ? " is-winner" : ""}">
+          <div class="ev-head">
+            <span class="ev-eyebrow">${idx === 0 ? "Original" : `Variant ${idx}`}${isWinner ? " · Recommended" : ""}</span>
+            <span class="ev-label">${escapeHtml(v.label)}</span>
+          </div>
+          ${bars}
+        </div>`;
+    })
+    .join("");
+
+  return `
+    <section class="evidence">
+      <span class="eyebrow">Sentiment breakdown · per draft</span>
+      ${rows}
+    </section>`;
 }
 
 function buildReportMarkdown(chat: ChatState): string {
