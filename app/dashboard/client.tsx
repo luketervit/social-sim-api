@@ -1096,32 +1096,35 @@ function ChatConversation(props: ChatConversationProps) {
       });
     }
 
-    if (linkedAudience.status === "ready" && chat.audiencePersonas.length > 0) {
-      const archetypes = summariseArchetypes(chat.audiencePersonas);
-      const affinity = avgAffinity(chat.audiencePersonas);
-
+    // While the audience is hydrating on a fresh page load, render an empty
+    // placeholder instead of nothing — prevents the chat from snapping from
+    // blank to populated mid-flow.
+    if (
+      linkedAudience.status === "ready" &&
+      chat.audiencePersonas.length === 0
+    ) {
       messages.push({
-        id: "ready-summary",
-        role: "atharias",
-        body: (
-          <>
-            <strong style={{ color: "var(--text-primary)" }}>
-              {chat.audiencePersonas.length} personas ready.
-            </strong>{" "}
-            The room skews{" "}
-            <strong style={{ color: "var(--text-primary)" }}>
-              {describeAffinity(affinity)}
-            </strong>
-            . Biggest clusters:
-          </>
+        id: "audience-warmup",
+        role: "system",
+        raw: (
+          <span
+            aria-live="polite"
+            style={{
+              fontFamily: "var(--font-data), monospace",
+              fontSize: 11,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              color: "var(--text-tertiary)",
+              opacity: 0.7,
+            }}
+          >
+            Loading audience…
+          </span>
         ),
       });
-      messages.push({
-        id: "ready-chips",
-        role: "system",
-        raw: <ArchetypeChips archetypes={archetypes.slice(0, 8)} />,
-      });
+    }
 
+    if (linkedAudience.status === "ready" && chat.audiencePersonas.length > 0) {
       if (!chat.platform) {
         const suggested = inferPlatformFromFilename(linkedAudience.name);
         messages.push({
@@ -3554,6 +3557,113 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+function pluralReplies(n: number): string {
+  return `${n} ${n === 1 ? "reply" : "replies"}`;
+}
+
+function affinityWord(affinity: number): string {
+  if (affinity <= -0.4) return "skeptical";
+  if (affinity <= -0.1) return "cool";
+  if (affinity < 0.15) return "neutral";
+  if (affinity < 0.45) return "warm";
+  return "supportive";
+}
+
+function buildVariantAnalysis(
+  variant: VariantRun,
+  audienceName: string
+): string {
+  const breakdown = sentimentBreakdown(variant.thread);
+  const total = variant.thread.length || 1;
+  const positivePct = (breakdown.positive / total) * 100;
+  const negativePct = (breakdown.negative / total) * 100;
+  const hostilePct = (breakdown.hostile / total) * 100;
+  const neutralPct = (breakdown.neutral / total) * 100;
+  const ratio = breakdown.hostile + breakdown.negative > breakdown.positive;
+
+  const dominant =
+    [
+      { label: "positive", pct: positivePct },
+      { label: "neutral", pct: neutralPct },
+      { label: "negative", pct: negativePct },
+      { label: "hostile", pct: hostilePct },
+    ].sort((a, b) => b.pct - a.pct)[0];
+
+  const sentences: string[] = [];
+
+  sentences.push(
+    `Across ${pluralReplies(variant.thread.length)} from ${audienceName}, the response leaned ${dominant.label} (${dominant.pct.toFixed(0)}%).`
+  );
+
+  if (hostilePct >= 15) {
+    sentences.push(
+      `Hostility ran high — ${hostilePct.toFixed(0)}% of replies turned aggressive, which is the early signature of a ratio.`
+    );
+  } else if (negativePct >= 30) {
+    sentences.push(
+      `Pushback was substantial: ${negativePct.toFixed(0)}% of replies were negative without crossing into hostility, suggesting the room disagrees but isn't out for blood.`
+    );
+  } else if (positivePct >= 35) {
+    sentences.push(
+      `Reception was net-positive (${positivePct.toFixed(0)}%) — the framing landed for the audience the way you intended.`
+    );
+  } else {
+    sentences.push(
+      `The room mostly hovered in neutral territory (${neutralPct.toFixed(0)}%), with no single reaction taking over.`
+    );
+  }
+
+  if (variant.aggression) {
+    sentences.push(
+      `Overall aggression scored ${variant.aggression}.`
+    );
+  }
+
+  if (ratio) {
+    sentences.push(
+      `Bottom line: this draft would likely get ratio'd. Consider rewriting before shipping.`
+    );
+  } else if (positivePct > negativePct + hostilePct) {
+    sentences.push(
+      `Bottom line: ships clean. The negative voices stay in the minority.`
+    );
+  } else {
+    sentences.push(
+      `Bottom line: shippable but not safe. Expect criticism alongside agreement.`
+    );
+  }
+
+  return sentences.join(" ");
+}
+
+function buildOverallAnalysis(
+  chat: ChatState,
+  ranked: VariantRun[]
+): string | null {
+  if (ranked.length === 0) return null;
+  if (ranked.length === 1) return null;
+
+  const winner = ranked[0];
+  const winnerIdx = chat.variants.findIndex((v) => v.id === winner.id);
+  const loser = ranked[ranked.length - 1];
+  const loserIdx = chat.variants.findIndex((v) => v.id === loser.id);
+
+  const winnerB = sentimentBreakdown(winner.thread);
+  const loserB = sentimentBreakdown(loser.thread);
+  const winnerTotal = winner.thread.length || 1;
+  const loserTotal = loser.thread.length || 1;
+  const winnerBad = ((winnerB.negative + winnerB.hostile) / winnerTotal) * 100;
+  const loserBad = ((loserB.negative + loserB.hostile) / loserTotal) * 100;
+
+  return `Across ${ranked.length} variants tested against ${escapeHtml(
+    chat.audienceName ?? "this audience"
+  )}, ${
+    winnerIdx === 0 ? "the original" : `Variant ${winnerIdx} — ${escapeHtml(winner.label)}`
+  } drew the cleanest response (${winnerBad.toFixed(0)}% negative or hostile), while ${
+    loserIdx === 0 ? "the original" : `Variant ${loserIdx} — ${escapeHtml(loser.label)}`
+  } drew the harshest (${loserBad.toFixed(0)}%). The gap between best and worst draft was ${(loserBad - winnerBad).toFixed(0)} percentage points — meaningful enough to be worth picking deliberately.`;
+}
+
 function buildReportHtml(chat: ChatState): string {
   const date = new Date().toLocaleDateString("en-US", {
     year: "numeric",
@@ -3564,7 +3674,7 @@ function buildReportHtml(chat: ChatState): string {
   const platformLabel = chat.platform ? PLATFORM_LABELS[chat.platform] : "—";
   const personaCount = Math.min(
     chat.personaCap,
-    chat.audiencePersonas.length
+    chat.audienceRowCount ?? chat.personaCap
   );
 
   const archetypes = summariseArchetypes(chat.audiencePersonas).slice(0, 6);
@@ -3579,23 +3689,20 @@ function buildReportHtml(chat: ChatState): string {
     ? chat.variants.findIndex((v) => v.id === winner.id)
     : -1;
 
+  const overallAnalysis = buildOverallAnalysis(chat, ranked);
+
   const variantSections = chat.variants
     .map((v, i) => {
       const heading =
         chat.mode === "variations"
           ? `${i === 0 ? "Original" : `Variant ${i}`} · ${escapeHtml(v.label)}`
           : "Simulation";
-      const hook = v.hook
-        ? `<p class="hook">${escapeHtml(v.hook)}</p>`
-        : "";
-      const post = `<div class="post">${escapeHtml(v.post)}</div>`;
 
       if (v.status !== "completed") {
         return `
           <section class="variant">
             <h2>${heading}</h2>
-            ${hook}
-            ${post}
+            <div class="post">${escapeHtml(v.post)}</div>
             <p class="status">Status: ${escapeHtml(v.status)}${
               v.error ? ` — ${escapeHtml(v.error)}` : ""
             }</p>
@@ -3604,6 +3711,7 @@ function buildReportHtml(chat: ChatState): string {
 
       const b = sentimentBreakdown(v.thread);
       const total = v.thread.length || 1;
+      const analysis = buildVariantAnalysis(v, audienceName);
       const bars = `
         <div class="bars">
           <div class="bar"><span class="bar-label">Positive</span>
@@ -3624,41 +3732,20 @@ function buildReportHtml(chat: ChatState): string {
           </div>
         </div>`;
 
-      // Pick a representative sample of replies — first 3 + most recent 3.
-      const sample =
-        v.thread.length <= 8
-          ? v.thread
-          : [...v.thread.slice(0, 4), ...v.thread.slice(-4)];
-      const replies = sample
-        .map((msg) => {
-          const handle = formatHandle(
-            (chat.platform ?? "twitter") as Platform,
-            msg.archetype
-          );
-          return `
-            <div class="reply" style="border-left-color:${SENTIMENT_COLORS[msg.sentiment]}">
-              <div class="reply-meta">
-                <span class="reply-handle">${escapeHtml(handle)}</span>
-                <span class="reply-round">R${msg.round}</span>
-                <span class="reply-sentiment" style="color:${SENTIMENT_COLORS[msg.sentiment]}">${escapeHtml(SENTIMENT_LABELS[msg.sentiment])}</span>
-              </div>
-              <p>${escapeHtml(msg.message)}</p>
-            </div>`;
-        })
-        .join("");
-
       return `
         <section class="variant">
           <h2>${heading}</h2>
-          ${hook}
-          ${post}
+          <span class="eyebrow">Root post</span>
+          <div class="post">${escapeHtml(v.post)}</div>
+
+          <span class="eyebrow">Analysis</span>
+          <p class="analysis">${analysis}</p>
+
           <div class="meta-line">
-            <span><strong>${v.thread.length}</strong> replies</span>
+            <span><strong>${v.thread.length}</strong> total replies</span>
             ${v.aggression ? `<span><strong>${escapeHtml(v.aggression)}</strong> aggression</span>` : ""}
           </div>
           ${bars}
-          <h3>Selected replies</h3>
-          ${replies}
         </section>`;
     })
     .join("");
@@ -3674,9 +3761,10 @@ function buildReportHtml(chat: ChatState): string {
               : `<em>Variant ${winnerIdx} — ${escapeHtml(winner.label)}</em>`
           }.</h2>
           <p>It draws the cleanest reaction from this audience.</p>
+          ${overallAnalysis ? `<p class="overall">${overallAnalysis}</p>` : ""}
           <table>
             <thead>
-              <tr><th>Variant</th><th>Title</th><th class="num">Negative share</th><th class="num">Aggression</th><th class="num">Replies</th></tr>
+              <tr><th>Variant</th><th>Title</th><th class="num">Negative + hostile</th><th class="num">Aggression</th><th class="num">Replies</th></tr>
             </thead>
             <tbody>
               ${ranked
@@ -3699,11 +3787,16 @@ function buildReportHtml(chat: ChatState): string {
         </section>`
       : "";
 
+  const audienceTone =
+    chat.audiencePersonas.length > 0
+      ? affinityWord(avgAffinity(chat.audiencePersonas))
+      : null;
+
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Atharias simulation report — ${escapeHtml(audienceName)}</title>
+<title>Atharias simulation analysis — ${escapeHtml(audienceName)}</title>
 <style>
   @page { size: A4; margin: 18mm 16mm; }
   :root {
@@ -3722,46 +3815,44 @@ function buildReportHtml(chat: ChatState): string {
   .page { max-width: 720px; margin: 0 auto; padding: 32px 0 48px; }
   header.brand { display: flex; align-items: center; gap: 16px; padding-bottom: 22px; border-bottom: 1px solid var(--border); }
   header.brand img { width: 56px; height: 56px; object-fit: contain; }
-  header.brand .word { font-family: "Fraunces", Georgia, serif; font-size: 30px; letter-spacing: -0.02em; color: var(--text); margin: 0; }
+  header.brand .word { font-family: "Fraunces", Georgia, serif; font-size: 30px; letter-spacing: -0.02em; color: var(--text); margin: 0; font-weight: 500; }
   header.brand .tag { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--tertiary); }
   .title { margin-top: 28px; }
-  .title h1 { font-family: "Fraunces", Georgia, serif; font-size: 34px; letter-spacing: -0.025em; line-height: 1.05; margin: 0; }
-  .title h1 em { font-style: italic; color: var(--muted); font-weight: 400; }
+  .title h1 { font-family: "Fraunces", Georgia, serif; font-size: 34px; letter-spacing: -0.025em; line-height: 1.05; margin: 0; font-weight: 400; }
+  .title h1 em { font-style: italic; color: var(--muted); }
   .meta { margin-top: 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 28px; padding: 14px 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
   .meta dt { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tertiary); margin: 0 0 2px; }
   .meta dd { margin: 0; font-size: 14px; color: var(--text); font-weight: 500; }
-  .archetypes { margin-top: 28px; }
-  .archetypes h3 { font-family: "Fraunces", Georgia, serif; font-size: 16px; letter-spacing: -0.01em; margin: 0 0 10px; color: var(--text); }
+  .archetypes { margin-top: 24px; }
+  .archetypes h3 { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tertiary); margin: 0 0 10px; font-weight: 500; }
   .archetypes ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
   .archetypes li { padding: 4px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; font-size: 12px; }
   .archetypes li .count { color: var(--tertiary); margin-left: 6px; font-family: "SF Mono", Menlo, monospace; font-size: 11px; }
+  .room-tone { margin-top: 12px; font-size: 13px; color: var(--muted); font-style: italic; }
   .recommendation { margin-top: 32px; padding: 24px 26px; background: var(--ink); color: rgba(245, 244, 242, 0.95); border-radius: 16px; page-break-inside: avoid; }
   .recommendation .eyebrow { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--butter); }
   .recommendation h2 { font-family: "Fraunces", Georgia, serif; font-size: 22px; letter-spacing: -0.02em; margin: 12px 0 4px; color: rgba(245, 244, 242, 0.95); font-weight: 400; line-height: 1.3; }
   .recommendation h2 em { color: var(--butter); font-style: italic; }
-  .recommendation p { color: rgba(245, 244, 242, 0.7); margin: 6px 0 16px; }
+  .recommendation p { color: rgba(245, 244, 242, 0.78); margin: 6px 0 12px; line-height: 1.55; }
+  .recommendation p.overall { font-size: 13px; color: rgba(245, 244, 242, 0.62); margin-bottom: 16px; }
   .recommendation table { width: 100%; border-collapse: collapse; font-size: 12px; }
   .recommendation th { text-align: left; font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(245, 244, 242, 0.5); padding: 8px 10px; border-bottom: 1px solid rgba(245, 244, 242, 0.12); font-weight: 500; }
   .recommendation td { padding: 9px 10px; border-bottom: 1px solid rgba(245, 244, 242, 0.06); }
   .recommendation tr.winner td { background: rgba(232, 210, 122, 0.1); color: var(--butter); }
   .recommendation .num { text-align: right; font-family: "SF Mono", Menlo, monospace; }
   .variant { margin-top: 28px; padding: 22px 24px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; page-break-inside: avoid; }
-  .variant h2 { font-family: "Fraunces", Georgia, serif; font-size: 19px; letter-spacing: -0.02em; margin: 0 0 8px; font-weight: 500; color: var(--text); }
-  .variant h3 { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; margin: 18px 0 8px; color: var(--tertiary); font-weight: 500; }
-  .variant .hook { font-family: "Fraunces", Georgia, serif; font-style: italic; font-size: 14px; color: var(--muted); margin: 0 0 12px; }
+  .variant h2 { font-family: "Fraunces", Georgia, serif; font-size: 19px; letter-spacing: -0.02em; margin: 0 0 16px; font-weight: 500; color: var(--text); }
+  .variant .eyebrow { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tertiary); display: block; margin: 16px 0 8px; }
+  .variant .eyebrow:first-of-type { margin-top: 0; }
   .variant .post { background: var(--bg); border-radius: 10px; padding: 14px 16px; font-family: "Fraunces", Georgia, serif; font-size: 15px; line-height: 1.55; color: var(--text); white-space: pre-wrap; }
-  .variant .meta-line { margin-top: 14px; display: flex; gap: 18px; font-size: 12px; color: var(--muted); font-family: "SF Mono", Menlo, monospace; letter-spacing: 0.04em; text-transform: uppercase; }
+  .variant .analysis { font-size: 14px; line-height: 1.6; color: var(--text); margin: 0; }
+  .variant .meta-line { margin-top: 18px; display: flex; gap: 18px; font-size: 11px; color: var(--muted); font-family: "SF Mono", Menlo, monospace; letter-spacing: 0.06em; text-transform: uppercase; }
   .variant .meta-line strong { color: var(--text); font-weight: 600; }
-  .bars { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+  .bars { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
   .bar { display: grid; grid-template-columns: 80px 1fr 32px; align-items: center; gap: 10px; font-size: 11px; color: var(--muted); font-family: "SF Mono", Menlo, monospace; letter-spacing: 0.04em; text-transform: uppercase; }
   .bar-track { height: 5px; background: var(--border); border-radius: 999px; overflow: hidden; }
   .bar-fill { display: block; height: 100%; border-radius: 999px; }
   .bar-count { text-align: right; color: var(--text); font-weight: 600; }
-  .reply { padding: 10px 12px; background: var(--bg); border-left: 3px solid var(--border); border-radius: 8px; margin: 8px 0; }
-  .reply-meta { display: flex; gap: 12px; align-items: baseline; font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--tertiary); }
-  .reply-handle { color: var(--text); font-weight: 600; }
-  .reply-sentiment { margin-left: auto; }
-  .reply p { margin: 4px 0 0; font-size: 13px; line-height: 1.5; color: var(--text); }
   .status { color: var(--muted); font-style: italic; }
   footer { margin-top: 36px; padding-top: 18px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--tertiary); }
   .actions { display: flex; gap: 8px; margin-top: 22px; }
@@ -3781,7 +3872,7 @@ function buildReportHtml(chat: ChatState): string {
     <img src="${typeof window !== "undefined" ? window.location.origin : ""}/mascot/lion.png" alt="Atharias mascot" />
     <div>
       <h1 class="word">Atharias</h1>
-      <span class="tag">Social Simulation Report</span>
+      <span class="tag">Simulation Analysis · ${escapeHtml(date)}</span>
     </div>
   </header>
 
@@ -3792,8 +3883,8 @@ function buildReportHtml(chat: ChatState): string {
   <dl class="meta">
     <div><dt>Audience</dt><dd>${escapeHtml(audienceName)}</dd></div>
     <div><dt>Platform</dt><dd>${escapeHtml(platformLabel)}</dd></div>
-    <div><dt>Personas tested</dt><dd>${personaCount} of ${chat.audiencePersonas.length}</dd></div>
-    <div><dt>Generated</dt><dd>${escapeHtml(date)}</dd></div>
+    <div><dt>Personas tested</dt><dd>${personaCount}${chat.audienceRowCount ? ` of ${chat.audienceRowCount}` : ""}</dd></div>
+    <div><dt>Drafts simulated</dt><dd>${chat.variants.length}</dd></div>
   </dl>
 
   ${
@@ -3809,6 +3900,7 @@ function buildReportHtml(chat: ChatState): string {
           )
           .join("")}
       </ul>
+      ${audienceTone ? `<p class="room-tone">The room skews <strong>${audienceTone}</strong> on average.</p>` : ""}
     </div>`
       : ""
   }
