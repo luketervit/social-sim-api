@@ -901,6 +901,29 @@ function ChatConversation(props: ChatConversationProps) {
         ),
       });
     } else {
+      const readyAudiences = audiences.filter((a) => a.status === "ready");
+      if (readyAudiences.length > 0) {
+        messages.push({
+          id: "pick-existing-prompt",
+          role: "atharias",
+          body: (
+            <>
+              Pick one of your audiences to start, or upload a fresh CSV.
+            </>
+          ),
+        });
+        messages.push({
+          id: "pick-existing-grid",
+          role: "system",
+          raw: (
+            <ExistingAudiencePicker
+              audiences={readyAudiences}
+              onPick={onPickAudience}
+            />
+          ),
+        });
+      }
+
       messages.push({
         id: "drop",
         role: "system",
@@ -912,8 +935,8 @@ function ChatConversation(props: ChatConversationProps) {
             fileInputRef={fileInputRef}
             uploading={false}
             hint={
-              audiences.filter((a) => a.status === "ready").length > 0
-                ? "or pick an audience from the sidebar →"
+              readyAudiences.length > 0
+                ? "Or drop a fresh CSV to build a new audience."
                 : null
             }
           />
@@ -1496,6 +1519,88 @@ function AudiencePicker({
           {chat.audienceError}
         </span>
       ) : null}
+    </div>
+  );
+}
+
+function ExistingAudiencePicker({
+  audiences,
+  onPick,
+}: {
+  audiences: AudienceSummary[];
+  onPick: (a: AudienceSummary) => void;
+}) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+        gap: 10,
+      }}
+    >
+      {audiences.map((a) => (
+        <button
+          key={a.id}
+          type="button"
+          onClick={() => onPick(a)}
+          style={{
+            textAlign: "left",
+            padding: "14px 16px",
+            borderRadius: 14,
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            cursor: "pointer",
+            display: "flex",
+            flexDirection: "column",
+            gap: 4,
+            transition:
+              "border-color 200ms cubic-bezier(0.215, 0.61, 0.355, 1), transform 200ms cubic-bezier(0.215, 0.61, 0.355, 1), background 200ms cubic-bezier(0.215, 0.61, 0.355, 1)",
+            font: "inherit",
+            color: "inherit",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.borderColor =
+              "var(--ink)";
+            (e.currentTarget as HTMLButtonElement).style.transform =
+              "translateY(-1px)";
+            (e.currentTarget as HTMLButtonElement).style.background =
+              "var(--bg-subtle)";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.borderColor =
+              "var(--border)";
+            (e.currentTarget as HTMLButtonElement).style.transform =
+              "translateY(0)";
+            (e.currentTarget as HTMLButtonElement).style.background =
+              "var(--surface)";
+          }}
+        >
+          <span
+            style={{
+              fontSize: 14,
+              fontWeight: 500,
+              color: "var(--text-primary)",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {a.name}
+          </span>
+          <span
+            className="tabular-nums"
+            style={{
+              fontFamily: "var(--font-data), monospace",
+              fontSize: 10,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              color: "var(--text-tertiary)",
+            }}
+          >
+            {a.row_count ?? 0} personas · {a.platform ?? "twitter"}
+          </span>
+        </button>
+      ))}
     </div>
   );
 }
