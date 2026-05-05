@@ -1043,6 +1043,35 @@ function ChatConversation(props: ChatConversationProps) {
           });
         }
 
+        // Drafting state — Claude is generating variants but they haven't
+        // come back yet. Without this, the chat went blank between the
+        // user's "Draft variations" tap and the editable cards landing.
+        if (chat.mode === "variations" && chat.variants.length === 0) {
+          messages.push({
+            id: "user-asked-variations-loading",
+            role: "user",
+            body: <>Draft variations.</>,
+          });
+          messages.push({
+            id: "drafting-variations-msg",
+            role: "atharias",
+            body: (
+              <>
+                Drafting{" "}
+                <strong style={{ color: "var(--text-primary)" }}>
+                  3 variations
+                </strong>{" "}
+                to compare against your draft. This takes ~5 seconds.
+              </>
+            ),
+          });
+          messages.push({
+            id: "drafting-variations-spinner",
+            role: "system",
+            raw: <ProcessingPulse />,
+          });
+        }
+
         if (
           chat.mode === "variations" &&
           chat.variants.length > 0 &&
@@ -1524,7 +1553,12 @@ function UploadDropzone({
         variant="idle"
         size={96}
         ariaLabel="Atharias mascot, waiting for your audience"
-        style={{ margin: "0 auto 8px" }}
+        style={{
+          margin: "0 auto 8px",
+          borderRadius: 999,
+          boxShadow:
+            "0 0 0 1px var(--border), 0 6px 18px rgba(20, 20, 19, 0.06)",
+        }}
       />
       <div
         style={{
@@ -1670,7 +1704,11 @@ function ProcessingCard({
           variant="listening"
           size={56}
           ariaLabel="Atharias mascot, listening to your data"
-          style={{ flexShrink: 0 }}
+          style={{
+            flexShrink: 0,
+            borderRadius: 999,
+            boxShadow: "0 0 0 1px var(--border)",
+          }}
         />
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span

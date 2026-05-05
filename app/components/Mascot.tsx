@@ -49,25 +49,34 @@ export function MascotVideo({
   ariaLabel?: string;
 }) {
   return (
-    <video
-      src={SRC[variant]}
-      width={size}
-      height={size}
-      autoPlay
-      loop
-      muted
-      playsInline
-      preload="metadata"
+    <span
+      className={className}
       aria-label={ariaLabel}
       aria-hidden={ariaLabel ? undefined : true}
-      className={className}
       style={{
-        display: "block",
+        display: "inline-block",
         width: size,
         height: size,
-        objectFit: "contain",
+        overflow: "hidden",
+        lineHeight: 0,
         ...style,
       }}
-    />
+    >
+      <video
+        src={SRC[variant]}
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="metadata"
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          objectPosition: "center",
+          display: "block",
+        }}
+      />
+    </span>
   );
 }

@@ -382,6 +382,11 @@ function MascotGreeting() {
       variant="idle"
       size={120}
       ariaLabel="Atharias mascot greeting you"
+      style={{
+        borderRadius: 999,
+        boxShadow:
+          "0 0 0 1px var(--border), 0 6px 18px rgba(20, 20, 19, 0.06)",
+      }}
     />
   );
 }
