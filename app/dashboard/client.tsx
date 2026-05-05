@@ -143,10 +143,10 @@ export default function DashboardClient({
           post: v.post,
           simulationId: v.simulationId,
           status: v.status,
-          // Drop thread on save — it can be huge and is recoverable from
-          // the simulations table via simulationId. Keep aggression so the
-          // verdict block reads correctly on reload.
-          thread: [],
+          // Persist the full thread so sentiment counts, replies, and the
+          // analysis pdf survive reloads. Capped per-sim at 250 messages
+          // (25 personas × 10 rounds) so JSONB stays comfortably sized.
+          thread: v.thread,
           aggression: v.aggression,
           error: v.error,
         }));
