@@ -3346,33 +3346,19 @@ function VariantCard({
         </p>
       ) : null}
 
-      {isComplete && variant.simulationId ? (
+      {isComplete && showLabel ? (
         <div style={{ marginTop: 12 }}>
-          <Link
-            href={`/sim/${variant.simulationId}`}
-            target="_blank"
+          <span
             style={{
               fontSize: 12,
-              color: "var(--text-secondary)",
-              textDecoration: "underline",
+              color: wouldRatio ? "var(--coral)" : "var(--mint)",
+              fontFamily: "var(--font-data), monospace",
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
             }}
           >
-            Open shareable view →
-          </Link>
-          {showLabel ? (
-            <span
-              style={{
-                marginLeft: 12,
-                fontSize: 12,
-                color: wouldRatio ? "var(--coral)" : "var(--mint)",
-                fontFamily: "var(--font-data), monospace",
-                letterSpacing: "0.04em",
-                textTransform: "uppercase",
-              }}
-            >
-              {wouldRatio ? "Would ratio" : "Ships clean"}
-            </span>
-          ) : null}
+            {wouldRatio ? "Would ratio" : "Ships clean"}
+          </span>
         </div>
       ) : null}
     </div>
