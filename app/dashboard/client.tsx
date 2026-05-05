@@ -854,6 +854,11 @@ function ChatConversation(props: ChatConversationProps) {
         role: "system",
         raw: <ArchetypeChips archetypes={archetypes.slice(0, 8)} />,
       });
+      messages.push({
+        id: "personas-grid",
+        role: "system",
+        raw: <PersonasGrid personas={chat.audiencePersonas} />,
+      });
 
       if (!chat.platform) {
         const suggested = inferPlatformFromFilename(linkedAudience.name);
@@ -1697,6 +1702,399 @@ function ArchetypeChips({
           </span>
         </span>
       ))}
+    </div>
+  );
+}
+
+function PersonasGrid({ personas }: { personas: Persona[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return personas;
+    return personas.filter((p) => {
+      if (p.archetype?.toLowerCase().includes(q)) return true;
+      if (p.persona_prompt?.toLowerCase().includes(q)) return true;
+      if (p.core_values?.some((v) => v.toLowerCase().includes(q))) return true;
+      return false;
+    });
+  }, [personas, search]);
+
+  if (personas.length === 0) return null;
+
+  const collapsedCount = 9;
+  const visible = expanded ? filtered : filtered.slice(0, collapsedCount);
+  const hiddenCount = filtered.length - visible.length;
+
+  return (
+    <div
+      style={{
+        padding: "20px 22px",
+        borderRadius: 18,
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.03), 0 8px 24px rgba(0,0,0,0.03)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+          marginBottom: 14,
+        }}
+      >
+        <span className="mono-label" style={{ color: "var(--text-tertiary)" }}>
+          {personas.length} personas
+        </span>
+        {expanded ? (
+          <input
+            type="search"
+            placeholder="Search by role, value, voice…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{
+              flex: 1,
+              minWidth: 200,
+              maxWidth: 320,
+              padding: "6px 12px",
+              borderRadius: 999,
+              border: "1px solid var(--border)",
+              background: "var(--bg-subtle)",
+              fontSize: 13,
+              color: "var(--text-primary)",
+              outline: "none",
+              fontFamily: "var(--font-body), system-ui, sans-serif",
+            }}
+            aria-label="Search personas"
+          />
+        ) : (
+          <span
+            style={{
+              fontFamily: "var(--font-data), monospace",
+              fontSize: 11,
+              letterSpacing: "0.04em",
+              color: "var(--text-tertiary)",
+              textTransform: "uppercase",
+            }}
+          >
+            Personality preview
+          </span>
+        )}
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+          gap: 10,
+        }}
+      >
+        {visible.map((p, i) => (
+          <PersonaCard key={p.id ?? `${i}`} persona={p} delayMs={Math.min(i * 22, 220)} />
+        ))}
+      </div>
+
+      {filtered.length > collapsedCount ? (
+        <div
+          style={{
+            marginTop: 14,
+            display: "flex",
+            justifyContent: "center",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setExpanded((v) => !v);
+              if (expanded) setSearch("");
+            }}
+            style={{
+              background: "transparent",
+              border: "1px solid var(--border)",
+              borderRadius: 999,
+              padding: "8px 16px",
+              fontSize: 13,
+              color: "var(--text-primary)",
+              cursor: "pointer",
+              transition: "background 150ms ease, border-color 150ms ease",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background =
+                "var(--bg-subtle)";
+              (e.currentTarget as HTMLButtonElement).style.borderColor =
+                "var(--border-hover)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background =
+                "transparent";
+              (e.currentTarget as HTMLButtonElement).style.borderColor =
+                "var(--border)";
+            }}
+          >
+            {expanded
+              ? "Show fewer"
+              : `Show all ${filtered.length} personas →`}
+          </button>
+        </div>
+      ) : null}
+
+      {expanded && filtered.length === 0 ? (
+        <p
+          style={{
+            marginTop: 12,
+            fontSize: 13,
+            color: "var(--text-tertiary)",
+            fontStyle: "italic",
+            textAlign: "center",
+          }}
+        >
+          No personas match &ldquo;{search}&rdquo;.
+        </p>
+      ) : null}
+
+      {hiddenCount > 0 && !expanded ? null : null}
+    </div>
+  );
+}
+
+function PersonaCard({
+  persona,
+  delayMs,
+}: {
+  persona: Persona;
+  delayMs: number;
+}) {
+  const reactivity = persona.reactivity_baseline;
+  const sophistication = persona.sophistication;
+  const affinity = persona.brand_affinity; // -1..1
+  const voice = persona.persona_prompt
+    ?.replace(/^You write things like:\s*/i, "")
+    .replace(/^"|"$/g, "")
+    .trim();
+
+  const affinityLabel =
+    affinity <= -0.4
+      ? "skeptical"
+      : affinity <= -0.1
+        ? "cool"
+        : affinity < 0.15
+          ? "neutral"
+          : affinity < 0.45
+            ? "warm"
+            : "supportive";
+  const affinityColor =
+    affinity <= -0.4
+      ? "var(--coral)"
+      : affinity <= -0.1
+        ? "#C8552B"
+        : affinity < 0.15
+          ? "var(--text-secondary)"
+          : affinity < 0.45
+            ? "#1F8A55"
+            : "var(--mint)";
+
+  return (
+    <div
+      data-convo-bubble
+      style={{
+        padding: "14px 16px",
+        borderRadius: 14,
+        background: "var(--bg-subtle)",
+        border: "1px solid var(--border)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+        animation: `convo-fade-up 320ms cubic-bezier(0.215, 0.61, 0.355, 1) ${delayMs}ms both`,
+      }}
+    >
+      <div>
+        <div
+          style={{
+            fontSize: 13,
+            fontWeight: 500,
+            color: "var(--text-primary)",
+            lineHeight: 1.3,
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+        >
+          {persona.archetype || "Unlabelled"}
+        </div>
+      </div>
+
+      {voice ? (
+        <p
+          style={{
+            margin: 0,
+            fontSize: 12,
+            lineHeight: 1.5,
+            color: "var(--text-secondary)",
+            fontFamily: "var(--font-display), Georgia, serif",
+            fontStyle: "italic",
+            display: "-webkit-box",
+            WebkitLineClamp: 3,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+        >
+          &ldquo;{voice}&rdquo;
+        </p>
+      ) : null}
+
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 5,
+          fontFamily: "var(--font-data), monospace",
+          fontSize: 10,
+          letterSpacing: "0.04em",
+          color: "var(--text-tertiary)",
+          textTransform: "uppercase",
+        }}
+      >
+        <StatBar label="Reactivity" value={reactivity} color="var(--accent)" />
+        <StatBar
+          label="Sophistication"
+          value={sophistication}
+          color="var(--ink)"
+        />
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <span style={{ minWidth: 88 }}>Affinity</span>
+          <div
+            style={{
+              flex: 1,
+              position: "relative",
+              height: 4,
+              borderRadius: 999,
+              background: "var(--border)",
+            }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                top: -2,
+                left: `${((affinity + 1) / 2) * 100}%`,
+                transform: "translateX(-50%)",
+                width: 8,
+                height: 8,
+                borderRadius: 999,
+                background: affinityColor,
+                boxShadow: "0 0 0 2px var(--bg-subtle)",
+              }}
+            />
+            <span
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                top: -1,
+                left: "50%",
+                transform: "translateX(-50%)",
+                width: 1,
+                height: 6,
+                background: "var(--border-hover)",
+              }}
+            />
+          </div>
+          <span
+            style={{
+              color: affinityColor,
+              minWidth: 64,
+              textAlign: "right",
+            }}
+          >
+            {affinityLabel}
+          </span>
+        </div>
+      </div>
+
+      {persona.core_values && persona.core_values.length > 0 ? (
+        <div
+          style={{
+            display: "flex",
+            gap: 4,
+            flexWrap: "wrap",
+            marginTop: 2,
+          }}
+        >
+          {persona.core_values.slice(0, 4).map((value) => (
+            <span
+              key={value}
+              style={{
+                padding: "2px 8px",
+                borderRadius: 999,
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                fontSize: 10,
+                color: "var(--text-secondary)",
+                fontFamily: "var(--font-data), monospace",
+                letterSpacing: "0.02em",
+              }}
+            >
+              {value}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function StatBar({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: number;
+  color: string;
+}) {
+  const pct = Math.max(0, Math.min(1, value));
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <span style={{ minWidth: 88 }}>{label}</span>
+      <div
+        style={{
+          flex: 1,
+          height: 4,
+          borderRadius: 999,
+          background: "var(--border)",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            width: `${pct * 100}%`,
+            height: "100%",
+            background: color,
+            borderRadius: 999,
+            transition: "width 360ms cubic-bezier(0.215, 0.61, 0.355, 1)",
+          }}
+        />
+      </div>
+      <span
+        className="tabular-nums"
+        style={{
+          color: "var(--text-secondary)",
+          minWidth: 30,
+          textAlign: "right",
+        }}
+      >
+        {Math.round(pct * 100)}
+      </span>
     </div>
   );
 }
