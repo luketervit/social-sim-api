@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -12,72 +11,40 @@ import {
 } from "react";
 import type { Persona } from "@/lib/schemas";
 import type { AgentMessage } from "@/lib/simulation/types";
+import Sidebar from "./Sidebar";
+import {
+  type AudienceSummary,
+  type ChatState,
+  type Platform,
+  type RunMode,
+  type VariantRun,
+  type VariantStatus,
+  PLATFORM_LABELS,
+  SENTIMENT_COLORS,
+  SENTIMENT_LABELS,
+  SIMULATION_ROUNDS,
+  DEFAULT_PERSONA_CAP,
+  avgAffinity,
+  describeAffinity,
+  formatHandle,
+  inferPlatformFromFilename,
+  makeChat,
+  sentimentBreakdown,
+  summariseArchetypes,
+  variantId,
+  variantScore,
+} from "./types";
 
-export interface AudienceSummary {
-  id: string;
-  name: string;
-  platform: string | null;
-  status: string;
-  row_count: number | null;
-  created_at: string;
-}
+export type { AudienceSummary };
 
 interface DashboardClientProps {
   email: string;
   audiences: AudienceSummary[];
-  selected: AudienceSummary | null;
-  personas: Persona[];
-  selectedPlatform: string | null;
 }
-
-type Platform = "twitter" | "reddit" | "slack";
-type RunMode = "single" | "variations";
-type VariantStatus = "idle" | "queued" | "running" | "completed" | "failed";
-
-interface VariantRun {
-  id: string;
-  label: string;
-  hook?: string;
-  rationale?: string;
-  post: string;
-  simulationId: string | null;
-  status: VariantStatus;
-  thread: AgentMessage[];
-  aggression: string | null;
-  error: string | null;
-}
-
-const PLATFORM_LABELS: Record<Platform, string> = {
-  twitter: "Twitter / X",
-  reddit: "Reddit",
-  slack: "Slack",
-};
-
-const PLATFORM_HANDLE: Record<Platform, string> = {
-  twitter: "@",
-  reddit: "u/",
-  slack: "",
-};
-
-const SENTIMENT_COLORS: Record<AgentMessage["sentiment"], string> = {
-  positive: "#1F8A55",
-  neutral: "#6B6B6B",
-  negative: "#C8552B",
-  hostile: "#B23226",
-};
-
-const SENTIMENT_LABELS: Record<AgentMessage["sentiment"], string> = {
-  positive: "Positive",
-  neutral: "Neutral",
-  negative: "Negative",
-  hostile: "Hostile",
-};
 
 const ACCEPTED_EXTENSIONS = [".csv", ".json", ".ndjson"];
 const POLL_INTERVAL_MS = 2000;
 const SIM_POLL_INTERVAL_MS = 1500;
-const SIMULATION_ROUNDS = 10;
-const DEFAULT_PERSONA_CAP = 25;
 
 interface ConvoMessage {
   id: string;
@@ -86,147 +53,145 @@ interface ConvoMessage {
   raw?: ReactNode;
 }
 
-function inferPlatformFromFilename(name: string): Platform {
-  const lower = name.toLowerCase();
-  if (lower.includes("linkedin")) return "twitter";
-  if (lower.includes("discord") || lower.includes("slack")) return "slack";
-  if (lower.includes("reddit")) return "reddit";
-  return "twitter";
-}
-
-function summariseArchetypes(personas: Persona[]) {
-  if (personas.length === 0) return [] as Array<{ archetype: string; count: number }>;
-  const map = new Map<string, number>();
-  for (const p of personas) {
-    const key = (p.archetype || "Unlabelled").trim();
-    map.set(key, (map.get(key) ?? 0) + 1);
-  }
-  return Array.from(map.entries())
-    .map(([archetype, count]) => ({ archetype, count }))
-    .sort((a, b) => b.count - a.count);
-}
-
-function avgAffinity(personas: Persona[]): number {
-  if (personas.length === 0) return 0;
-  return personas.reduce((s, p) => s + p.brand_affinity, 0) / personas.length;
-}
-
-function describeAffinity(affinity: number): string {
-  if (affinity <= -0.4) return "skeptical";
-  if (affinity <= -0.1) return "cool";
-  if (affinity < 0.15) return "neutral";
-  if (affinity < 0.45) return "warm";
-  return "supportive";
-}
-
-function formatHandle(platform: Platform, archetype: string): string {
-  const cleaned = archetype.replace(/[·\s]+/g, platform === "reddit" ? "_" : "");
-  return `${PLATFORM_HANDLE[platform]}${cleaned.slice(0, 24)}`;
-}
-
-function variantId(): string {
-  return `v_${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function sentimentBreakdown(thread: AgentMessage[]) {
-  return {
-    hostile: thread.filter((m) => m.sentiment === "hostile").length,
-    negative: thread.filter((m) => m.sentiment === "negative").length,
-    neutral: thread.filter((m) => m.sentiment === "neutral").length,
-    positive: thread.filter((m) => m.sentiment === "positive").length,
-  };
-}
-
-function variantScore(v: VariantRun): number {
-  // Lower = better. Penalise hostile heavily, then negative; reward positive.
-  const b = sentimentBreakdown(v.thread);
-  const total = v.thread.length || 1;
-  return (
-    (b.hostile * 3 + b.negative * 1.5 - b.positive * 1.2) / total
-  );
-}
-
 export default function DashboardClient({
   email,
   audiences: initialAudiences,
-  selected,
-  personas,
-  selectedPlatform,
 }: DashboardClientProps) {
-  const router = useRouter();
   const [audiences, setAudiences] = useState<AudienceSummary[]>(initialAudiences);
+  const [chats, setChats] = useState<ChatState[]>(() => [makeChat()]);
+  const [activeChatId, setActiveChatId] = useState<string>(() => chats[0].id);
 
-  // Upload state.
+  const activeChat =
+    chats.find((c) => c.id === activeChatId) ?? chats[0] ?? null;
+
+  // Update the active chat with a partial patch.
+  const updateActive = useCallback(
+    (patch: Partial<ChatState> | ((c: ChatState) => Partial<ChatState>)) => {
+      setChats((prev) =>
+        prev.map((c) => {
+          if (c.id !== activeChatId) return c;
+          const p = typeof patch === "function" ? patch(c) : patch;
+          return { ...c, ...p };
+        })
+      );
+    },
+    [activeChatId]
+  );
+
+  // Update a specific chat by id (used by polling for any background sims).
+  const updateChatById = useCallback(
+    (id: string, patch: Partial<ChatState> | ((c: ChatState) => Partial<ChatState>)) => {
+      setChats((prev) =>
+        prev.map((c) => {
+          if (c.id !== id) return c;
+          const p = typeof patch === "function" ? patch(c) : patch;
+          return { ...c, ...p };
+        })
+      );
+    },
+    []
+  );
+
+  // ---------------- Sidebar handlers ----------------
+
+  function handleNewChat() {
+    const fresh = makeChat();
+    setChats((prev) => [fresh, ...prev]);
+    setActiveChatId(fresh.id);
+  }
+
+  function handleSelectChat(id: string) {
+    setActiveChatId(id);
+  }
+
+  function handleDeleteChat(id: string) {
+    setChats((prev) => {
+      const next = prev.filter((c) => c.id !== id);
+      if (next.length === 0) {
+        const fresh = makeChat();
+        setActiveChatId(fresh.id);
+        return [fresh];
+      }
+      if (id === activeChatId) {
+        setActiveChatId(next[0].id);
+      }
+      return next;
+    });
+  }
+
+  // Pick an audience for whatever chat is active. Loads personas.
+  const fetchPersonasForAudience = useCallback(
+    async (audience: AudienceSummary) => {
+      try {
+        const res = await fetch(`/api/v1/audiences/${audience.id}`);
+        if (!res.ok) {
+          throw new Error("Could not load audience.");
+        }
+        const data = await res.json();
+        const personas = Array.isArray(data?.personas)
+          ? (data.personas as Persona[])
+          : [];
+        return { personas, platform: data?.platform as string | null };
+      } catch (err) {
+        throw err;
+      }
+    },
+    []
+  );
+
+  async function handlePickAudienceForActive(audience: AudienceSummary) {
+    if (audience.status !== "ready") return;
+    updateActive({
+      audienceId: audience.id,
+      audienceName: audience.name,
+      audienceRowCount: audience.row_count,
+      audienceLoading: true,
+      audienceError: null,
+    });
+    try {
+      const { personas, platform } = await fetchPersonasForAudience(audience);
+      updateActive((c) => ({
+        audiencePersonas: personas,
+        audienceLoading: false,
+        personaCap: Math.min(c.personaCap, Math.max(5, personas.length)),
+        platform:
+          c.platform ??
+          (platform === "twitter" || platform === "reddit" || platform === "slack"
+            ? (platform as Platform)
+            : inferPlatformFromFilename(audience.name)),
+      }));
+    } catch (err) {
+      updateActive({
+        audienceLoading: false,
+        audienceError:
+          err instanceof Error ? err.message : "Could not load audience.",
+      });
+    }
+  }
+
+  function handleUnpickAudience() {
+    updateActive({
+      audienceId: null,
+      audienceName: null,
+      audienceRowCount: null,
+      audiencePersonas: [],
+      audienceLoading: false,
+      audienceError: null,
+      platform: null,
+      mode: null,
+      variants: [],
+      runError: null,
+      variationsError: null,
+    });
+  }
+
+  // ---------------- Upload (into the active chat) ----------------
+
   const [uploading, setUploading] = useState(false);
   const [uploadingFilename, setUploadingFilename] = useState<string | null>(null);
-  const [dragActive, setDragActive] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  // Conversation state.
-  const [platform, setPlatform] = useState<Platform | null>(
-    (selectedPlatform as Platform | null) ?? null
-  );
-  const [post, setPost] = useState("");
-  const [personaCap, setPersonaCap] = useState<number>(
-    Math.min(DEFAULT_PERSONA_CAP, selected?.row_count ?? DEFAULT_PERSONA_CAP)
-  );
-  const [mode, setMode] = useState<RunMode | null>(null);
-  const [variants, setVariants] = useState<VariantRun[]>([]);
-  const [variationsLoading, setVariationsLoading] = useState(false);
-  const [variationsError, setVariationsError] = useState<string | null>(null);
-  const [runError, setRunError] = useState<string | null>(null);
-
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-
-  // Reset conversation state when audience switches.
-  useEffect(() => {
-    setPlatform((selectedPlatform as Platform | null) ?? null);
-    setPost("");
-    setMode(null);
-    setVariants([]);
-    setVariationsError(null);
-    setVariationsLoading(false);
-    setRunError(null);
-  }, [selected?.id, selectedPlatform]);
-
-  // Poll for audience status while any are processing.
-  useEffect(() => {
-    const hasProcessing = audiences.some((a) => a.status === "processing");
-    if (!hasProcessing) return;
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch("/api/v1/audiences");
-        if (!res.ok) return;
-        const data = (await res.json()) as { audiences?: AudienceSummary[] };
-        if (!Array.isArray(data.audiences)) return;
-        const prevAudiences = audiences;
-        setAudiences(data.audiences);
-        const justFinished = data.audiences.find(
-          (a) =>
-            a.status === "ready" &&
-            !prevAudiences.find((b) => b.id === a.id && b.status === "ready")
-        );
-        if (justFinished && !selected) {
-          router.replace(`/dashboard?audience=${justFinished.id}`);
-        } else if (justFinished) {
-          router.refresh();
-        }
-      } catch {
-        /* ignore */
-      }
-    }, POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
-  }, [audiences, selected, router]);
-
-  // Auto-scroll the conversation as new messages arrive.
-  const scrollToBottom = useCallback(() => {
-    if (!scrollRef.current) return;
-    scrollRef.current.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior: "smooth",
-    });
-  }, []);
 
   const handleUpload = useCallback(
     async (file: File) => {
@@ -252,13 +217,23 @@ export default function DashboardClient({
         if (!res.ok) {
           throw new Error(payload?.error ?? "Upload failed.");
         }
+        // Refresh audiences list.
         const listRes = await fetch("/api/v1/audiences");
         if (listRes.ok) {
-          const data = (await listRes.json()) as { audiences?: AudienceSummary[] };
+          const data = (await listRes.json()) as {
+            audiences?: AudienceSummary[];
+          };
           if (Array.isArray(data.audiences)) setAudiences(data.audiences);
         }
+        // Attach the new audience to the active chat (still processing).
         if (payload?.audience_id) {
-          router.replace(`/dashboard?audience=${payload.audience_id}`);
+          updateActive({
+            audienceId: payload.audience_id as string,
+            audienceName: guess,
+            audienceRowCount: payload.row_count ?? null,
+            audiencePersonas: [],
+            platform: inferredPlatform,
+          });
         }
       } catch (err) {
         setUploadError(err instanceof Error ? err.message : "Upload failed.");
@@ -268,22 +243,108 @@ export default function DashboardClient({
         if (fileInputRef.current) fileInputRef.current.value = "";
       }
     },
-    [router]
+    [updateActive]
   );
 
-  // -------------------- Run handlers --------------------
+  // ---------------- Audience status polling ----------------
 
-  async function startSimulationFor(variant: VariantRun): Promise<VariantRun> {
-    if (!selected || !platform) return variant;
+  // Poll while any audience is processing. When one flips to "ready",
+  // load its personas into any chat that has it selected.
+  useEffect(() => {
+    const hasProcessing = audiences.some((a) => a.status === "processing");
+    if (!hasProcessing) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch("/api/v1/audiences");
+        if (!res.ok) return;
+        const data = (await res.json()) as { audiences?: AudienceSummary[] };
+        if (!Array.isArray(data.audiences)) return;
+        setAudiences(data.audiences);
+        // For each chat that has an audienceId, if that audience just became
+        // ready and personas haven't been loaded, fetch them.
+        const ready = data.audiences.filter((a) => a.status === "ready");
+        for (const a of ready) {
+          // Find chats pointing at this audience that don't have personas yet.
+          // We use a snapshot; React will batch the patches.
+          setChats((prev) => {
+            let changed = false;
+            const next = prev.map((c) => {
+              if (c.audienceId === a.id && c.audiencePersonas.length === 0) {
+                changed = true;
+                return {
+                  ...c,
+                  audienceLoading: true,
+                };
+              }
+              return c;
+            });
+            if (!changed) return prev;
+            // Trigger fetch outside the setter.
+            void (async () => {
+              try {
+                const { personas, platform } = await fetchPersonasForAudience(a);
+                setChats((p2) =>
+                  p2.map((c) =>
+                    c.audienceId === a.id
+                      ? {
+                          ...c,
+                          audiencePersonas: personas,
+                          audienceLoading: false,
+                          audienceRowCount: a.row_count,
+                          platform:
+                            c.platform ??
+                            (platform === "twitter" ||
+                            platform === "reddit" ||
+                            platform === "slack"
+                              ? (platform as Platform)
+                              : inferPlatformFromFilename(a.name)),
+                        }
+                      : c
+                  )
+                );
+              } catch {
+                setChats((p2) =>
+                  p2.map((c) =>
+                    c.audienceId === a.id
+                      ? {
+                          ...c,
+                          audienceLoading: false,
+                          audienceError: "Could not load personas.",
+                        }
+                      : c
+                  )
+                );
+              }
+            })();
+            return next;
+          });
+        }
+      } catch {
+        /* ignore */
+      }
+    }, POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [audiences, fetchPersonasForAudience]);
+
+  // ---------------- Sim run handlers (operate on activeChat) ----------------
+
+  async function startSimulationFor(
+    chat: ChatState,
+    variant: VariantRun
+  ): Promise<VariantRun> {
+    if (!chat.audienceId || !chat.platform) return variant;
     try {
       const res = await fetch("/api/v1/simulate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          audienceId: selected.id,
-          platform,
+          audienceId: chat.audienceId,
+          platform: chat.platform,
           input: variant.post,
-          personaCap: Math.min(personaCap, personas.length),
+          personaCap: Math.min(
+            chat.personaCap,
+            Math.max(5, chat.audiencePersonas.length)
+          ),
         }),
       });
       const payload = await res.json().catch(() => null);
@@ -305,49 +366,65 @@ export default function DashboardClient({
   }
 
   async function handleRunSingle() {
-    if (!selected || !platform) return;
-    if (post.trim().length === 0) {
-      setRunError("Paste a post first.");
+    if (!activeChat) return;
+    if (activeChat.post.trim().length === 0) {
+      updateActive({ runError: "Paste a post first." });
       return;
     }
-    setRunError(null);
+    if (!activeChat.audienceId || activeChat.audiencePersonas.length === 0) {
+      updateActive({ runError: "Pick an audience first." });
+      return;
+    }
+    if (!activeChat.platform) {
+      updateActive({ runError: "Pick a platform first." });
+      return;
+    }
 
     const original: VariantRun = {
       id: variantId(),
       label: "Your draft",
-      post: post.trim(),
+      post: activeChat.post.trim(),
       simulationId: null,
       status: "idle",
       thread: [],
       aggression: null,
       error: null,
     };
-    setMode("single");
-    setVariants([original]);
+    updateActive({ runError: null, mode: "single", variants: [original] });
 
-    const updated = await startSimulationFor(original);
-    setVariants([updated]);
+    const updated = await startSimulationFor(
+      { ...activeChat, mode: "single", variants: [original] },
+      original
+    );
+    updateChatById(activeChat.id, { variants: [updated] });
   }
 
   async function handleDraftVariations() {
-    if (!selected || !platform) return;
-    if (post.trim().length === 0) {
-      setRunError("Paste a post first.");
+    if (!activeChat) return;
+    if (activeChat.post.trim().length === 0) {
+      updateActive({ variationsError: "Paste a post first." });
       return;
     }
-    setRunError(null);
-    setVariationsError(null);
-    setVariationsLoading(true);
-    setMode("variations");
+    if (!activeChat.audienceId || !activeChat.platform) {
+      updateActive({ variationsError: "Pick an audience and platform first." });
+      return;
+    }
+
+    updateActive({
+      runError: null,
+      variationsError: null,
+      variationsLoading: true,
+      mode: "variations",
+    });
 
     try {
       const res = await fetch("/api/v1/variations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          audienceId: selected.id,
-          platform,
-          post: post.trim(),
+          audienceId: activeChat.audienceId,
+          platform: activeChat.platform,
+          post: activeChat.post.trim(),
         }),
       });
       const payload = await res.json().catch(() => null);
@@ -365,7 +442,7 @@ export default function DashboardClient({
       const original: VariantRun = {
         id: variantId(),
         label: "Your draft",
-        post: post.trim(),
+        post: activeChat.post.trim(),
         simulationId: null,
         status: "idle",
         thread: [],
@@ -384,70 +461,88 @@ export default function DashboardClient({
         aggression: null,
         error: null,
       }));
-      setVariants([original, ...drafted]);
+      updateActive({
+        variants: [original, ...drafted],
+        variationsLoading: false,
+      });
     } catch (err) {
-      setVariationsError(
-        err instanceof Error ? err.message : "Could not draft variations."
-      );
-      setMode(null);
-    } finally {
-      setVariationsLoading(false);
+      updateActive({
+        variationsError:
+          err instanceof Error ? err.message : "Could not draft variations.",
+        variationsLoading: false,
+        mode: null,
+      });
     }
   }
 
   async function handleRunAll() {
-    if (variants.length === 0) return;
-    setRunError(null);
-
-    // Validate all have content.
-    for (const v of variants) {
+    if (!activeChat) return;
+    const chat = activeChat;
+    if (chat.variants.length === 0) return;
+    for (const v of chat.variants) {
       if (v.post.trim().length === 0) {
-        setRunError("One of the drafts is empty. Fill it in or remove it.");
+        updateActive({ runError: "One of the drafts is empty. Fill or remove it." });
         return;
       }
     }
 
-    // Mark all as queued optimistically.
-    setVariants((prev) =>
-      prev.map((v) => ({ ...v, status: "queued" as VariantStatus, error: null }))
-    );
-
+    updateActive({ runError: null });
+    // Mark all queued.
+    updateActive({
+      variants: chat.variants.map((v) => ({
+        ...v,
+        status: "queued" as VariantStatus,
+        error: null,
+      })),
+    });
+    const queuedChat = {
+      ...chat,
+      variants: chat.variants.map((v) => ({
+        ...v,
+        status: "queued" as VariantStatus,
+      })),
+    };
     const started = await Promise.all(
-      variants.map((v) => startSimulationFor(v))
+      queuedChat.variants.map((v) => startSimulationFor(queuedChat, v))
     );
-    setVariants(started);
+    updateChatById(chat.id, { variants: started });
   }
 
   function handleEditVariant(id: string, nextPost: string) {
-    setVariants((prev) =>
-      prev.map((v) => (v.id === id ? { ...v, post: nextPost } : v))
-    );
+    updateActive((c) => ({
+      variants: c.variants.map((v) => (v.id === id ? { ...v, post: nextPost } : v)),
+    }));
   }
 
   function handleRemoveVariant(id: string) {
-    setVariants((prev) => prev.filter((v) => v.id !== id));
+    updateActive((c) => ({
+      variants: c.variants.filter((v) => v.id !== id),
+    }));
   }
 
   function handleResetRun() {
-    setMode(null);
-    setVariants([]);
-    setVariationsError(null);
-    setVariationsLoading(false);
-    setRunError(null);
-    setPost("");
+    updateActive({
+      mode: null,
+      variants: [],
+      runError: null,
+      variationsError: null,
+      variationsLoading: false,
+      post: "",
+    });
   }
 
-  // -------------------- Polling --------------------
+  // ---------------- Sim status polling for active chat ----------------
 
   useEffect(() => {
-    const inFlight = variants.filter(
-      (v) =>
-        v.simulationId &&
-        (v.status === "queued" || v.status === "running")
+    if (!activeChat) return;
+    const inFlight = activeChat.variants.filter(
+      (v) => v.simulationId && (v.status === "queued" || v.status === "running")
     );
     if (inFlight.length === 0) return;
 
     let cancelled = false;
+    const chatId = activeChat.id;
+
     const interval = setInterval(async () => {
       const updates = await Promise.all(
         inFlight.map(async (v) => {
@@ -462,8 +557,8 @@ export default function DashboardClient({
         })
       );
       if (cancelled) return;
-      setVariants((prev) =>
-        prev.map((variant) => {
+      updateChatById(chatId, (c) => ({
+        variants: c.variants.map((variant) => {
           const update = updates.find((u) => u && u.id === variant.id);
           if (!update || !update.data) return variant;
           const data = update.data;
@@ -484,434 +579,91 @@ export default function DashboardClient({
                 ? data.errorMessage
                 : variant.error,
           };
-        })
-      );
+        }),
+      }));
     }, SIM_POLL_INTERVAL_MS);
 
     return () => {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [variants]);
+  }, [activeChat, updateChatById]);
 
-  // -------------------- Build the conversation --------------------
+  // ---------------- Download report ----------------
 
-  const messages: ConvoMessage[] = [];
-
-  if (!selected && !uploading) {
-    messages.push({
-      id: "intro",
-      role: "atharias",
-      body: (
-        <>
-          Drop a CSV and I&apos;ll build your audience. LinkedIn connections,
-          customer messages, support tickets — anything text-based works. I&apos;ll
-          pick the useful columns automatically.
-        </>
-      ),
-    });
-    messages.push({
-      id: "drop",
-      role: "system",
-      raw: (
-        <UploadDropzone
-          dragActive={dragActive}
-          onDragActive={setDragActive}
-          onUpload={handleUpload}
-          fileInputRef={fileInputRef}
-          uploading={false}
-        />
-      ),
-    });
-    if (uploadError) {
-      messages.push({
-        id: "upload-error",
-        role: "atharias",
-        body: <span style={{ color: "var(--coral)" }}>{uploadError}</span>,
-      });
-    }
+  function handleDownloadReport() {
+    if (!activeChat) return;
+    const md = buildReportMarkdown(activeChat);
+    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${activeChat.audienceName ?? "atharias"}-report.md`.replace(
+      /\s+/g,
+      "-"
+    );
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
-  if (uploading) {
-    messages.push({
-      id: "uploading",
-      role: "atharias",
-      body: (
-        <>
-          Got it. Reading{" "}
-          <strong style={{ color: "var(--text-primary)" }}>
-            {uploadingFilename}
-          </strong>
-          …
-        </>
-      ),
-    });
-  }
-
-  if (selected) {
-    messages.push({
-      id: "got-file",
-      role: "user",
-      body: <>Uploaded {selected.name}.</>,
-    });
-
-    if (selected.status === "processing") {
-      messages.push({
-        id: "processing-1",
-        role: "atharias",
-        body: (
-          <>
-            Reading{" "}
-            <strong style={{ color: "var(--text-primary)" }}>
-              {selected.row_count ?? "your"} rows
-            </strong>
-            . Claude is picking the columns that carry signal — names, roles,
-            companies — and dropping noise like URLs and timestamps.
-          </>
-        ),
-      });
-      messages.push({
-        id: "processing-2",
-        role: "atharias",
-        body: (
-          <>
-            Then I&apos;ll classify tone and reactivity per row and build a persona
-            for each one. Usually 30–90 seconds.
-          </>
-        ),
-      });
-      messages.push({
-        id: "processing-spinner",
-        role: "system",
-        raw: <ProcessingPulse />,
-      });
-    }
-
-    if (selected.status === "failed") {
-      messages.push({
-        id: "failed",
-        role: "atharias",
-        body: (
-          <span style={{ color: "var(--coral)" }}>
-            Processing failed. Try uploading again or pick a CSV with more text.
-          </span>
-        ),
-      });
-    }
-
-    if (selected.status === "ready") {
-      const archetypes = summariseArchetypes(personas);
-      const affinity = avgAffinity(personas);
-
-      messages.push({
-        id: "ready-summary",
-        role: "atharias",
-        body: (
-          <>
-            <strong style={{ color: "var(--text-primary)" }}>
-              {personas.length} personas ready.
-            </strong>{" "}
-            The room skews{" "}
-            <strong style={{ color: "var(--text-primary)" }}>
-              {describeAffinity(affinity)}
-            </strong>{" "}
-            on average. Biggest clusters:
-          </>
-        ),
-      });
-      messages.push({
-        id: "ready-chips",
-        role: "system",
-        raw: <ArchetypeChips archetypes={archetypes.slice(0, 8)} />,
-      });
-
-      if (!platform) {
-        const suggested = inferPlatformFromFilename(selected.name);
-        messages.push({
-          id: "ask-platform",
-          role: "atharias",
-          body: (
-            <>
-              Where do you want to test this? I picked{" "}
-              <strong style={{ color: "var(--text-primary)" }}>
-                {PLATFORM_LABELS[suggested]}
-              </strong>{" "}
-              based on the filename — change it if you want.
-            </>
-          ),
-        });
-        messages.push({
-          id: "platform-chips",
-          role: "system",
-          raw: (
-            <PlatformChips
-              suggested={suggested}
-              onPick={(p) => {
-                setPlatform(p);
-                window.requestAnimationFrame(scrollToBottom);
-              }}
-            />
-          ),
-        });
-      } else {
-        messages.push({
-          id: "platform-chosen",
-          role: "user",
-          body: <>{PLATFORM_LABELS[platform]}.</>,
-        });
-
-        // Stage A — composer asking for post (mode === null)
-        if (mode === null) {
-          messages.push({
-            id: "ask-post",
-            role: "atharias",
-            body: (
-              <>
-                Paste the draft you want to test. Then run it as-is, or let me
-                draft a few variations to A/B against it.
-              </>
-            ),
-          });
-          messages.push({
-            id: "post-composer",
-            role: "system",
-            raw: (
-              <PostComposer
-                post={post}
-                onPostChange={setPost}
-                personaCap={personaCap}
-                onPersonaCapChange={setPersonaCap}
-                maxPersonas={Math.max(5, personas.length)}
-                onRunSingle={handleRunSingle}
-                onDraftVariations={handleDraftVariations}
-                onChangePlatform={() => setPlatform(null)}
-                platformLabel={PLATFORM_LABELS[platform]}
-                error={runError ?? variationsError}
-                draftingVariations={variationsLoading}
-              />
-            ),
-          });
-        }
-
-        // Stage B — variations drafted, awaiting "Run all"
-        if (
-          mode === "variations" &&
-          variants.length > 0 &&
-          variants.every((v) => v.simulationId === null && v.status === "idle")
-        ) {
-          messages.push({
-            id: "user-asked-variations",
-            role: "user",
-            body: <>Draft variations to compare.</>,
-          });
-          messages.push({
-            id: "variations-explainer",
-            role: "atharias",
-            body: (
-              <>
-                Here are{" "}
-                <strong style={{ color: "var(--text-primary)" }}>
-                  {variants.length}
-                </strong>{" "}
-                drafts to A/B test. Edit any of them, drop the ones you don&apos;t
-                want, then run all to see which lands best.
-              </>
-            ),
-          });
-          messages.push({
-            id: "variation-cards",
-            role: "system",
-            raw: (
-              <VariationReview
-                variants={variants}
-                onEdit={handleEditVariant}
-                onRemove={handleRemoveVariant}
-                onRunAll={handleRunAll}
-                onCancel={handleResetRun}
-                error={runError}
-                personaCap={Math.min(personaCap, personas.length)}
-              />
-            ),
-          });
-        }
-
-        // Stage C — running / completed (single or variations)
-        if (mode !== null && variants.some((v) => v.simulationId !== null)) {
-          if (mode === "single" && variants[0]) {
-            messages.push({
-              id: "user-post-single",
-              role: "user",
-              body: (
-                <span
-                  style={{
-                    whiteSpace: "pre-wrap",
-                    fontFamily: "var(--font-display), Georgia, serif",
-                    fontSize: 17,
-                    lineHeight: 1.45,
-                  }}
-                >
-                  {variants[0].post}
-                </span>
-              ),
-            });
-          } else if (mode === "variations") {
-            messages.push({
-              id: "running-variants-msg",
-              role: "user",
-              body: <>Run all {variants.length}.</>,
-            });
-          }
-
-          const allDone = variants.every(
-            (v) => v.status === "completed" || v.status === "failed"
-          );
-          messages.push({
-            id: "running-status",
-            role: "atharias",
-            body: allDone
-              ? mode === "variations"
-                ? "All done. Comparison below."
-                : "Done."
-              : `Streaming. ${variants.reduce((acc, v) => acc + v.thread.length, 0)} replies so far across ${variants.length} run${variants.length > 1 ? "s" : ""}.`,
-          });
-
-          if (mode === "variations" && allDone) {
-            messages.push({
-              id: "variation-comparison",
-              role: "system",
-              raw: <VariationComparison variants={variants} />,
-            });
-          }
-
-          messages.push({
-            id: "variant-streams",
-            role: "system",
-            raw: (
-              <VariantList
-                variants={variants}
-                platform={platform}
-                showLabel={mode === "variations"}
-              />
-            ),
-          });
-
-          if (allDone) {
-            messages.push({
-              id: "after-run-actions",
-              role: "system",
-              raw: (
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    onClick={handleResetRun}
-                    style={{
-                      padding: "10px 18px",
-                      borderRadius: 999,
-                      background: "var(--ink)",
-                      color: "var(--butter-deep)",
-                      border: "none",
-                      fontSize: 14,
-                      fontWeight: 500,
-                      cursor: "pointer",
-                    }}
-                  >
-                    Try another draft
-                  </button>
-                </div>
-              ),
-            });
-          }
-        }
-      }
-    }
-  }
-
-  // Auto-scroll on new messages.
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages.length, variants, scrollToBottom]);
+  // ---------------- Render ----------------
 
   return (
-    <div style={{ background: "var(--bg)", minHeight: "100vh" }}>
-      <div
-        className="mx-auto px-6"
-        style={{
-          maxWidth: 880,
-          padding: "clamp(28px, 4vh, 48px) 24px clamp(72px, 10vh, 120px)",
-        }}
-      >
+    <div
+      style={{
+        background: "var(--bg)",
+        minHeight: "100vh",
+        display: "flex",
+      }}
+    >
+      <Sidebar
+        email={email}
+        chats={chats}
+        activeChatId={activeChatId}
+        audiences={audiences}
+        onSelectChat={handleSelectChat}
+        onNewChat={handleNewChat}
+        onDeleteChat={handleDeleteChat}
+        onPickAudienceForActive={handlePickAudienceForActive}
+      />
+
+      <main style={{ flex: 1, minWidth: 0 }}>
         <div
+          className="mx-auto px-6"
           style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "flex-end",
-            gap: 14,
-            marginBottom: 18,
-            fontFamily: "var(--font-data), monospace",
-            fontSize: 11,
-            color: "var(--text-tertiary)",
-            letterSpacing: "0.04em",
+            maxWidth: 880,
+            padding: "clamp(28px, 4vh, 48px) 24px clamp(72px, 10vh, 120px)",
           }}
         >
-          <span>{email}</span>
-          {audiences.length > 0 ? (
-            <>
-              <span aria-hidden="true">·</span>
-              <Link
-                href="/audiences"
-                style={{ color: "var(--text-secondary)", textDecoration: "none" }}
-              >
-                Audiences
-              </Link>
-            </>
+          {activeChat ? (
+            <ChatConversation
+              chat={activeChat}
+              audiences={audiences}
+              uploading={uploading}
+              uploadingFilename={uploadingFilename}
+              uploadError={uploadError}
+              dragActive={dragActive}
+              fileInputRef={fileInputRef}
+              onUpload={handleUpload}
+              onDragActive={setDragActive}
+              onPickAudience={(a) => void handlePickAudienceForActive(a)}
+              onUnpickAudience={handleUnpickAudience}
+              onPickPlatform={(p) => updateActive({ platform: p })}
+              onChangePlatform={() => updateActive({ platform: null })}
+              onSetPost={(post) => updateActive({ post })}
+              onSetPersonaCap={(personaCap) => updateActive({ personaCap })}
+              onRunSingle={handleRunSingle}
+              onDraftVariations={handleDraftVariations}
+              onEditVariant={handleEditVariant}
+              onRemoveVariant={handleRemoveVariant}
+              onRunAll={handleRunAll}
+              onResetRun={handleResetRun}
+              onDownloadReport={handleDownloadReport}
+            />
           ) : null}
         </div>
+      </main>
 
-        {audiences.length >= 2 ? (
-          <div
-            style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 18 }}
-            role="tablist"
-            aria-label="Switch audience"
-          >
-            {audiences.map((a) => {
-              const active = selected?.id === a.id;
-              const ready = a.status === "ready" || a.status === "processing";
-              return (
-                <Link
-                  key={a.id}
-                  href={ready ? `/dashboard?audience=${a.id}` : "#"}
-                  aria-disabled={!ready}
-                  role="tab"
-                  aria-selected={active}
-                  style={{
-                    padding: "5px 12px",
-                    borderRadius: 999,
-                    fontSize: 12,
-                    fontWeight: 500,
-                    color: active ? "var(--text-primary)" : "var(--text-tertiary)",
-                    background: active ? "var(--surface)" : "transparent",
-                    border: `1px solid ${active ? "var(--border-hover)" : "var(--border)"}`,
-                    textDecoration: "none",
-                    opacity: ready ? 1 : 0.55,
-                    pointerEvents: ready ? "auto" : "none",
-                  }}
-                >
-                  {a.name}
-                </Link>
-              );
-            })}
-          </div>
-        ) : null}
-
-        <div
-          ref={scrollRef}
-          style={{ display: "flex", flexDirection: "column", gap: 14 }}
-        >
-          {messages.map((m, i) => (
-            <ConversationItem key={m.id} message={m} delayMs={Math.min(i * 30, 240)} />
-          ))}
-        </div>
-      </div>
       <style jsx global>{`
         @keyframes convo-fade-up {
           from {
@@ -932,6 +684,458 @@ export default function DashboardClient({
     </div>
   );
 }
+
+// =====================================================================
+// ChatConversation — the per-chat conversation view
+// =====================================================================
+
+interface ChatConversationProps {
+  chat: ChatState;
+  audiences: AudienceSummary[];
+  uploading: boolean;
+  uploadingFilename: string | null;
+  uploadError: string | null;
+  dragActive: boolean;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
+  onUpload: (file: File) => void;
+  onDragActive: (active: boolean) => void;
+  onPickAudience: (a: AudienceSummary) => void;
+  onUnpickAudience: () => void;
+  onPickPlatform: (p: Platform) => void;
+  onChangePlatform: () => void;
+  onSetPost: (post: string) => void;
+  onSetPersonaCap: (n: number) => void;
+  onRunSingle: () => void;
+  onDraftVariations: () => void;
+  onEditVariant: (id: string, post: string) => void;
+  onRemoveVariant: (id: string) => void;
+  onRunAll: () => void;
+  onResetRun: () => void;
+  onDownloadReport: () => void;
+}
+
+function ChatConversation(props: ChatConversationProps) {
+  const {
+    chat,
+    audiences,
+    uploading,
+    uploadingFilename,
+    uploadError,
+    dragActive,
+    fileInputRef,
+    onUpload,
+    onDragActive,
+    onPickAudience,
+    onUnpickAudience,
+    onPickPlatform,
+    onChangePlatform,
+    onSetPost,
+    onSetPersonaCap,
+    onRunSingle,
+    onDraftVariations,
+    onEditVariant,
+    onRemoveVariant,
+    onRunAll,
+    onResetRun,
+    onDownloadReport,
+  } = props;
+
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const messages: ConvoMessage[] = [];
+
+  // Linked audience (if any) — get current status from audiences list.
+  const linkedAudience = chat.audienceId
+    ? audiences.find((a) => a.id === chat.audienceId)
+    : null;
+
+  // Top: audience picker chip
+  messages.push({
+    id: "audience-picker",
+    role: "system",
+    raw: (
+      <AudiencePicker
+        chat={chat}
+        audiences={audiences}
+        linkedAudience={linkedAudience}
+        onPickAudience={onPickAudience}
+        onUnpickAudience={onUnpickAudience}
+      />
+    ),
+  });
+
+  // No audience yet — show upload prompt
+  if (!chat.audienceId) {
+    if (uploading) {
+      messages.push({
+        id: "uploading",
+        role: "atharias",
+        body: (
+          <>
+            Got it. Reading{" "}
+            <strong style={{ color: "var(--text-primary)" }}>
+              {uploadingFilename}
+            </strong>
+            …
+          </>
+        ),
+      });
+    } else {
+      if (audiences.filter((a) => a.status === "ready").length === 0) {
+        messages.push({
+          id: "intro",
+          role: "atharias",
+          body: (
+            <>
+              Drop a CSV and I&apos;ll build your audience. LinkedIn connections,
+              customer messages, support tickets — anything text-based works.
+            </>
+          ),
+        });
+      } else {
+        messages.push({
+          id: "pick-or-upload",
+          role: "atharias",
+          body: (
+            <>
+              Pick an audience from the sidebar to use it here, or drop a fresh
+              CSV below.
+            </>
+          ),
+        });
+      }
+      messages.push({
+        id: "drop",
+        role: "system",
+        raw: (
+          <UploadDropzone
+            dragActive={dragActive}
+            onDragActive={onDragActive}
+            onUpload={onUpload}
+            fileInputRef={fileInputRef}
+            uploading={false}
+          />
+        ),
+      });
+      if (uploadError) {
+        messages.push({
+          id: "upload-error",
+          role: "atharias",
+          body: <span style={{ color: "var(--coral)" }}>{uploadError}</span>,
+        });
+      }
+    }
+  }
+
+  // Audience linked — figure out state
+  if (chat.audienceId && linkedAudience) {
+    if (linkedAudience.status === "processing") {
+      messages.push({
+        id: "got-file",
+        role: "user",
+        body: <>Uploaded {linkedAudience.name}.</>,
+      });
+      messages.push({
+        id: "processing-1",
+        role: "atharias",
+        body: (
+          <>
+            Reading{" "}
+            <strong style={{ color: "var(--text-primary)" }}>
+              {linkedAudience.row_count ?? "your"} rows
+            </strong>
+            . Claude is picking the columns that carry signal — names, roles,
+            companies — and dropping noise.
+          </>
+        ),
+      });
+      messages.push({
+        id: "processing-2",
+        role: "atharias",
+        body: (
+          <>
+            Then I&apos;ll classify tone and reactivity per row and build a persona
+            for each one. Usually 30–90 seconds.
+          </>
+        ),
+      });
+      messages.push({
+        id: "processing-spinner",
+        role: "system",
+        raw: <ProcessingPulse />,
+      });
+    }
+
+    if (linkedAudience.status === "failed") {
+      messages.push({
+        id: "failed",
+        role: "atharias",
+        body: (
+          <span style={{ color: "var(--coral)" }}>
+            Processing failed. Pick a different audience or upload a fresh CSV.
+          </span>
+        ),
+      });
+    }
+
+    if (linkedAudience.status === "ready" && chat.audiencePersonas.length > 0) {
+      const archetypes = summariseArchetypes(chat.audiencePersonas);
+      const affinity = avgAffinity(chat.audiencePersonas);
+
+      messages.push({
+        id: "ready-summary",
+        role: "atharias",
+        body: (
+          <>
+            <strong style={{ color: "var(--text-primary)" }}>
+              {chat.audiencePersonas.length} personas ready.
+            </strong>{" "}
+            The room skews{" "}
+            <strong style={{ color: "var(--text-primary)" }}>
+              {describeAffinity(affinity)}
+            </strong>
+            . Biggest clusters:
+          </>
+        ),
+      });
+      messages.push({
+        id: "ready-chips",
+        role: "system",
+        raw: <ArchetypeChips archetypes={archetypes.slice(0, 8)} />,
+      });
+
+      if (!chat.platform) {
+        const suggested = inferPlatformFromFilename(linkedAudience.name);
+        messages.push({
+          id: "ask-platform",
+          role: "atharias",
+          body: (
+            <>
+              Where do you want to test this? I picked{" "}
+              <strong style={{ color: "var(--text-primary)" }}>
+                {PLATFORM_LABELS[suggested]}
+              </strong>{" "}
+              based on the filename.
+            </>
+          ),
+        });
+        messages.push({
+          id: "platform-chips",
+          role: "system",
+          raw: <PlatformChips suggested={suggested} onPick={onPickPlatform} />,
+        });
+      } else {
+        messages.push({
+          id: "platform-chosen",
+          role: "user",
+          body: <>{PLATFORM_LABELS[chat.platform]}.</>,
+        });
+
+        if (chat.mode === null) {
+          messages.push({
+            id: "ask-post",
+            role: "atharias",
+            body: (
+              <>
+                Paste the draft you want to test. Run it as-is, or let me draft a
+                few variations to A/B test.
+              </>
+            ),
+          });
+          messages.push({
+            id: "post-composer",
+            role: "system",
+            raw: (
+              <PostComposer
+                post={chat.post}
+                onPostChange={onSetPost}
+                personaCap={chat.personaCap}
+                onPersonaCapChange={onSetPersonaCap}
+                maxPersonas={Math.max(5, chat.audiencePersonas.length)}
+                onRunSingle={onRunSingle}
+                onDraftVariations={onDraftVariations}
+                onChangePlatform={onChangePlatform}
+                platformLabel={PLATFORM_LABELS[chat.platform]}
+                error={chat.runError ?? chat.variationsError}
+                draftingVariations={chat.variationsLoading}
+              />
+            ),
+          });
+        }
+
+        if (
+          chat.mode === "variations" &&
+          chat.variants.length > 0 &&
+          chat.variants.every((v) => v.simulationId === null && v.status === "idle")
+        ) {
+          messages.push({
+            id: "user-asked-variations",
+            role: "user",
+            body: <>Draft variations.</>,
+          });
+          messages.push({
+            id: "variations-explainer",
+            role: "atharias",
+            body: (
+              <>
+                Here are{" "}
+                <strong style={{ color: "var(--text-primary)" }}>
+                  {chat.variants.length}
+                </strong>{" "}
+                drafts. Edit any of them, drop the ones you don&apos;t want, then
+                run all.
+              </>
+            ),
+          });
+          messages.push({
+            id: "variation-cards",
+            role: "system",
+            raw: (
+              <VariationReview
+                variants={chat.variants}
+                onEdit={onEditVariant}
+                onRemove={onRemoveVariant}
+                onRunAll={onRunAll}
+                onCancel={onResetRun}
+                error={chat.runError}
+                personaCap={Math.min(chat.personaCap, chat.audiencePersonas.length)}
+              />
+            ),
+          });
+        }
+
+        if (chat.mode !== null && chat.variants.some((v) => v.simulationId !== null)) {
+          if (chat.mode === "single" && chat.variants[0]) {
+            messages.push({
+              id: "user-post-single",
+              role: "user",
+              body: (
+                <span
+                  style={{
+                    whiteSpace: "pre-wrap",
+                    fontFamily: "var(--font-display), Georgia, serif",
+                    fontSize: 17,
+                    lineHeight: 1.45,
+                  }}
+                >
+                  {chat.variants[0].post}
+                </span>
+              ),
+            });
+          } else if (chat.mode === "variations") {
+            messages.push({
+              id: "running-variants-msg",
+              role: "user",
+              body: <>Run all {chat.variants.length}.</>,
+            });
+          }
+
+          const allDone = chat.variants.every(
+            (v) => v.status === "completed" || v.status === "failed"
+          );
+          messages.push({
+            id: "running-status",
+            role: "atharias",
+            body: allDone
+              ? chat.mode === "variations"
+                ? "All done. Comparison below."
+                : "Done."
+              : `Streaming. ${chat.variants.reduce(
+                  (acc, v) => acc + v.thread.length,
+                  0
+                )} replies so far.`,
+          });
+
+          if (chat.mode === "variations" && allDone) {
+            messages.push({
+              id: "variation-comparison",
+              role: "system",
+              raw: <VariationComparison variants={chat.variants} />,
+            });
+          }
+
+          messages.push({
+            id: "variant-streams",
+            role: "system",
+            raw: (
+              <VariantList
+                variants={chat.variants}
+                platform={chat.platform}
+                showLabel={chat.mode === "variations"}
+              />
+            ),
+          });
+
+          if (allDone) {
+            messages.push({
+              id: "after-run-actions",
+              role: "system",
+              raw: (
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={onResetRun}
+                    style={{
+                      padding: "10px 18px",
+                      borderRadius: 999,
+                      background: "var(--ink)",
+                      color: "var(--butter-deep)",
+                      border: "none",
+                      fontSize: 14,
+                      fontWeight: 500,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Try another draft
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onDownloadReport}
+                    style={{
+                      padding: "10px 18px",
+                      borderRadius: 999,
+                      background: "transparent",
+                      color: "var(--text-primary)",
+                      border: "1px solid var(--border-hover)",
+                      fontSize: 14,
+                      fontWeight: 500,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Download report (.md) ↓
+                  </button>
+                </div>
+              ),
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // Auto-scroll on new messages.
+  useEffect(() => {
+    if (!scrollRef.current) return;
+    scrollRef.current.scrollTo({
+      top: scrollRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [messages.length, chat.variants]);
+
+  return (
+    <div
+      ref={scrollRef}
+      style={{ display: "flex", flexDirection: "column", gap: 14 }}
+    >
+      {messages.map((m, i) => (
+        <ConversationItem key={m.id} message={m} delayMs={Math.min(i * 30, 240)} />
+      ))}
+    </div>
+  );
+}
+
+// =====================================================================
+// Sub-components
+// =====================================================================
 
 function ConversationItem({
   message,
@@ -993,6 +1197,192 @@ function ConversationItem({
         ) : null}
         {message.body}
       </div>
+    </div>
+  );
+}
+
+function AudiencePicker({
+  chat,
+  audiences,
+  linkedAudience,
+  onPickAudience,
+  onUnpickAudience,
+}: {
+  chat: ChatState;
+  audiences: AudienceSummary[];
+  linkedAudience: AudienceSummary | null | undefined;
+  onPickAudience: (a: AudienceSummary) => void;
+  onUnpickAudience: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ready = audiences.filter((a) => a.status === "ready");
+
+  return (
+    <div
+      style={{
+        position: "relative",
+        display: "flex",
+        gap: 10,
+        flexWrap: "wrap",
+        alignItems: "center",
+      }}
+    >
+      <span
+        style={{
+          fontFamily: "var(--font-data), monospace",
+          fontSize: 10,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          color: "var(--text-tertiary)",
+        }}
+      >
+        AUDIENCE
+      </span>
+      {linkedAudience ? (
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "5px 10px 5px 12px",
+            borderRadius: 999,
+            background: "var(--ink)",
+            color: "rgba(245, 244, 242, 0.95)",
+            fontSize: 13,
+            fontWeight: 500,
+          }}
+        >
+          {linkedAudience.name}
+          <span
+            className="tabular-nums"
+            style={{
+              fontFamily: "var(--font-data), monospace",
+              fontSize: 10,
+              letterSpacing: "0.04em",
+              color: "rgba(245, 244, 242, 0.5)",
+            }}
+          >
+            ×{linkedAudience.row_count ?? chat.audiencePersonas.length}
+          </span>
+          <button
+            type="button"
+            onClick={onUnpickAudience}
+            aria-label="Unselect audience"
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "rgba(245, 244, 242, 0.7)",
+              fontSize: 14,
+              lineHeight: 1,
+              padding: 2,
+              cursor: "pointer",
+            }}
+          >
+            ×
+          </button>
+        </span>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          style={{
+            padding: "5px 12px",
+            borderRadius: 999,
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            fontSize: 13,
+            color: "var(--text-secondary)",
+            cursor: "pointer",
+          }}
+        >
+          Pick an audience…
+        </button>
+      )}
+
+      {!linkedAudience && open && ready.length > 0 ? (
+        <div
+          style={{
+            position: "absolute",
+            top: "calc(100% + 6px)",
+            left: 80,
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            borderRadius: 12,
+            padding: 6,
+            boxShadow:
+              "0 0 0 1px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.08)",
+            zIndex: 10,
+            minWidth: 240,
+            maxHeight: 300,
+            overflowY: "auto",
+          }}
+        >
+          {ready.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              onClick={() => {
+                onPickAudience(a);
+                setOpen(false);
+              }}
+              style={{
+                width: "100%",
+                textAlign: "left",
+                background: "transparent",
+                border: "none",
+                padding: "8px 10px",
+                borderRadius: 8,
+                fontSize: 13,
+                color: "var(--text-primary)",
+                cursor: "pointer",
+                display: "flex",
+                flexDirection: "column",
+                gap: 2,
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background =
+                  "var(--bg-subtle)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background =
+                  "transparent";
+              }}
+            >
+              <span>{a.name}</span>
+              <span
+                className="tabular-nums"
+                style={{
+                  fontFamily: "var(--font-data), monospace",
+                  fontSize: 10,
+                  letterSpacing: "0.04em",
+                  color: "var(--text-tertiary)",
+                  textTransform: "uppercase",
+                }}
+              >
+                {a.row_count ?? 0} personas
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {chat.audienceLoading ? (
+        <span
+          style={{
+            fontFamily: "var(--font-data), monospace",
+            fontSize: 11,
+            color: "var(--text-tertiary)",
+            letterSpacing: "0.04em",
+          }}
+        >
+          Loading personas…
+        </span>
+      ) : null}
+      {chat.audienceError ? (
+        <span style={{ fontSize: 12, color: "var(--coral)" }}>
+          {chat.audienceError}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -2065,4 +2455,114 @@ function Stat({
       <span>{label}</span>
     </span>
   );
+}
+
+// =====================================================================
+// Markdown report
+// =====================================================================
+
+function buildReportMarkdown(chat: ChatState): string {
+  const lines: string[] = [];
+  const date = new Date().toISOString().slice(0, 10);
+  lines.push(`# Atharias simulation report`);
+  lines.push("");
+  lines.push(`**Audience:** ${chat.audienceName ?? "—"}`);
+  lines.push(`**Platform:** ${chat.platform ? PLATFORM_LABELS[chat.platform] : "—"}`);
+  lines.push(`**Personas tested:** ${Math.min(chat.personaCap, chat.audiencePersonas.length)} of ${chat.audiencePersonas.length}`);
+  lines.push(`**Generated:** ${date}`);
+  lines.push("");
+
+  if (chat.audiencePersonas.length > 0) {
+    const archetypes = summariseArchetypes(chat.audiencePersonas).slice(0, 8);
+    lines.push("## Audience composition");
+    lines.push("");
+    for (const a of archetypes) {
+      lines.push(`- **${a.archetype}** — ${a.count}`);
+    }
+    lines.push("");
+  }
+
+  if (chat.variants.length === 0) {
+    lines.push("No simulations were run in this chat.");
+    return lines.join("\n");
+  }
+
+  if (chat.mode === "variations" && chat.variants.length > 1) {
+    const completed = chat.variants.filter((v) => v.status === "completed");
+    if (completed.length > 0) {
+      const ranked = [...completed].sort(
+        (a, b) => variantScore(a) - variantScore(b)
+      );
+      const winner = ranked[0];
+      const winnerIdx = chat.variants.findIndex((v) => v.id === winner.id);
+      lines.push("## Recommendation");
+      lines.push("");
+      lines.push(
+        `Ship **${winnerIdx === 0 ? "the original" : `Variant ${winnerIdx}`}${winner.label && winnerIdx !== 0 ? ` — ${winner.label}` : ""}**. It draws the cleanest reaction from this audience.`
+      );
+      lines.push("");
+      lines.push("| Variant | Negative share | Aggression | Replies |");
+      lines.push("| --- | ---: | --- | ---: |");
+      for (const v of ranked) {
+        const idx = chat.variants.findIndex((x) => x.id === v.id);
+        const b = sentimentBreakdown(v.thread);
+        const total = v.thread.length || 1;
+        const bad = (((b.hostile + b.negative) / total) * 100).toFixed(0);
+        lines.push(
+          `| ${idx === 0 ? "Original" : `Variant ${idx}`} (${v.label}) | ${bad}% | ${v.aggression ?? "—"} | ${v.thread.length} |`
+        );
+      }
+      lines.push("");
+    }
+  }
+
+  for (let i = 0; i < chat.variants.length; i++) {
+    const v = chat.variants[i];
+    const heading =
+      chat.mode === "variations"
+        ? `${i === 0 ? "Original" : `Variant ${i}`} — ${v.label}`
+        : "Simulation";
+    lines.push(`## ${heading}`);
+    lines.push("");
+    if (v.hook) {
+      lines.push(`> ${v.hook}`);
+      lines.push("");
+    }
+    lines.push("**Post:**");
+    lines.push("");
+    lines.push("```");
+    lines.push(v.post);
+    lines.push("```");
+    lines.push("");
+
+    if (v.status !== "completed") {
+      lines.push(`*Status: ${v.status}${v.error ? ` — ${v.error}` : ""}*`);
+      lines.push("");
+      continue;
+    }
+
+    const b = sentimentBreakdown(v.thread);
+    lines.push(
+      `**Sentiment:** ${b.positive} positive · ${b.neutral} neutral · ${b.negative} negative · ${b.hostile} hostile`
+    );
+    lines.push(
+      `**Replies:** ${v.thread.length}${v.aggression ? ` · **Aggression:** ${v.aggression}` : ""}`
+    );
+    lines.push("");
+
+    if (v.simulationId) {
+      lines.push(`Shareable view: \`/sim/${v.simulationId}\``);
+      lines.push("");
+    }
+
+    lines.push("### Thread");
+    lines.push("");
+    for (const msg of v.thread) {
+      const handle = formatHandle(chat.platform ?? "twitter", msg.archetype);
+      lines.push(`- \`${handle}\` *(R${msg.round}, ${msg.sentiment})*: ${msg.message}`);
+    }
+    lines.push("");
+  }
+
+  return lines.join("\n");
 }
