@@ -139,6 +139,27 @@ export default function HeroSection() {
           >
             Get early access
           </Link>
+          <Link
+            href="/login"
+            className="cta-ghost"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "14px 24px",
+              borderRadius: 999,
+              fontSize: 15,
+              fontWeight: 500,
+              letterSpacing: "-0.01em",
+              minHeight: 48,
+              color: "rgba(245, 244, 242, 0.85)",
+              background: "transparent",
+              textDecoration: "none",
+              border: "1px solid rgba(245, 244, 242, 0.18)",
+            }}
+          >
+            Sign in
+          </Link>
         </div>
 
         {/* Swarm demo */}

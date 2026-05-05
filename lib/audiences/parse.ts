@@ -13,6 +13,12 @@ const TEXT_COLUMN_CANDIDATES = [
   "body",
   "content",
   "post",
+  "headline",
+  "bio",
+  "description",
+  "position",
+  "title",
+  "role",
 ];
 
 export interface ParsedRow {
