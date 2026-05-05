@@ -67,13 +67,11 @@ export default function HeroSection() {
       >
         <MascotVideo
           variant="idle"
-          size={108}
+          size={128}
           ariaLabel="Atharias mascot, watching"
           style={{
-            marginBottom: 22,
-            borderRadius: 999,
-            boxShadow:
-              "0 0 0 1px rgba(245, 230, 184, 0.18), 0 12px 32px rgba(0, 0, 0, 0.35)",
+            marginBottom: 18,
+            filter: "drop-shadow(0 12px 28px rgba(0, 0, 0, 0.45))",
           }}
         />
 

@@ -3,8 +3,8 @@ import Image from "next/image";
 type Variant = "idle" | "listening";
 
 const SRC: Record<Variant, string> = {
-  idle: "/mascot/idle.mp4",
-  listening: "/mascot/listening.mp4",
+  idle: "/mascot/idle.webm",
+  listening: "/mascot/listening.webm",
 };
 
 export function MascotImage({
@@ -49,34 +49,26 @@ export function MascotVideo({
   ariaLabel?: string;
 }) {
   return (
-    <span
-      className={className}
+    <video
+      src={SRC[variant]}
+      width={size}
+      height={size}
+      autoPlay
+      loop
+      muted
+      playsInline
+      preload="metadata"
       aria-label={ariaLabel}
       aria-hidden={ariaLabel ? undefined : true}
+      className={className}
       style={{
-        display: "inline-block",
+        display: "block",
         width: size,
         height: size,
-        overflow: "hidden",
-        lineHeight: 0,
+        objectFit: "contain",
+        background: "transparent",
         ...style,
       }}
-    >
-      <video
-        src={SRC[variant]}
-        autoPlay
-        loop
-        muted
-        playsInline
-        preload="metadata"
-        style={{
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          objectPosition: "center",
-          display: "block",
-        }}
-      />
-    </span>
+    />
   );
 }

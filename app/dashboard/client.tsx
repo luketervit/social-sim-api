@@ -1554,14 +1554,9 @@ function UploadDropzone({
     >
       <MascotVideo
         variant="idle"
-        size={96}
+        size={108}
         ariaLabel="Atharias mascot, waiting for your audience"
-        style={{
-          margin: "0 auto 8px",
-          borderRadius: 999,
-          boxShadow:
-            "0 0 0 1px var(--border), 0 6px 18px rgba(20, 20, 19, 0.06)",
-        }}
+        style={{ margin: "0 auto 4px" }}
       />
       <div
         style={{
@@ -1705,13 +1700,9 @@ function ProcessingCard({
       >
         <MascotVideo
           variant="listening"
-          size={56}
+          size={64}
           ariaLabel="Atharias mascot, listening to your data"
-          style={{
-            flexShrink: 0,
-            borderRadius: 999,
-            boxShadow: "0 0 0 1px var(--border)",
-          }}
+          style={{ flexShrink: 0 }}
         />
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span
