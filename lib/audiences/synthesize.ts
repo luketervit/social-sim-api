@@ -2,6 +2,122 @@ import type { Persona } from "@/lib/schemas";
 import type { ParsedRow } from "./parse";
 import type { RowScores } from "./classify";
 
+const ROLE_FIELD_KEYS = [
+  "position",
+  "title",
+  "job title",
+  "job_title",
+  "headline",
+  "role",
+  "current position",
+];
+
+const COMPANY_FIELD_KEYS = [
+  "company",
+  "organization",
+  "organisation",
+  "employer",
+  "current company",
+];
+
+const SENIORITY = {
+  exec: /(founder|ceo|cto|cmo|cfo|coo|cpo|chief|president|owner|managing partner|partner)\b/i,
+  vp: /\b(vp|vice president|svp|evp)\b/i,
+  director: /\b(director|head of)\b/i,
+  manager: /\b(manager|lead|principal|staff)\b/i,
+  senior: /\b(senior|sr\.?)\b/i,
+  junior: /\b(junior|jr\.?|intern|trainee|graduate|entry[- ]level|associate)\b/i,
+};
+
+const VOICE = {
+  loud:
+    /\b(marketing|comms|communications|brand|content|advocate|evangelist|pr|product marketing|growth|founder|ceo|investor|venture|advisor)\b/i,
+  technical:
+    /\b(engineer|engineering|developer|software|data|machine learning|ml|ai|research|researcher|scientist|architect|infra|infrastructure|devops|sre)\b/i,
+  ops: /\b(operations|finance|accounting|legal|compliance|hr|people|talent|recruiting)\b/i,
+  design: /\b(design|designer|product designer|ux|ui|brand designer|illustrator)\b/i,
+};
+
+function pickField(
+  fields: Record<string, string>,
+  candidateKeys: string[]
+): string | null {
+  // Exact-key match first.
+  for (const key of Object.keys(fields)) {
+    if (candidateKeys.includes(key.toLowerCase().trim())) {
+      const value = fields[key]?.trim();
+      if (value && value.length > 1 && value.length < 200) return value;
+    }
+  }
+  return null;
+}
+
+function extractArchetypeFromFields(
+  fields: Record<string, string> | undefined
+): { label: string; role: string } | null {
+  if (!fields) return null;
+  const role = pickField(fields, ROLE_FIELD_KEYS);
+  if (!role) return null;
+  const company = pickField(fields, COMPANY_FIELD_KEYS);
+  // Trim role to ~50 chars so the chip layout stays clean.
+  const cleanRole = role.replace(/\s+/g, " ").trim().slice(0, 60);
+  const label = company
+    ? `${cleanRole} · ${company.replace(/\s+/g, " ").trim().slice(0, 40)}`
+    : cleanRole;
+  return { label, role: cleanRole };
+}
+
+function reactivityFromRole(role: string): number {
+  // Loud-and-senior = highest. Technical/quiet = lower. Junior = quietest.
+  if (SENIORITY.exec.test(role) && VOICE.loud.test(role)) return 0.78;
+  if (SENIORITY.exec.test(role)) return 0.6;
+  if (SENIORITY.vp.test(role) && VOICE.loud.test(role)) return 0.65;
+  if (SENIORITY.vp.test(role)) return 0.5;
+  if (SENIORITY.director.test(role) && VOICE.loud.test(role)) return 0.6;
+  if (SENIORITY.director.test(role)) return 0.45;
+  if (VOICE.loud.test(role)) return 0.55;
+  if (SENIORITY.junior.test(role)) return 0.2;
+  if (VOICE.technical.test(role)) return 0.3;
+  if (VOICE.design.test(role)) return 0.4;
+  if (VOICE.ops.test(role)) return 0.3;
+  if (SENIORITY.senior.test(role) || SENIORITY.manager.test(role)) return 0.5;
+  return 0.4;
+}
+
+function sophisticationFromRole(role: string): number {
+  let base = 0.5;
+  if (SENIORITY.exec.test(role)) base = 0.88;
+  else if (SENIORITY.vp.test(role)) base = 0.82;
+  else if (SENIORITY.director.test(role)) base = 0.75;
+  else if (SENIORITY.senior.test(role) || SENIORITY.manager.test(role)) base = 0.65;
+  else if (SENIORITY.junior.test(role)) base = 0.32;
+  if (VOICE.technical.test(role)) base = Math.min(0.95, base + 0.08);
+  if (VOICE.ops.test(role)) base = Math.min(0.95, base + 0.04);
+  return base;
+}
+
+function affinityFromRole(role: string, indexSeed: number): number {
+  // Spread roles across a mild affinity range so the chat reflects diversity
+  // even before classifier scores carry signal. Deterministic per-row.
+  const roleSeed =
+    role
+      .toLowerCase()
+      .split("")
+      .reduce((acc, ch) => (acc * 33 + ch.charCodeAt(0)) % 997, 7) /
+    997;
+  const indexNoise = (indexSeed * 0.137) % 1;
+  // Map [0,1) to [-0.45, 0.45) baseline.
+  let value = (roleSeed - 0.5) * 0.9;
+  // Voicey marketing/founders skew slightly positive about novel products.
+  if (VOICE.loud.test(role)) value += 0.1;
+  // Engineers / scientists skew slightly skeptical by default.
+  if (VOICE.technical.test(role)) value -= 0.1;
+  // Compliance / legal skew negative on bold posts.
+  if (VOICE.ops.test(role)) value -= 0.05;
+  value += (indexNoise - 0.5) * 0.15;
+  return Math.max(-0.85, Math.min(0.85, value));
+}
+
 const STOPWORDS = new Set([
   "the","a","an","and","or","but","if","then","of","in","on","for","to","with",
   "is","are","was","were","be","been","being","i","you","he","she","it","we",
@@ -72,12 +188,28 @@ export function synthesizePersona(
   const toxicityScore = pick(scores.toxicity, "toxic");
   const aggression = Math.max(offensiveScore, hateScore, toxicityScore);
 
-  const { archetype, reactivity } = tier(aggression);
-  const sophistication = clamp(row.text.length / 300, 0.2, 0.95);
+  // For synthetic uploads (LinkedIn exports, contact lists, etc.) the
+  // classifier scores are uniformly low because the text is just a job
+  // title, not a hot tweet. Fall back to the row's actual role/company
+  // fields so personas come out differentiated instead of all "Quiet Voice".
+  const fieldArchetype = extractArchetypeFromFields(row.fields);
+
+  const { archetype: tierArchetype, reactivity: tierReactivity } = tier(aggression);
+  const reactivity = fieldArchetype
+    ? reactivityFromRole(fieldArchetype.role)
+    : tierReactivity;
+  const baseArchetype = fieldArchetype ? fieldArchetype.label : tierArchetype;
+
+  const sophistication = fieldArchetype
+    ? sophisticationFromRole(fieldArchetype.role)
+    : clamp(row.text.length / 300, 0.2, 0.95);
 
   // Brand affinity: prefer political signal when meaningful, else sentiment.
   let brandAffinity = 0;
   const political = scores.political;
+  const sentimentDelta = sentimentMap
+    ? clamp(2 * (sentimentMap["positive"] ?? 0) - 1, -1, 1)
+    : 0;
   if (political) {
     const right = political["right"] ?? 0;
     const left = political["left"] ?? 0;
@@ -85,12 +217,16 @@ export function synthesizePersona(
       // Heavily-leaning rows map to extremes; centre stays near 0.
       brandAffinity = clamp(right - left, -1, 1);
     } else {
-      brandAffinity = sentimentMap
-        ? clamp(2 * (sentimentMap["positive"] ?? 0) - 1, -1, 1)
-        : 0;
+      brandAffinity = sentimentDelta;
     }
-  } else if (sentimentMap) {
-    brandAffinity = clamp(2 * (sentimentMap["positive"] ?? 0) - 1, -1, 1);
+  } else {
+    brandAffinity = sentimentDelta;
+  }
+
+  // For synthetic uploads, real classifier signal is weak — derive affinity
+  // from the role itself so the audience analysis shows genuine variation.
+  if (fieldArchetype && Math.abs(brandAffinity) < 0.1) {
+    brandAffinity = affinityFromRole(fieldArchetype.role, row.index);
   }
 
   // Emotion influences archetype label when present (more vivid than tier alone).
@@ -107,11 +243,13 @@ export function synthesizePersona(
     if (bestScore >= 0.4) emotionLabel = bestLabel;
   }
 
-  const archetypeLabel = row.source_id
-    ? row.source_id
-    : emotionLabel
-      ? `${capitalize(emotionLabel)} ${archetype}`
-      : archetype;
+  const archetypeLabel = fieldArchetype
+    ? baseArchetype
+    : row.source_id
+      ? row.source_id
+      : emotionLabel
+        ? `${capitalize(emotionLabel)} ${baseArchetype}`
+        : baseArchetype;
 
   const keywords = topKeywords(row.text);
   const idSuffix = row.source_id
