@@ -257,7 +257,7 @@ export default function AudiencesClient({ initialAudiences }: AudiencesClientPro
                   marginTop: 6,
                 }}
               >
-                Max 2 MB · ≤ 500 rows · needs a column named text/message/comment/body/content/post/tweet
+                Max 10 MB · up to 2,000 rows · any CSV — we&apos;ll pick the best text column or combine fields
               </div>
             </div>
           )}

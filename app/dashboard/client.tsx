@@ -404,8 +404,8 @@ function UploadHero({
             letterSpacing: "0.02em",
           }}
         >
-          Max 2 MB · ≤ 500 rows · CSV needs a column like text, body, headline,
-          position, or description.
+          Max 10 MB · up to 2,000 rows · any CSV works — we&apos;ll pick the
+          best text column or combine fields automatically.
         </div>
 
         <input

@@ -117,6 +117,8 @@ export async function POST(request: NextRequest) {
     name,
     metadata: {
       text_column: parsed.text_column,
+      headers: parsed.headers,
+      synthetic: parsed.synthetic,
       total_rows_in_file: parsed.total_rows_in_file,
       truncated: parsed.truncated,
       max_rows: MAX_AUDIENCE_ROWS,
@@ -143,6 +145,8 @@ export async function POST(request: NextRequest) {
       audienceName: name,
       platform,
       rows: parsed.rows,
+      headers: parsed.headers,
+      synthetic: parsed.synthetic,
     })
   );
 
