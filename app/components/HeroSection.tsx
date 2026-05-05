@@ -34,6 +34,7 @@ export default function HeroSection() {
   }, []);
 
   return (
+    <>
     <section
       style={{
         background: "var(--ink)",
@@ -177,17 +178,6 @@ export default function HeroSection() {
           </Link>
         </div>
 
-        {/* Swarm demo */}
-        <div
-          style={{
-            width: "100%",
-            maxWidth: 480,
-            margin: "24px auto 0",
-          }}
-        >
-          <ReactionSwarm theme="dark" />
-        </div>
-
         {/* Live sentiment readout */}
         <div
           className="tabular-nums"
@@ -226,5 +216,24 @@ export default function HeroSection() {
         </div>
       </div>
     </section>
+
+    <section
+      style={{
+        background: "var(--ink)",
+        padding: "clamp(48px, 8vh, 96px) 0 clamp(64px, 10vh, 120px)",
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        className="mx-auto max-w-[1080px] px-6"
+        style={{ position: "relative", zIndex: 1 }}
+      >
+        <div style={{ width: "100%", maxWidth: 480, margin: "0 auto" }}>
+          <ReactionSwarm theme="dark" />
+        </div>
+      </div>
+    </section>
+    </>
   );
 }
