@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { MascotImage } from "@/app/components/Mascot";
 import {
   type AudienceSummary,
   type ChatState,
@@ -62,6 +63,9 @@ export default function Sidebar({
         <Link
           href="/"
           style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
             fontFamily: "var(--font-body), system-ui, sans-serif",
             fontWeight: 600,
             fontSize: 15,
@@ -70,6 +74,7 @@ export default function Sidebar({
             textDecoration: "none",
           }}
         >
+          <MascotImage size={28} alt="" style={{ flexShrink: 0 }} />
           Atharias
         </Link>
         <button

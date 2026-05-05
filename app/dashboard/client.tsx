@@ -11,7 +11,7 @@ import {
 } from "react";
 import type { Persona } from "@/lib/schemas";
 import type { AgentMessage } from "@/lib/simulation/types";
-import { MascotVideo } from "@/app/components/Mascot";
+import { MascotImage, MascotVideo } from "@/app/components/Mascot";
 import AudienceTable, { buildPersonaCsv } from "./AudienceTable";
 import OnboardingModal from "./OnboardingModal";
 import Sidebar from "./Sidebar";
@@ -1418,9 +1418,18 @@ function ConversationItem({
       style={{
         display: "flex",
         justifyContent: isUser ? "flex-end" : "flex-start",
+        alignItems: "flex-start",
+        gap: 10,
         animation: `convo-fade-up 320ms cubic-bezier(0.215, 0.61, 0.355, 1) ${delayMs}ms both`,
       }}
     >
+      {!isUser ? (
+        <MascotImage
+          size={32}
+          alt=""
+          style={{ flexShrink: 0, marginTop: 2 }}
+        />
+      ) : null}
       <div
         style={{
           maxWidth: "min(640px, 92%)",
