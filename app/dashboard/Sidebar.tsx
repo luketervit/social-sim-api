@@ -18,6 +18,7 @@ interface SidebarProps {
   onNewChat: () => void;
   onDeleteChat: (id: string) => void;
   onViewAudience: (audience: AudienceSummary) => void;
+  onDeleteAudience: (audience: AudienceSummary) => void;
 }
 
 export default function Sidebar({
@@ -31,6 +32,7 @@ export default function Sidebar({
   onNewChat,
   onDeleteChat,
   onViewAudience,
+  onDeleteAudience,
 }: SidebarProps) {
   return (
     <aside
@@ -166,6 +168,7 @@ export default function Sidebar({
                       active={active}
                       ready={ready}
                       onClick={() => onViewAudience(a)}
+                      onDelete={() => onDeleteAudience(a)}
                     />
                   </li>
                 );
@@ -354,11 +357,13 @@ function AudienceRow({
   active,
   ready,
   onClick,
+  onDelete,
 }: {
   audience: AudienceSummary;
   active: boolean;
   ready: boolean;
   onClick: () => void;
+  onDelete: () => void;
 }) {
   return (
     <div
@@ -379,7 +384,8 @@ function AudienceRow({
           : `${audience.status} — wait for ready`
       }
       style={{
-        padding: "8px 10px",
+        position: "relative",
+        padding: "8px 30px 8px 10px",
         borderRadius: 8,
         background: active ? "var(--surface)" : "transparent",
         cursor: ready ? "pointer" : "not-allowed",
@@ -427,6 +433,30 @@ function AudienceRow({
       >
         {ready ? `${audience.row_count ?? 0} personas` : audience.status}
       </span>
+      <button
+        type="button"
+        aria-label={`Delete ${audience.name}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete();
+        }}
+        style={{
+          position: "absolute",
+          top: 6,
+          right: 6,
+          background: "transparent",
+          border: "none",
+          color: "var(--text-tertiary)",
+          fontSize: 14,
+          lineHeight: 1,
+          padding: 4,
+          borderRadius: 4,
+          cursor: "pointer",
+          opacity: 0.6,
+        }}
+      >
+        ×
+      </button>
     </div>
   );
 }

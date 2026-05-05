@@ -20,6 +20,7 @@ interface AudienceTableProps {
   error: string | null;
   onUseInChat: () => void;
   onDownloadCsv: () => void;
+  onDelete: () => void;
 }
 
 const PAGE_SIZE = 50;
@@ -93,6 +94,7 @@ export default function AudienceTable({
   error,
   onUseInChat,
   onDownloadCsv,
+  onDelete,
 }: AudienceTableProps) {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("archetype");
@@ -207,6 +209,34 @@ export default function AudienceTable({
         </div>
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={onDelete}
+            style={{
+              background: "transparent",
+              border: "1px solid var(--border)",
+              borderRadius: 999,
+              padding: "10px 18px",
+              fontSize: 14,
+              color: "var(--coral)",
+              cursor: "pointer",
+              transition: "background 150ms ease, border-color 150ms ease",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background =
+                "var(--coral-muted)";
+              (e.currentTarget as HTMLButtonElement).style.borderColor =
+                "rgba(249, 112, 102, 0.3)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background =
+                "transparent";
+              (e.currentTarget as HTMLButtonElement).style.borderColor =
+                "var(--border)";
+            }}
+          >
+            Delete
+          </button>
           <button
             type="button"
             onClick={onDownloadCsv}

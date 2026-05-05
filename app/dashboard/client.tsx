@@ -148,6 +148,57 @@ export default function DashboardClient({
     []
   );
 
+  async function handleDeleteAudience(audience: AudienceSummary) {
+    const confirmed = window.confirm(
+      `Delete "${audience.name}"? Personas and history attached to it will be removed.`
+    );
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch(`/api/v1/audiences/${audience.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(payload?.error ?? "Could not delete audience.");
+      }
+
+      setAudiences((prev) => prev.filter((a) => a.id !== audience.id));
+
+      // If we were viewing this audience, fall back to chat view.
+      if (viewedAudienceId === audience.id) {
+        setView("chat");
+        setViewedAudienceId(null);
+        setViewedAudiencePersonas([]);
+        setViewedAudienceError(null);
+      }
+
+      // Detach from any chats that had it selected.
+      setChats((prev) =>
+        prev.map((c) =>
+          c.audienceId === audience.id
+            ? {
+                ...c,
+                audienceId: null,
+                audienceName: null,
+                audienceRowCount: null,
+                audiencePersonas: [],
+                audienceLoading: false,
+                audienceError: null,
+                platform: null,
+                mode: null,
+                variants: [],
+              }
+            : c
+        )
+      );
+    } catch (err) {
+      window.alert(
+        err instanceof Error ? err.message : "Could not delete audience."
+      );
+    }
+  }
+
   async function handleViewAudience(audience: AudienceSummary) {
     if (audience.status !== "ready") return;
     setView("audience");
@@ -677,6 +728,7 @@ export default function DashboardClient({
         onNewChat={handleNewChat}
         onDeleteChat={handleDeleteChat}
         onViewAudience={(a) => void handleViewAudience(a)}
+        onDeleteAudience={(a) => void handleDeleteAudience(a)}
       />
 
       <main style={{ flex: 1, minWidth: 0 }}>
@@ -705,6 +757,7 @@ export default function DashboardClient({
                   error={viewedAudienceError}
                   onUseInChat={() => void handleUseViewedAudienceInChat()}
                   onDownloadCsv={handleDownloadViewedCsv}
+                  onDelete={() => void handleDeleteAudience(viewed)}
                 />
               );
             })()
