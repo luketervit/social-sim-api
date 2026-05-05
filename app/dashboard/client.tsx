@@ -11,6 +11,7 @@ import {
 } from "react";
 import type { Persona } from "@/lib/schemas";
 import type { AgentMessage } from "@/lib/simulation/types";
+import OnboardingModal from "./OnboardingModal";
 import Sidebar from "./Sidebar";
 import {
   type AudienceSummary,
@@ -616,6 +617,7 @@ export default function DashboardClient({
         display: "flex",
       }}
     >
+      <OnboardingModal />
       <Sidebar
         email={email}
         chats={chats}
@@ -763,46 +765,17 @@ function ChatConversation(props: ChatConversationProps) {
     ),
   });
 
-  // No audience yet — show upload prompt
+  // No audience yet — quiet empty state with the upload zone.
   if (!chat.audienceId) {
     if (uploading) {
       messages.push({
         id: "uploading",
-        role: "atharias",
-        body: (
-          <>
-            Got it. Reading{" "}
-            <strong style={{ color: "var(--text-primary)" }}>
-              {uploadingFilename}
-            </strong>
-            …
-          </>
+        role: "system",
+        raw: (
+          <UploadingHint filename={uploadingFilename ?? "your file"} />
         ),
       });
     } else {
-      if (audiences.filter((a) => a.status === "ready").length === 0) {
-        messages.push({
-          id: "intro",
-          role: "atharias",
-          body: (
-            <>
-              Drop a CSV and I&apos;ll build your audience. LinkedIn connections,
-              customer messages, support tickets — anything text-based works.
-            </>
-          ),
-        });
-      } else {
-        messages.push({
-          id: "pick-or-upload",
-          role: "atharias",
-          body: (
-            <>
-              Pick an audience from the sidebar to use it here, or drop a fresh
-              CSV below.
-            </>
-          ),
-        });
-      }
       messages.push({
         id: "drop",
         role: "system",
@@ -813,14 +786,21 @@ function ChatConversation(props: ChatConversationProps) {
             onUpload={onUpload}
             fileInputRef={fileInputRef}
             uploading={false}
+            hint={
+              audiences.filter((a) => a.status === "ready").length > 0
+                ? "or pick an audience from the sidebar →"
+                : null
+            }
           />
         ),
       });
       if (uploadError) {
         messages.push({
           id: "upload-error",
-          role: "atharias",
-          body: <span style={{ color: "var(--coral)" }}>{uploadError}</span>,
+          role: "system",
+          raw: (
+            <ErrorLine text={uploadError} />
+          ),
         });
       }
     }
@@ -830,38 +810,14 @@ function ChatConversation(props: ChatConversationProps) {
   if (chat.audienceId && linkedAudience) {
     if (linkedAudience.status === "processing") {
       messages.push({
-        id: "got-file",
-        role: "user",
-        body: <>Uploaded {linkedAudience.name}.</>,
-      });
-      messages.push({
-        id: "processing-1",
-        role: "atharias",
-        body: (
-          <>
-            Reading{" "}
-            <strong style={{ color: "var(--text-primary)" }}>
-              {linkedAudience.row_count ?? "your"} rows
-            </strong>
-            . Claude is picking the columns that carry signal — names, roles,
-            companies — and dropping noise.
-          </>
-        ),
-      });
-      messages.push({
-        id: "processing-2",
-        role: "atharias",
-        body: (
-          <>
-            Then I&apos;ll classify tone and reactivity per row and build a persona
-            for each one. Usually 30–90 seconds.
-          </>
-        ),
-      });
-      messages.push({
-        id: "processing-spinner",
+        id: "processing-card",
         role: "system",
-        raw: <ProcessingPulse />,
+        raw: (
+          <ProcessingCard
+            name={linkedAudience.name}
+            rowCount={linkedAudience.row_count}
+          />
+        ),
       });
     }
 
@@ -1393,12 +1349,14 @@ function UploadDropzone({
   onUpload,
   fileInputRef,
   uploading,
+  hint,
 }: {
   dragActive: boolean;
   onDragActive: (active: boolean) => void;
   onUpload: (file: File) => void;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   uploading: boolean;
+  hint?: string | null;
 }) {
   return (
     <div
@@ -1425,22 +1383,26 @@ function UploadDropzone({
       aria-label="Upload a CSV file"
       style={{
         marginTop: 4,
-        padding: "28px 24px",
-        borderRadius: 16,
+        padding: "32px 24px",
+        borderRadius: 18,
         background: dragActive ? "var(--accent-subtle)" : "var(--surface)",
         border: `1.5px dashed ${dragActive ? "var(--accent)" : "var(--border)"}`,
         textAlign: "center",
         cursor: uploading ? "progress" : "pointer",
-        transition: "border-color 150ms ease, background 150ms ease",
+        transition:
+          "border-color 200ms cubic-bezier(0.215, 0.61, 0.355, 1), background 200ms cubic-bezier(0.215, 0.61, 0.355, 1), transform 200ms cubic-bezier(0.215, 0.61, 0.355, 1)",
         opacity: uploading ? 0.7 : 1,
+        transform: dragActive ? "scale(1.005)" : "scale(1)",
       }}
     >
       <div
         style={{
           fontFamily: "var(--font-display), Georgia, serif",
-          fontSize: 20,
+          fontSize: 22,
           color: "var(--text-primary)",
           letterSpacing: "-0.02em",
+          fontStyle: dragActive ? "italic" : "normal",
+          transition: "font-style 200ms ease",
         }}
       >
         {dragActive ? "Drop to upload" : "Drop a .csv or click to browse"}
@@ -1450,12 +1412,24 @@ function UploadDropzone({
           fontFamily: "var(--font-data), monospace",
           fontSize: 11,
           color: "var(--text-tertiary)",
-          marginTop: 8,
+          marginTop: 10,
           letterSpacing: "0.04em",
         }}
       >
         Up to 10 MB · 2,000 rows · any CSV — we pick the useful columns
       </div>
+      {hint ? (
+        <div
+          style={{
+            marginTop: 12,
+            fontSize: 12,
+            color: "var(--text-secondary)",
+            fontStyle: "italic",
+          }}
+        >
+          {hint}
+        </div>
+      ) : null}
       <input
         ref={fileInputRef}
         type="file"
@@ -1466,6 +1440,192 @@ function UploadDropzone({
           if (f) onUpload(f);
         }}
       />
+    </div>
+  );
+}
+
+function UploadingHint({ filename }: { filename: string }) {
+  return (
+    <div
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 12,
+        padding: "12px 18px",
+        borderRadius: 14,
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+      }}
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: 999,
+          background: "var(--accent)",
+          animation: "pulse-soft 1.4s ease-in-out infinite",
+        }}
+      />
+      <span style={{ fontSize: 14, color: "var(--text-primary)" }}>
+        Reading{" "}
+        <strong style={{ fontWeight: 500 }}>{filename}</strong>…
+      </span>
+    </div>
+  );
+}
+
+function ErrorLine({ text }: { text: string }) {
+  return (
+    <p
+      role="alert"
+      style={{
+        fontSize: 13,
+        color: "var(--coral)",
+        margin: 0,
+      }}
+    >
+      {text}
+    </p>
+  );
+}
+
+function ProcessingCard({
+  name,
+  rowCount,
+}: {
+  name: string;
+  rowCount: number | null;
+}) {
+  const steps = [
+    {
+      label: "Reading rows",
+      detail: `${rowCount ?? "?"} rows`,
+    },
+    {
+      label: "Picking useful columns",
+      detail: "Claude is dropping URLs, emails, dates",
+    },
+    {
+      label: "Classifying tone & reactivity",
+      detail: "tone, voice, role signals",
+    },
+    {
+      label: "Building personas",
+      detail: "one persona per row",
+    },
+  ];
+  return (
+    <div
+      style={{
+        padding: "20px 22px",
+        borderRadius: 18,
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        boxShadow:
+          "0 1px 3px rgba(0,0,0,0.03), 0 8px 24px rgba(0,0,0,0.03)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          marginBottom: 14,
+        }}
+      >
+        <span
+          aria-hidden="true"
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: 999,
+            background: "var(--accent)",
+            animation: "pulse-soft 1.4s ease-in-out infinite",
+          }}
+        />
+        <span
+          style={{
+            fontFamily: "var(--font-data), monospace",
+            fontSize: 11,
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            color: "var(--text-secondary)",
+          }}
+        >
+          Processing {name}
+        </span>
+      </div>
+      <ol
+        style={{
+          margin: 0,
+          padding: 0,
+          listStyle: "none",
+          display: "flex",
+          flexDirection: "column",
+          gap: 10,
+        }}
+      >
+        {steps.map((s, i) => (
+          <li
+            key={s.label}
+            style={{
+              display: "flex",
+              alignItems: "baseline",
+              gap: 12,
+              fontSize: 14,
+              color: "var(--text-primary)",
+              animation: `fade-step 360ms cubic-bezier(0.215, 0.61, 0.355, 1) ${i * 90}ms both`,
+            }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                width: 18,
+                fontFamily: "var(--font-data), monospace",
+                fontSize: 11,
+                color: "var(--text-tertiary)",
+              }}
+            >
+              0{i + 1}
+            </span>
+            <span style={{ flex: 1 }}>{s.label}</span>
+            <span
+              style={{
+                fontFamily: "var(--font-data), monospace",
+                fontSize: 11,
+                letterSpacing: "0.04em",
+                color: "var(--text-tertiary)",
+              }}
+            >
+              {s.detail}
+            </span>
+          </li>
+        ))}
+      </ol>
+      <p
+        style={{
+          marginTop: 14,
+          fontSize: 12,
+          color: "var(--text-tertiary)",
+          fontStyle: "italic",
+        }}
+      >
+        Usually 30–90 seconds. You can switch chats while it runs.
+      </p>
+      <style jsx>{`
+        @keyframes fade-step {
+          from {
+            opacity: 0;
+            transform: translateY(4px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </div>
   );
 }
