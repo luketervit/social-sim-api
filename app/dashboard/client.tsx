@@ -11,6 +11,7 @@ import {
 } from "react";
 import type { Persona } from "@/lib/schemas";
 import type { AgentMessage } from "@/lib/simulation/types";
+import AudienceTable, { buildPersonaCsv } from "./AudienceTable";
 import OnboardingModal from "./OnboardingModal";
 import Sidebar from "./Sidebar";
 import {
@@ -61,6 +62,15 @@ export default function DashboardClient({
   const [audiences, setAudiences] = useState<AudienceSummary[]>(initialAudiences);
   const [chats, setChats] = useState<ChatState[]>(() => [makeChat()]);
   const [activeChatId, setActiveChatId] = useState<string>(() => chats[0].id);
+  const [view, setView] = useState<"chat" | "audience">("chat");
+  const [viewedAudienceId, setViewedAudienceId] = useState<string | null>(null);
+  const [viewedAudiencePersonas, setViewedAudiencePersonas] = useState<Persona[]>(
+    []
+  );
+  const [viewedAudienceLoading, setViewedAudienceLoading] = useState(false);
+  const [viewedAudienceError, setViewedAudienceError] = useState<string | null>(
+    null
+  );
 
   const activeChat =
     chats.find((c) => c.id === activeChatId) ?? chats[0] ?? null;
@@ -99,10 +109,12 @@ export default function DashboardClient({
     const fresh = makeChat();
     setChats((prev) => [fresh, ...prev]);
     setActiveChatId(fresh.id);
+    setView("chat");
   }
 
   function handleSelectChat(id: string) {
     setActiveChatId(id);
+    setView("chat");
   }
 
   function handleDeleteChat(id: string) {
@@ -135,6 +147,46 @@ export default function DashboardClient({
     },
     []
   );
+
+  async function handleViewAudience(audience: AudienceSummary) {
+    if (audience.status !== "ready") return;
+    setView("audience");
+    setViewedAudienceId(audience.id);
+    setViewedAudienceError(null);
+    setViewedAudienceLoading(true);
+    try {
+      const { personas } = await fetchPersonasForAudience(audience);
+      setViewedAudiencePersonas(personas);
+    } catch (err) {
+      setViewedAudienceError(
+        err instanceof Error ? err.message : "Could not load audience."
+      );
+    } finally {
+      setViewedAudienceLoading(false);
+    }
+  }
+
+  async function handleUseViewedAudienceInChat() {
+    if (!viewedAudienceId) return;
+    const audience = audiences.find((a) => a.id === viewedAudienceId);
+    if (!audience) return;
+    setView("chat");
+    await handlePickAudienceForActive(audience);
+  }
+
+  function handleDownloadViewedCsv() {
+    if (!viewedAudienceId) return;
+    const audience = audiences.find((a) => a.id === viewedAudienceId);
+    if (!audience) return;
+    const csv = buildPersonaCsv(audience, viewedAudiencePersonas);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${audience.name.replace(/\s+/g, "-")}-personas.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   async function handlePickAudienceForActive(audience: AudienceSummary) {
     if (audience.status !== "ready") return;
@@ -618,11 +670,13 @@ export default function DashboardClient({
         email={email}
         chats={chats}
         activeChatId={activeChatId}
+        view={view}
+        viewedAudienceId={viewedAudienceId}
         audiences={audiences}
         onSelectChat={handleSelectChat}
         onNewChat={handleNewChat}
         onDeleteChat={handleDeleteChat}
-        onPickAudienceForActive={handlePickAudienceForActive}
+        onViewAudience={(a) => void handleViewAudience(a)}
       />
 
       <main style={{ flex: 1, minWidth: 0 }}>
@@ -633,7 +687,28 @@ export default function DashboardClient({
             padding: "clamp(28px, 4vh, 48px) 24px clamp(72px, 10vh, 120px)",
           }}
         >
-          {activeChat ? (
+          {view === "audience" && viewedAudienceId ? (
+            (() => {
+              const viewed = audiences.find((a) => a.id === viewedAudienceId);
+              if (!viewed) {
+                return (
+                  <p style={{ color: "var(--text-tertiary)", fontSize: 14 }}>
+                    Audience not found.
+                  </p>
+                );
+              }
+              return (
+                <AudienceTable
+                  audience={viewed}
+                  personas={viewedAudiencePersonas}
+                  loading={viewedAudienceLoading}
+                  error={viewedAudienceError}
+                  onUseInChat={() => void handleUseViewedAudienceInChat()}
+                  onDownloadCsv={handleDownloadViewedCsv}
+                />
+              );
+            })()
+          ) : activeChat ? (
             <ChatConversation
               chat={activeChat}
               audiences={audiences}
@@ -853,11 +928,6 @@ function ChatConversation(props: ChatConversationProps) {
         id: "ready-chips",
         role: "system",
         raw: <ArchetypeChips archetypes={archetypes.slice(0, 8)} />,
-      });
-      messages.push({
-        id: "personas-grid",
-        role: "system",
-        raw: <PersonasGrid personas={chat.audiencePersonas} />,
       });
 
       if (!chat.platform) {

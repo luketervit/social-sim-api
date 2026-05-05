@@ -11,22 +11,26 @@ interface SidebarProps {
   email: string;
   chats: ChatState[];
   activeChatId: string;
+  view: "chat" | "audience";
+  viewedAudienceId: string | null;
   audiences: AudienceSummary[];
   onSelectChat: (id: string) => void;
   onNewChat: () => void;
   onDeleteChat: (id: string) => void;
-  onPickAudienceForActive: (audience: AudienceSummary) => void;
+  onViewAudience: (audience: AudienceSummary) => void;
 }
 
 export default function Sidebar({
   email,
   chats,
   activeChatId,
+  view,
+  viewedAudienceId,
   audiences,
   onSelectChat,
   onNewChat,
   onDeleteChat,
-  onPickAudienceForActive,
+  onViewAudience,
 }: SidebarProps) {
   return (
     <aside
@@ -82,7 +86,16 @@ export default function Sidebar({
             display: "inline-flex",
             alignItems: "center",
             gap: 6,
+            transition: "transform 150ms ease",
           }}
+          onMouseEnter={(e) =>
+            ((e.currentTarget as HTMLButtonElement).style.transform =
+              "translateY(-1px)")
+          }
+          onMouseLeave={(e) =>
+            ((e.currentTarget as HTMLButtonElement).style.transform =
+              "translateY(0)")
+          }
         >
           + New chat
         </button>
@@ -113,7 +126,7 @@ export default function Sidebar({
               }}
             >
               {chats.map((chat) => {
-                const active = chat.id === activeChatId;
+                const active = view === "chat" && chat.id === activeChatId;
                 return (
                   <li key={chat.id}>
                     <ChatRow
@@ -143,75 +156,20 @@ export default function Sidebar({
                 gap: 2,
               }}
             >
-              {audiences.map((a) => (
-                <li key={a.id}>
-                  <button
-                    type="button"
-                    onClick={() => onPickAudienceForActive(a)}
-                    disabled={a.status !== "ready"}
-                    title={
-                      a.status !== "ready"
-                        ? `${a.status} — wait for ready`
-                        : "Use this audience in the active chat"
-                    }
-                    style={{
-                      width: "100%",
-                      textAlign: "left",
-                      background: "transparent",
-                      border: "none",
-                      padding: "8px 10px",
-                      borderRadius: 8,
-                      fontSize: 13,
-                      color:
-                        a.status === "ready"
-                          ? "var(--text-primary)"
-                          : "var(--text-tertiary)",
-                      cursor: a.status === "ready" ? "pointer" : "not-allowed",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 2,
-                      transition: "background 120ms ease",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (a.status === "ready") {
-                        (e.currentTarget as HTMLButtonElement).style.background =
-                          "var(--surface)";
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLButtonElement).style.background =
-                        "transparent";
-                    }}
-                  >
-                    <span
-                      style={{
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {a.name}
-                    </span>
-                    <span
-                      className="tabular-nums"
-                      style={{
-                        fontFamily: "var(--font-data), monospace",
-                        fontSize: 10,
-                        letterSpacing: "0.04em",
-                        color:
-                          a.status === "ready"
-                            ? "var(--text-tertiary)"
-                            : "var(--accent)",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      {a.status === "ready"
-                        ? `${a.row_count ?? 0} personas`
-                        : a.status}
-                    </span>
-                  </button>
-                </li>
-              ))}
+              {audiences.map((a) => {
+                const ready = a.status === "ready";
+                const active = view === "audience" && viewedAudienceId === a.id;
+                return (
+                  <li key={a.id}>
+                    <AudienceRow
+                      audience={a}
+                      active={active}
+                      ready={ready}
+                      onClick={() => onViewAudience(a)}
+                    />
+                  </li>
+                );
+              })}
             </ul>
           )}
         </Section>
@@ -240,17 +198,6 @@ export default function Sidebar({
         >
           {email}
         </span>
-        <Link
-          href="/audiences"
-          style={{
-            color: "var(--text-secondary)",
-            textDecoration: "none",
-            paddingLeft: 6,
-            fontSize: 11,
-          }}
-        >
-          Manage audiences →
-        </Link>
       </div>
     </aside>
   );
@@ -331,7 +278,7 @@ function ChatRow({
         display: "flex",
         flexDirection: "column",
         gap: 2,
-        transition: "background 120ms ease",
+        transition: "background 160ms cubic-bezier(0.215, 0.61, 0.355, 1)",
         boxShadow: active
           ? "0 0 0 1px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)"
           : "none",
@@ -398,6 +345,88 @@ function ChatRow({
       >
         ×
       </button>
+    </div>
+  );
+}
+
+function AudienceRow({
+  audience,
+  active,
+  ready,
+  onClick,
+}: {
+  audience: AudienceSummary;
+  active: boolean;
+  ready: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={ready ? onClick : undefined}
+      onKeyDown={(e) => {
+        if (!ready) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      aria-disabled={!ready}
+      title={
+        ready
+          ? "View audience personas"
+          : `${audience.status} — wait for ready`
+      }
+      style={{
+        padding: "8px 10px",
+        borderRadius: 8,
+        background: active ? "var(--surface)" : "transparent",
+        cursor: ready ? "pointer" : "not-allowed",
+        display: "flex",
+        flexDirection: "column",
+        gap: 2,
+        transition: "background 160ms cubic-bezier(0.215, 0.61, 0.355, 1)",
+        boxShadow: active
+          ? "0 0 0 1px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)"
+          : "none",
+        opacity: ready ? 1 : 0.6,
+      }}
+      onMouseEnter={(e) => {
+        if (ready && !active) {
+          (e.currentTarget as HTMLDivElement).style.background = "var(--surface)";
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!active) {
+          (e.currentTarget as HTMLDivElement).style.background = "transparent";
+        }
+      }}
+    >
+      <span
+        style={{
+          fontSize: 13,
+          color: ready ? "var(--text-primary)" : "var(--text-tertiary)",
+          fontWeight: active ? 500 : 400,
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {audience.name}
+      </span>
+      <span
+        className="tabular-nums"
+        style={{
+          fontFamily: "var(--font-data), monospace",
+          fontSize: 10,
+          letterSpacing: "0.04em",
+          color: ready ? "var(--text-tertiary)" : "var(--accent)",
+          textTransform: "uppercase",
+        }}
+      >
+        {ready ? `${audience.row_count ?? 0} personas` : audience.status}
+      </span>
     </div>
   );
 }
