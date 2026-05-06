@@ -50,12 +50,17 @@ export default function ReactionSwarm({
   const [reduced, setReduced] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(mq.matches);
+    const raf = window.requestAnimationFrame(() => {
+      setMounted(true);
+      setReduced(mq.matches);
+    });
     const handle = (e: MediaQueryListEvent) => setReduced(e.matches);
     mq.addEventListener("change", handle);
-    return () => mq.removeEventListener("change", handle);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      mq.removeEventListener("change", handle);
+    };
   }, []);
 
   const isDark = theme === "dark";

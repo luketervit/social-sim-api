@@ -32,13 +32,7 @@ SUPABASE_SERVICE_ROLE_KEY=sb_secret_xxx
 supabase db push
 ```
 
-4. Seed the audiences:
-
-```bash
-npm run seed
-```
-
-5. Start the dev server:
+4. Start the dev server:
 
 ```bash
 npm run dev
@@ -46,34 +40,29 @@ npm run dev
 
 ## API Usage
 
-### Get an API Key
+### Upload an Audience
 
 ```bash
-curl -X POST http://localhost:3000/api/v1/keys \
-  -H "Content-Type: application/json" \
-  -d '{"email": "you@example.com"}'
+curl -X POST http://localhost:3000/api/v1/audiences \
+  -H "Cookie: your_session_cookie" \
+  -F "platform=twitter" \
+  -F "name=Beta Testers" \
+  -F "file=@./audience.csv"
 ```
 
 ### Run a Simulation
 
 ```bash
-curl -N -X POST http://localhost:3000/api/v1/simulate \
-  -H "x-api-key: ssim_your_key" \
+curl -X POST http://localhost:3000/api/v1/simulate \
+  -H "Cookie: your_session_cookie" \
   -H "Content-Type: application/json" \
   -d '{
-    "audience_id": "toxic_gamers",
+    "audienceId": "uuid-from-upload",
     "platform": "twitter",
-    "input": "We are proud to announce NFTs in our next game!"
+    "input": "We are sunsetting the free tier next month.",
+    "personaCap": 25
   }'
 ```
-
-### Available Audiences
-
-- `toxic_gamers` - Hardcore gaming community
-- `genz` - Gen Z social media users
-- `engineers` - Software engineering community
-- `small_town` - Small town community
-- `company_internal` - Corporate internal comms
 
 ### Platforms
 
@@ -84,5 +73,6 @@ curl -N -X POST http://localhost:3000/api/v1/simulate \
 ## Frontend
 
 - `/` - Landing page
-- `/keys` - API key generation
-- `/docs` - Interactive documentation
+- `/docs` - Product documentation
+- `/waitlist` - Early access flow
+- `/dashboard` - Audience upload and simulation UI

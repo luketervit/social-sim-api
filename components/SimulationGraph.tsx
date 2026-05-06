@@ -345,15 +345,21 @@ export default function SimulationGraph({
   const showingAllRounds = viewMode === "all";
 
   useEffect(() => {
-    setIsMounted(true);
+    const raf = window.requestAnimationFrame(() => setIsMounted(true));
+    return () => window.cancelAnimationFrame(raf);
   }, []);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReducedMotion(mediaQuery.matches);
+    const raf = window.requestAnimationFrame(() => {
+      setReducedMotion(mediaQuery.matches);
+    });
     const handleChange = (event: MediaQueryListEvent) => setReducedMotion(event.matches);
     mediaQuery.addEventListener("change", handleChange);
-    return () => mediaQuery.removeEventListener("change", handleChange);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      mediaQuery.removeEventListener("change", handleChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -368,10 +374,13 @@ export default function SimulationGraph({
   }, []);
 
   useEffect(() => {
-    setViewMode("all");
-    setIsPlaying(false);
-    setHoveredNodeId(null);
-    setSelectedNodeId(null);
+    const timeout = window.setTimeout(() => {
+      setViewMode("all");
+      setIsPlaying(false);
+      setHoveredNodeId(null);
+      setSelectedNodeId(null);
+    }, 0);
+    return () => window.clearTimeout(timeout);
   }, [thread]);
 
   useEffect(() => {
@@ -423,8 +432,17 @@ export default function SimulationGraph({
   }, [activeRound, graph.links, layout, showingAllRounds, visibleNodeIds]);
 
   useEffect(() => {
-    if (hoveredNodeId && !visibleNodeIds.has(hoveredNodeId)) setHoveredNodeId(null);
-    if (selectedNodeId && !visibleNodeIds.has(selectedNodeId)) setSelectedNodeId(null);
+    if (
+      (!hoveredNodeId || visibleNodeIds.has(hoveredNodeId)) &&
+      (!selectedNodeId || visibleNodeIds.has(selectedNodeId))
+    ) {
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      if (hoveredNodeId && !visibleNodeIds.has(hoveredNodeId)) setHoveredNodeId(null);
+      if (selectedNodeId && !visibleNodeIds.has(selectedNodeId)) setSelectedNodeId(null);
+    }, 0);
+    return () => window.clearTimeout(timeout);
   }, [hoveredNodeId, selectedNodeId, visibleNodeIds]);
 
   const nodeLookup = useMemo(

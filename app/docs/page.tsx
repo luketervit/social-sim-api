@@ -16,9 +16,8 @@ export default function DocsPage() {
         className="mt-2 text-[14px] leading-[1.6]"
         style={{ color: "var(--text-secondary)" }}
       >
-        Use Atharias to run audience simulations, monitor queued jobs, and
-        integrate sentiment intelligence into internal workflows or product
-        features.
+        Use Atharias to upload an audience, run private simulations, and review
+        the resulting reaction thread before you ship the real message.
       </p>
 
       <section className="mt-12">
@@ -33,34 +32,38 @@ export default function DocsPage() {
         </h2>
 
         <div className="mt-5 flex flex-col gap-6">
-          <Step number={1} title="Create an account, then request API access">
+          <Step number={1} title="Sign in and clear the beta gate">
             <p className="text-[13px] leading-[1.6]" style={{ color: "var(--text-secondary)" }}>
-              The free dashboard and playground are instant. Direct API keys are
-              still gated behind the API waitlist. Once approved, open the
-              dashboard to create your first production key.
+              Atharias currently runs through an authenticated browser session,
+              not a public API key flow. Join the waitlist, sign in once
+              approved, and use the dashboard or your own internal tooling with
+              that session cookie.
             </p>
           </Step>
 
-          <Step number={2} title="Create or list API keys">
+          <Step number={2} title="Upload an audience">
             <p className="text-[13px] leading-[1.6]" style={{ color: "var(--text-secondary)" }}>
-              API key management uses your authenticated browser session. These
-              routes are for the dashboard or your own internal tools.
+              Upload CSV, JSON, NDJSON, or a LinkedIn export ZIP. Atharias
+              creates a processing audience immediately, then synthesizes
+              personas in the background.
             </p>
             <div className="code-block mt-3">
               <pre>
-                <code>{`curl -X GET "${BASE_URL}/api/v1/keys" \\
-  -H "Cookie: your_session_cookie"
+                <code>{`curl -X POST "${BASE_URL}/api/v1/audiences" \\
+  -H "Cookie: your_session_cookie" \\
+  -F "platform=twitter" \\
+  -F "name=Beta Testers" \\
+  -F "file=@./audience.csv"
 
 → {
-  "keys": [
-    {
-      "key": "ssim_...",
-      "email": "you@company.com",
-      "credits": 0,
-      "total_tokens_used": 0,
-      "created_at": "..."
-    }
-  ]
+  "audience_id": "uuid",
+  "name": "Beta Testers",
+  "platform": "twitter",
+  "status": "processing",
+  "row_count": 184,
+  "total_rows_in_file": 184,
+  "truncated": false,
+  "text_column": "bio"
 }`}</code>
               </pre>
             </div>
@@ -69,27 +72,26 @@ export default function DocsPage() {
           <Step number={3} title="Queue a simulation">
             <p className="text-[13px] leading-[1.6]" style={{ color: "var(--text-secondary)" }}>
               Simulations are queued immediately and processed asynchronously.
-              Send your API key in `x-api-key`.
+              This route uses your authenticated session and an audience that
+              belongs to the signed-in user.
             </p>
             <div className="code-block mt-3">
               <pre>
                 <code>{`curl -X POST "${BASE_URL}/api/v1/simulate" \\
-  -H "x-api-key: ssim_your_key_here" \\
+  -H "Cookie: your_session_cookie" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "audience_id": "toxic_gamers",
+    "audienceId": "uuid-from-upload",
     "platform": "twitter",
-    "input": "We are proud to announce NFTs in our next game."
+    "input": "We are sunsetting the free tier next month.",
+    "personaCap": 25
   }'
 
 → {
-  "simulation_id": "uuid",
+  "simulationId": "uuid",
   "status": "queued",
-  "expected_messages": 1000,
-  "simulation_rounds": 10,
-  "reserved_credits": 1000,
-  "progress_messages": 0,
-  "poll_url": "/api/v1/simulate?id=uuid"
+  "personaCap": 25,
+  "reservedCredits": 250
 }`}</code>
               </pre>
             </div>
@@ -97,20 +99,22 @@ export default function DocsPage() {
 
           <Step number={4} title="Poll job status">
             <p className="text-[13px] leading-[1.6]" style={{ color: "var(--text-secondary)" }}>
-              Use the returned `simulation_id` to track progress. Completed and
+              Use the returned `simulationId` to track progress. Completed and
               failed jobs include the final thread.
             </p>
             <div className="code-block mt-3">
               <pre>
-                <code>{`curl "${BASE_URL}/api/v1/simulate?id=uuid" \\
-  -H "x-api-key: ssim_your_key_here"
+                <code>{`curl "${BASE_URL}/api/v1/simulate/uuid/status" \\
+  -H "Cookie: your_session_cookie"
 
 → {
-  "simulation_id": "uuid",
+  "id": "uuid",
   "status": "running",
-  "progress_messages": 123,
-  "expected_messages": 1000,
-  "simulation_rounds": 10
+  "platform": "twitter",
+  "input": "We are sunsetting the free tier next month.",
+  "progressMessages": 123,
+  "thread": [],
+  "aggressionScore": null
 }`}</code>
               </pre>
             </div>
@@ -131,12 +135,11 @@ export default function DocsPage() {
 
         <div className="mt-5 flex flex-col gap-4">
           <div className="panel p-4">
-            <div className="mono-label">1. Seeded Developer Audiences</div>
+            <div className="mono-label">1. Your Upload Becomes an Audience</div>
             <p className="mt-2 text-[13px] leading-[1.7]" style={{ color: "var(--text-secondary)" }}>
-              In developer mode, Atharias includes prebuilt test audiences such
-              as `toxic_gamers`, `genz`, and `engineers`. These are seeded
-              benchmark audiences so you can test the API immediately without
-              uploading your own data.
+              The current product flow is user-owned audiences. Upload your own
+              CSV, JSON, NDJSON, or LinkedIn export and Atharias stores it
+              under your account before persona synthesis begins.
             </p>
           </div>
 
@@ -176,29 +179,29 @@ export default function DocsPage() {
 
         <div className="mt-5 flex flex-col gap-4">
           <EndpointCard
-            method="GET"
-            path="/api/v1/keys"
-            detail="List API keys for the signed-in user. Requires a valid browser session."
-          />
-          <EndpointCard
             method="POST"
-            path="/api/v1/keys"
-            detail="Create a new direct API key for the signed-in user. Requires API approval and a valid browser session."
+            path="/api/v1/audiences"
+            detail="Upload a new audience with a multipart form and queue persona synthesis."
           />
           <EndpointCard
-            method="DELETE"
-            path="/api/v1/keys"
-            detail="Delete one API key belonging to the signed-in user."
+            method="GET"
+            path="/api/v1/audiences"
+            detail="List audiences belonging to the signed-in user."
+          />
+          <EndpointCard
+            method="GET"
+            path="/api/v1/audiences/[id]"
+            detail="Fetch audience status, metadata, and preview personas for one audience."
           />
           <EndpointCard
             method="POST"
             path="/api/v1/simulate"
-            detail="Queue a new simulation job using `x-api-key`."
+            detail="Queue a new simulation job using your authenticated browser session."
           />
           <EndpointCard
             method="GET"
-            path="/api/v1/simulate?id=..."
-            detail="Fetch status, progress, and final output for a queued job using `x-api-key`."
+            path="/api/v1/simulate/[id]/status"
+            detail="Fetch status, progress, and final output for one queued simulation."
           />
         </div>
       </section>
@@ -230,9 +233,10 @@ export default function DocsPage() {
           <div className="code-block rounded-none border-0">
             <pre>
               <code>{`{
-  "audience_id": "toxic_gamers",
+  "audienceId": "uuid-from-upload",
   "platform": "twitter",
-  "input": "We are proud to announce NFTs in our next game."
+  "input": "We are sunsetting the free tier next month.",
+  "personaCap": 25
 }`}</code>
             </pre>
           </div>
@@ -265,11 +269,10 @@ export default function DocsPage() {
               Audiences
             </div>
             <div className="flex flex-col">
-              <RefRow code="toxic_gamers" label="Hardcore gaming community" />
-              <RefRow code="genz" label="Gen Z social users" />
-              <RefRow code="engineers" label="Software engineering community" />
-              <RefRow code="small_town" label="Small-town community sentiment" />
-              <RefRow code="company_internal" label="Internal workplace discussion" />
+              <RefRow code="owner_user_id" label="Every audience is scoped to one signed-in user" />
+              <RefRow code="status=processing" label="Upload accepted and persona synthesis is still running" />
+              <RefRow code="status=ready" label="Audience is ready for simulations" />
+              <RefRow code="status=failed" label="Upload or synthesis failed and includes an error message" />
             </div>
           </div>
 
@@ -290,6 +293,7 @@ export default function DocsPage() {
               <RefRow code="twitter" label="Short-form, high-velocity discussion" />
               <RefRow code="slack" label="Workplace tone, internal team discussion" />
               <RefRow code="reddit" label="Longer-form anonymous discussion" />
+              <RefRow code="linkedin" label="Professional reputation and network-sensitive discussion" />
             </div>
           </div>
 
@@ -310,7 +314,7 @@ export default function DocsPage() {
               <RefRow code="queued" label="Accepted and waiting for worker capacity" />
               <RefRow code="running" label="Currently generating simulation messages" />
               <RefRow code="completed" label="Finished successfully with a final thread" />
-              <RefRow code="failed" label="Stopped early and may include refunded credits" />
+              <RefRow code="failed" label="Stopped early and includes an error message when available" />
             </div>
           </div>
         </div>
@@ -330,15 +334,15 @@ export default function DocsPage() {
         <div className="mt-5 flex flex-col gap-4">
           <ErrorCard
             code="401 Unauthorized"
-            detail="Your browser session is missing for `/api/v1/keys`, or your `x-api-key` header is missing for `/api/v1/simulate`."
+            detail="Your browser session is missing or expired."
           />
           <ErrorCard
-            code="403 Direct API access is still pending approval"
-            detail="Your account exists and can use the product, but direct API access is still on the waitlist."
+            code="403 Forbidden"
+            detail="Your account is still on the waitlist, lacks current consent, or is queued for deletion."
           />
           <ErrorCard
-            code="404 Audience not found"
-            detail="The provided `audience_id` does not match one of the seeded audiences."
+            code="404 Not Found"
+            detail="The requested audience or simulation does not belong to the signed-in user."
           />
           <ErrorCard
             code="400 Validation failed"

@@ -206,6 +206,19 @@ export default function Sidebar({
         >
           {email}
         </span>
+        {email.toLowerCase() === "luke@atharias.dev" ? (
+          <Link
+            href="/dashboard/intel"
+            style={{
+              paddingLeft: 6,
+              color: "var(--text-primary)",
+              textDecoration: "none",
+              fontSize: 11,
+            }}
+          >
+            Persona intelligence
+          </Link>
+        ) : null}
       </div>
     </aside>
   );

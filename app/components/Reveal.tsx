@@ -30,8 +30,10 @@ export default function Reveal({
     if (!el) return;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduced) {
-      setVisible(true);
-      return;
+      const raf = window.requestAnimationFrame(() => {
+        setVisible(true);
+      });
+      return () => window.cancelAnimationFrame(raf);
     }
     const io = new IntersectionObserver(
       (entries) => {

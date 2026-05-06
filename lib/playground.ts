@@ -143,23 +143,21 @@ export async function listVisibleApiKeysForUser(userId: string) {
 
 export async function listAudienceOptions(userId?: string | null) {
   const db = supabaseAdmin();
-  // Seeded audiences + (optionally) the user's ready uploads.
   const { data, error } = await db
     .from("audiences")
     .select("id, name, metadata, source, status, platform, row_count, owner_user_id")
-    .or(
-      userId
-        ? `source.eq.seeded,and(owner_user_id.eq.${userId},status.eq.ready)`
-        : "source.eq.seeded"
-    )
-    .order("source", { ascending: true })
+    .eq("source", "uploaded")
+    .eq("status", "ready")
+    .order("created_at", { ascending: false })
     .order("name", { ascending: true });
 
   if (error) {
     throw error;
   }
 
-  return (data ?? []) as AudienceOption[];
+  return userId
+    ? ((data ?? []).filter((row) => row.owner_user_id === userId) as AudienceOption[])
+    : ([] as AudienceOption[]);
 }
 
 export async function listSimulationsForUser(userId: string, limit = 50) {

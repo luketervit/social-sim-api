@@ -14,7 +14,7 @@ AI assistant context for the Social Simulation API (B2B Infrastructure).
 - **Agent DNA (Universal Persona Matrix):** A JSON object defining a synthetic agent's personality (e.g., reactivity baseline, brand affinity, sophistication, core values).
 - **The Ghost Shift:** The latent opinion shift of "lurkers" (the silent majority). The model tracks the specific "action threshold" where a lurker becomes angry enough to post.
 - **Environment:** The context of the simulation (e.g., `twitter` for short-form hostile, `slack` for corporate, `reddit` for long-form anonymous).
-- **Batteries-Included Audiences:** Pre-computed static JSON files containing Agent DNA for specific demographics stored in `train/` and seeded to the `audiences` table.
+- **Uploaded Audiences:** User-owned audience uploads are parsed into rows, synthesized into Agent DNA, and stored in the `audiences` table.
 
 ## Structure
 
@@ -45,7 +45,6 @@ social-sim-api/
 │   └── migrations/
 │       └── 001_initial_schema.sql  # audiences, api_keys, simulations tables
 ├── scripts/
-│   └── seed.ts                 # Seed audiences from train/ JSON files
-├── train/                      # 5 persona JSON files (~150 agents total)
+├── train/                      # Legacy research/persona fixtures used for mocked runs
 └── .env                        # Environment variables (gitignored)
 ```

@@ -77,11 +77,10 @@ export default function HeroSection() {
             maxWidth: 18 + "ch",
           }}
         >
-          Get ratioed{" "}
+          Pressure-test your message{" "}
           <span style={{ fontStyle: "italic", color: "var(--butter-deep)" }}>
-            in private
+            before it goes public
           </span>{" "}
-          first.
         </h1>
 
         <p
@@ -95,7 +94,8 @@ export default function HeroSection() {
             lineHeight: 1.4,
           }}
         >
-          Then ship it like nothing happened.
+          Run launches, pricing changes, and internal memos through a synthetic
+          audience before the real crowd reacts.
         </p>
 
         <div

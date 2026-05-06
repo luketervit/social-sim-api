@@ -48,17 +48,21 @@ export default function OnboardingModal({
   const [closing, setClosing] = useState(false);
 
   useEffect(() => {
+    let timeout = 0;
     if (forceOpen) {
-      setOpen(true);
-      return;
+      timeout = window.setTimeout(() => setOpen(true), 0);
+      return () => window.clearTimeout(timeout);
     }
     if (typeof window === "undefined") return;
     try {
       const seen = window.localStorage.getItem(ONBOARDING_KEY);
-      if (!seen) setOpen(true);
+      if (!seen) {
+        timeout = window.setTimeout(() => setOpen(true), 0);
+      }
     } catch {
-      setOpen(true);
+      timeout = window.setTimeout(() => setOpen(true), 0);
     }
+    return () => window.clearTimeout(timeout);
   }, [forceOpen]);
 
   // Lock body scroll while open.

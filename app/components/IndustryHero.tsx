@@ -23,8 +23,10 @@ export default function IndustryHero({ config }: { config: IndustryHeroConfig })
   useEffect(() => {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduced) {
-      setCounts(config.sentiment);
-      return;
+      const raf = requestAnimationFrame(() => {
+        setCounts(config.sentiment);
+      });
+      return () => cancelAnimationFrame(raf);
     }
     const start = performance.now();
     const duration = 2200;
