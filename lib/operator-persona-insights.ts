@@ -83,6 +83,26 @@ interface PersonaRow {
 export interface OperatorPersonaInsights {
   ownerEmail: string;
   generatedAt: string;
+  personas: Array<{
+    id: string;
+    audienceId: string;
+    audienceName: string;
+    platform: string;
+    archetype: string;
+    family: string;
+    seniority: string;
+    coreValues: string[];
+    reactivity: number;
+    sophistication: number;
+    affinity: number;
+  }>;
+  filterOptions: {
+    audiences: Array<{ id: string; name: string; count: number; platform: string }>;
+    platforms: string[];
+    families: string[];
+    seniority: string[];
+    values: string[];
+  };
   totals: {
     audiences: number;
     personas: number;
@@ -463,9 +483,44 @@ export async function loadOperatorPersonaInsights(): Promise<OperatorPersonaInsi
     }))
     .sort((a, b) => b.count - a.count);
 
+  const exportedPersonas = personaRows.map((row) => {
+    const family = classifyFamily(row.persona);
+    const seniority = classifySeniority(row.persona);
+    return {
+      id: row.persona.id,
+      audienceId: row.audienceId,
+      audienceName: row.audienceName,
+      platform: row.platform,
+      archetype: row.persona.archetype.trim() || "Unlabelled",
+      family,
+      seniority,
+      coreValues: row.persona.core_values
+        .map((value) => value.trim().toLowerCase())
+        .filter((value) => value.length > 0 && value !== "position"),
+      reactivity: round(row.persona.reactivity_baseline),
+      sophistication: round(row.persona.sophistication),
+      affinity: round(row.persona.brand_affinity),
+    };
+  });
+
   return {
     ownerEmail: OPERATOR_EMAIL,
     generatedAt: new Date().toISOString(),
+    personas: exportedPersonas,
+    filterOptions: {
+      audiences: audienceInsights.map((audience) => ({
+        id: audience.id,
+        name: audience.name,
+        count: audience.count,
+        platform: audience.platform,
+      })),
+      platforms: Array.from(
+        new Set(exportedPersonas.map((persona) => persona.platform))
+      ).sort(),
+      families: families.map((family) => family.label),
+      seniority: seniority.map((entry) => entry.label),
+      values: topValues.map((entry) => entry.label),
+    },
     totals: {
       audiences: audiences.length,
       personas: totalPersonas,
