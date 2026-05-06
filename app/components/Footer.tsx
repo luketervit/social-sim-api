@@ -7,7 +7,6 @@ const LINK_GROUPS = [
     title: "Product",
     links: [
       { label: "Playground", href: "/#playground" },
-      { label: "Docs", href: "/docs" },
     ],
   },
   {

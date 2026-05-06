@@ -18,7 +18,7 @@ export default function WaitlistPage() {
     const supabase = createSupabaseBrowser();
     // No product behind the waitlist yet — generate a throwaway password so
     // Supabase auth can record the email. Users won't sign in anywhere.
-    const throwawayPassword = `${crypto.randomUUID()}-${crypto.randomUUID()}`;
+    const throwawayPassword = crypto.randomUUID();
     const { data, error } = await supabase.auth.signUp({
       email,
       password: throwawayPassword,

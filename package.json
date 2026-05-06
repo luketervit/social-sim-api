@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "seed": "tsx --env-file=.env scripts/seed.ts",
     "worker": "tsx --env-file=.env scripts/worker.ts",
-    "mock-runs": "tsx --env-file=.env scripts/mock-runs.ts"
+    "mock-runs": "tsx --env-file=.env scripts/mock-runs.ts",
+    "grant": "tsx --env-file=.env scripts/grant-access.ts"
   },
   "keywords": [],
   "author": "",

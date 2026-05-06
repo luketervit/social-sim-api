@@ -64,9 +64,9 @@ export default async function WaitlistPendingPage() {
           >
             {user.email}
           </span>{" "}
-          is approved for early access in batches. We&apos;ll email you the
-          moment your seat is ready, and you&apos;ll be able to upload any CSV
-          of your audience and run simulations on it.
+          is on the list for early access. When your seat is ready, we&apos;ll
+          email you a link to set a password — then you can upload any CSV of
+          your audience and run simulations on it.
         </p>
 
         <div
@@ -125,9 +125,6 @@ export default async function WaitlistPendingPage() {
         <div style={{ marginTop: 28, display: "flex", gap: 12, flexWrap: "wrap" }}>
           <Link href="/" className="btn-secondary">
             Back to home
-          </Link>
-          <Link href="/docs" className="btn-secondary">
-            Read the docs
           </Link>
         </div>
       </div>
