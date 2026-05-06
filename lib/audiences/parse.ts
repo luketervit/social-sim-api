@@ -1,6 +1,5 @@
 import { parse } from "csv-parse/sync";
 
-export const MAX_AUDIENCE_ROWS = 2000;
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const MIN_TEXT_CHARS = 8;
 export const MAX_TEXT_CHARS = 1500;
@@ -104,7 +103,6 @@ function buildRowsForKnownColumn(
       text,
       source_id: sourceId && sourceId.length > 0 ? sourceId : undefined,
     });
-    if (rows.length >= MAX_AUDIENCE_ROWS) break;
   }
 
   return {
@@ -150,7 +148,6 @@ function buildRowsForSynthetic(
       source_id: sourceId && sourceId.length > 0 ? sourceId : undefined,
       fields,
     });
-    if (rows.length >= MAX_AUDIENCE_ROWS) break;
   }
 
   return {

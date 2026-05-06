@@ -1895,7 +1895,7 @@ function UploadDropzone({
           letterSpacing: "0.04em",
         }}
       >
-        Up to 10 MB · 2,000 rows · any CSV — we pick the useful columns
+        Up to 10 MB · any CSV — we pick the useful columns
       </div>
       {hint ? (
         <div

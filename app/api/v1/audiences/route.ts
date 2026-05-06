@@ -2,11 +2,7 @@ import { NextRequest, after } from "next/server";
 import { randomUUID } from "node:crypto";
 import { createServerClient } from "@supabase/ssr";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import {
-  MAX_UPLOAD_BYTES,
-  MAX_AUDIENCE_ROWS,
-  parseUpload,
-} from "@/lib/audiences/parse";
+import { MAX_UPLOAD_BYTES, parseUpload } from "@/lib/audiences/parse";
 import { processAudienceUpload } from "@/lib/audiences/process";
 
 export const maxDuration = 300;
@@ -121,7 +117,6 @@ export async function POST(request: NextRequest) {
       synthetic: parsed.synthetic,
       total_rows_in_file: parsed.total_rows_in_file,
       truncated: parsed.truncated,
-      max_rows: MAX_AUDIENCE_ROWS,
     },
     personas: [],
     owner_user_id: user.id,

@@ -257,7 +257,7 @@ export default function AudiencesClient({ initialAudiences }: AudiencesClientPro
                   marginTop: 6,
                 }}
               >
-                Max 10 MB · up to 2,000 rows · any CSV — we&apos;ll pick the best text column or combine fields
+                Max 10 MB · any CSV — we&apos;ll pick the best text column or combine fields
               </div>
             </div>
           )}
