@@ -51,20 +51,21 @@ export default function PrivacyPage() {
         </p>
         <p>
           <strong>From your uploaded data:</strong> when you upload a LinkedIn
-          export, we parse it on the server. We extract role/title information
-          per row to derive an anonymized persona archetype. Role text is
-          run through a strip step that removes the company name and any
-          parenthetical identifiers before storage.
+          export or another audience file you control, we parse it on the
+          server. We extract text fields needed to derive anonymized persona
+          archetypes. Role text is run through a strip step that removes the
+          company name and any parenthetical identifiers before storage.
         </p>
         <p>
-          <strong>From your connections (third parties):</strong> we read
-          their role and title fields only. We do <strong>not</strong> persist
-          their names, email addresses, or company identifiers on derived
-          personas. We do <strong>not</strong> store the message content from
-          messages they sent you. If your export includes a connection&rsquo;s
-          URL we hash it with a per-application secret salt, store only the
-          hash, and use it to deduplicate the same connection across multiple
-          users&rsquo; uploads. The original URL is discarded.
+          <strong>From third parties represented in your upload:</strong> we
+          may read fields like role, title, employer, location, and other
+          text columns needed to synthesize personas from the uploaded file. We
+          do <strong>not</strong> persist names, email addresses, or company
+          identifiers on derived personas. We do <strong>not</strong> store the
+          message content from messages third parties sent you. If your upload
+          includes a profile URL we hash it with a per-application secret salt,
+          store only the hash, and use it to deduplicate the same person across
+          multiple users&rsquo; uploads. The original URL is discarded.
         </p>
       </Section>
 

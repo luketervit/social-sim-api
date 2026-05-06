@@ -45,23 +45,26 @@ export default function TermsPage() {
       <Section title="1. What Atharias is">
         <p>
           Atharias is a private-beta tool that turns the audience you upload
-          (currently your LinkedIn data export) into a set of anonymized agents
-          you can run post drafts and content variations through, to predict
-          how members of your network are likely to react.
+          into a set of anonymized agents you can run post drafts and content
+          variations through, to predict how members of that audience are
+          likely to react.
         </p>
         <p>
-          You upload data you control. We process it into anonymized personas.
-          The personas are tied to your account and used to power simulations
-          you run.
+          You upload data you control: this may include your own LinkedIn
+          export or other customer, prospect, community, or internal audience
+          datasets that you have the right to use. We process that data into
+          anonymized personas tied to your account and used to power the
+          simulations you run.
         </p>
       </Section>
 
       <Section title="2. Your data, your responsibility">
         <p>
           By uploading data to Atharias you confirm that you have the right to
-          do so. You may upload your own LinkedIn export. Do not upload
-          anyone else&rsquo;s export, scraped data, or data you obtained
-          through means that violate the source platform&rsquo;s terms.
+          do so. You may upload your own LinkedIn export and other datasets you
+          lawfully control. Do not upload anyone else&rsquo;s export, scraped
+          data, or data you obtained through means that violate the source
+          platform&rsquo;s terms.
         </p>
         <p>
           If you suspect any data you uploaded was obtained improperly, email{" "}
@@ -72,10 +75,11 @@ export default function TermsPage() {
 
       <Section title="3. How we treat your connections’ data">
         <p>
-          When you upload your LinkedIn export, the file contains information
-          about your connections (names, roles, company, sometimes email).
-          Atharias processes that data to derive role-level archetypes — for
-          example, &ldquo;Founder, vocal, leans skeptical of bold claims.&rdquo;{" "}
+          Some uploads, including LinkedIn exports, may contain information
+          about third parties such as connections, customers, teammates, or
+          community members. Atharias processes that data to derive role-level
+          archetypes — for example, &ldquo;Founder, vocal, leans skeptical of
+          bold claims.&rdquo;{" "}
           <strong>
             We strip names, emails, company identifiers, and message bodies
             from non-uploader parties before anything is persisted as a
@@ -156,8 +160,8 @@ export default function TermsPage() {
       <Section title="8. Changes">
         <p>
           We may update these terms. If we make a material change we will
-          re-prompt for consent on next sign-in. The current version is shown
-          at the top of this page.
+          re-prompt for consent before further uploads. The current version is
+          shown at the top of this page.
         </p>
       </Section>
 

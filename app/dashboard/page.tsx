@@ -1,11 +1,14 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import {
+  CURRENT_CONSENT_VERSION,
   ensureOperatorAccount,
   getOperatorAccountByUserId,
+  hasCurrentConsent,
 } from "@/lib/operator-accounts";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { listChatsForUser } from "@/lib/chats";
+import ConsentGate from "./ConsentGate";
 import DashboardClient, { type AudienceSummary } from "./client";
 import type { ChatState, Platform, RunMode, VariantRun } from "./types";
 
@@ -27,6 +30,10 @@ export default async function DashboardPage() {
 
   if (account.waitlist) {
     redirect("/waitlist/pending");
+  }
+
+  if (!hasCurrentConsent(account)) {
+    return <ConsentGate consentVersion={CURRENT_CONSENT_VERSION} />;
   }
 
   const db = supabaseAdmin();
