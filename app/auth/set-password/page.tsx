@@ -155,15 +155,15 @@ export default function SetPasswordPage() {
                   lineHeight: 1.55,
                 }}
               >
-                This invite link has expired or already been used. Reply to
-                your invite email and we&apos;ll send a fresh one.
+                This password-reset link has expired or already been used.
+                Request a fresh one from the reset password page.
               </p>
               <Link
-                href="/login"
+                href="/reset-password"
                 className="btn-secondary"
                 style={{ marginTop: 18, display: "inline-flex" }}
               >
-                Go to sign in
+                Reset password
               </Link>
             </div>
           ) : (
