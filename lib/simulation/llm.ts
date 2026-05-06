@@ -155,6 +155,43 @@ export class SimulationCapacityError extends Error {
   }
 }
 
+function isStructuredOutputCompatibilityError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  return (
+    message.includes("response_format") ||
+    message.includes("json_schema") ||
+    message.includes("structured output") ||
+    message.includes("unsupported parameter") ||
+    message.includes("require_parameters")
+  );
+}
+
+async function createCompletion(
+  modelToUse: string,
+  systemPrompt: string,
+  userPrompt: string,
+  structured: boolean
+) {
+  const payload: Record<string, unknown> = {
+    model: modelToUse,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    max_tokens: DEFAULT_MAX_TOKENS,
+    temperature: DEFAULT_TEMPERATURE,
+    frequency_penalty: 0.1,
+  };
+
+  if (structured) {
+    payload.response_format = {
+      type: "json_object",
+    };
+  }
+
+  return getClient().chat.completions.create(payload as never);
+}
+
 export async function generateReply(
   systemPrompt: string,
   userPrompt: string,
@@ -165,16 +202,25 @@ export async function generateReply(
 
   while (true) {
     try {
-      const response = await getClient().chat.completions.create({
-        model: modelToUse,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        max_tokens: DEFAULT_MAX_TOKENS,
-        temperature: DEFAULT_TEMPERATURE,
-        frequency_penalty: 0.1,
-      });
+      let response: Awaited<ReturnType<typeof createCompletion>>;
+      try {
+        response = await createCompletion(
+          modelToUse,
+          systemPrompt,
+          userPrompt,
+          true
+        );
+      } catch (structuredError) {
+        if (!isStructuredOutputCompatibilityError(structuredError)) {
+          throw structuredError;
+        }
+        response = await createCompletion(
+          modelToUse,
+          systemPrompt,
+          userPrompt,
+          false
+        );
+      }
 
       return {
         content: response.choices[0]?.message?.content?.trim() || "(no response)",

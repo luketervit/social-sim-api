@@ -50,7 +50,7 @@ function anonymiseRole(rawRole: string): string {
   // almost always a company name and would leak identity.
   let cleaned = rawRole.replace(/\s+/g, " ").trim();
   cleaned = cleaned.split(/\s+(?:at|@)\s+/i)[0] ?? cleaned;
-  cleaned = cleaned.split(/\s*[|·•—–-]\s*/)[0] ?? cleaned;
+  cleaned = cleaned.split(/\s+[|·•—–-]\s+/)[0] ?? cleaned;
   cleaned = cleaned.replace(/\s*\([^)]*\)\s*/g, " ").trim();
   return cleaned.slice(0, 60);
 }
@@ -130,6 +130,7 @@ const STOPWORDS = new Set([
   "last","good","bad","im","ive","ill","its","dont","didnt","cant","wont","theyre",
   "youre","were","weve","theyll","thats","youll","ya","yall","oh","ok","yeah",
   "wow","huh","ugh","lmao","lol","rofl","tbh","fr","ngl","imo",
+  "position","title","headline","role","bio","description","current","company",
 ]);
 
 function pick(map: Record<string, number> | undefined, key: string): number {
@@ -162,6 +163,19 @@ function topKeywords(text: string, limit = 3): string[] {
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
+}
+
+function topLabel(map: Record<string, number> | undefined): string | null {
+  if (!map) return null;
+  let bestLabel: string | null = null;
+  let bestScore = -1;
+  for (const [label, score] of Object.entries(map)) {
+    if (score > bestScore) {
+      bestLabel = label;
+      bestScore = score;
+    }
+  }
+  return bestLabel;
 }
 
 /**
@@ -207,7 +221,11 @@ export function synthesizePersona(
   let brandAffinity = 0;
   const political = scores.political;
   const sentimentDelta = sentimentMap
-    ? clamp(2 * (sentimentMap["positive"] ?? 0) - 1, -1, 1)
+    ? clamp(
+        (sentimentMap["positive"] ?? 0) - (sentimentMap["negative"] ?? 0),
+        -1,
+        1
+      )
     : 0;
   if (political) {
     const right = political["right"] ?? 0;
@@ -258,6 +276,11 @@ export function synthesizePersona(
     sophistication,
     brandAffinity,
     keywords,
+    aggression,
+    sentiment: topLabel(scores.sentiment),
+    emotion: emotionLabel,
+    political: topLabel(scores.political),
+    formality: topLabel(scores.formality),
   });
 
   return {
@@ -307,6 +330,11 @@ interface PersonaPromptInput {
   sophistication: number;
   brandAffinity: number;
   keywords: string[];
+  aggression: number;
+  sentiment: string | null;
+  emotion: string | null;
+  political: string | null;
+  formality: string | null;
 }
 
 function buildAnonymousPersonaPrompt(input: PersonaPromptInput): string {
@@ -319,6 +347,19 @@ function buildAnonymousPersonaPrompt(input: PersonaPromptInput): string {
   lines.push(`Tone: ${describeReactivity(input.reactivity)}.`);
   lines.push(`${capitalize(describeSophistication(input.sophistication))}.`);
   lines.push(`Disposition: ${describeBrandAffinity(input.brandAffinity)}.`);
+  lines.push(`Conflict style: ${describeAggression(input.aggression)}.`);
+
+  const emotion = describeEmotion(input.emotion);
+  if (emotion) lines.push(`Emotional register: ${emotion}.`);
+
+  const politics = describePolitical(input.political);
+  if (politics) lines.push(`Worldview: ${politics}.`);
+
+  const sentiment = describeSentiment(input.sentiment);
+  if (sentiment) lines.push(`Default reaction pattern: ${sentiment}.`);
+
+  const formality = describeFormality(input.formality);
+  if (formality) lines.push(`Register: ${formality}.`);
 
   if (input.keywords.length > 0) {
     lines.push(`You care about: ${input.keywords.slice(0, 3).join(", ")}.`);
@@ -333,4 +374,68 @@ function buildAnonymousPersonaPrompt(input: PersonaPromptInput): string {
 
 function capitalize(s: string): string {
   return s.length === 0 ? s : s[0].toUpperCase() + s.slice(1);
+}
+
+function describeAggression(a: number): string {
+  if (a >= 0.75) return "quick to escalate, mocking, and openly combative";
+  if (a >= 0.55) return "sharp, willing to argue, and not especially polite";
+  if (a >= 0.35) return "firm but selective about picking fights";
+  if (a >= 0.15) return "mostly measured unless something really irritates you";
+  return "low-drama and rarely looking for conflict";
+}
+
+function describeEmotion(label: string | null): string | null {
+  if (!label) return null;
+  switch (label.toLowerCase()) {
+    case "anger":
+      return "easily irritated and inclined to read posts as provocation";
+    case "optimism":
+      return "energized by momentum and willing to give ideas the benefit of the doubt";
+    case "joy":
+      return "warm, approving, and happy to reward things that feel smart or generous";
+    case "sadness":
+      return "somber, wary, and sensitive to harm, loss, or neglect";
+    default:
+      return `${label.toLowerCase()}-tinged in how you react`;
+  }
+}
+
+function describePolitical(label: string | null): string | null {
+  if (!label) return null;
+  switch (label.toLowerCase()) {
+    case "left":
+      return "skeptical of concentrated power, alert to fairness, labor, and harm";
+    case "right":
+      return "sensitive to status, competence, order, and overreach";
+    case "center":
+      return "pragmatic, incremental, and suspicious of ideological overstatement";
+    default:
+      return null;
+  }
+}
+
+function describeSentiment(label: string | null): string | null {
+  if (!label) return null;
+  switch (label.toLowerCase()) {
+    case "positive":
+      return "you naturally look for upside before you look for flaws";
+    case "negative":
+      return "you instinctively notice weaknesses, inconsistencies, and hidden costs";
+    case "neutral":
+      return "you hold judgment until enough specifics are on the table";
+    default:
+      return null;
+  }
+}
+
+function describeFormality(label: string | null): string | null {
+  if (!label) return null;
+  switch (label.toLowerCase()) {
+    case "formal":
+      return "more polished than chatty; you phrase things deliberately";
+    case "informal":
+      return "plain-spoken, casual, and comfortable with internet shorthand";
+    default:
+      return null;
+  }
 }

@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { classifyTexts } from "./classify";
 import { synthesizePersona } from "./synthesize";
+import { enrichPersonasWithModel } from "./persona-writer";
 import { MAX_TEXT_CHARS, MIN_TEXT_CHARS, type ParsedRow } from "./parse";
 import { selectUsefulColumns } from "./select-columns";
 import { routeAudience } from "@/lib/models/router";
@@ -127,9 +128,18 @@ export async function processAudienceUpload({
     const texts = workingRows.map((r) => r.text);
     const scored = await classifyTexts(texts, classifierIds);
 
-    const personas = workingRows.map((row, i) =>
+    const basePersonas = workingRows.map((row, i) =>
       synthesizePersona(audienceId, row, scored[i])
     );
+    const personas =
+      process.env.ENABLE_PERSONA_WRITER === "true"
+        ? await enrichPersonasWithModel(
+            platform,
+            workingRows,
+            basePersonas,
+            scored
+          )
+        : basePersonas;
 
     // Surface the column selection alongside the existing routing decision so
     // the audience tile's "Routing" disclosure shows what got picked and why.

@@ -1,75 +1,43 @@
-// Generalised classifier dispatcher. Runs whichever HuggingFace classifiers
-// the router selected, returns a per-row score record keyed by classifier
-// field. The downstream synthesizer reads only the fields that are present.
+import OpenAI from "openai";
+import {
+  classifiersByIds,
+  type ClassifierField,
+  type ClassifierModel,
+} from "@/lib/models/registry";
+import { getOpenRouterEnv } from "@/lib/env";
 
-import { classifiersByIds, type ClassifierField, type ClassifierModel } from "@/lib/models/registry";
-
-const HF_API_URL = "https://api-inference.huggingface.co/models";
-const BATCH_SIZE = 32;
+const MODEL =
+  process.env.OPENROUTER_CLASSIFIER_MODEL || "google/gemini-2.5-flash";
+const BATCH_SIZE = 20;
+const MAX_RETRIES = 2;
 const REQUEST_TIMEOUT_MS = 20_000;
 
 export type RowScores = Partial<Record<ClassifierField, Record<string, number>>>;
 
-interface HFLabelScore {
-  label: string;
-  score: number;
+interface FieldInference {
+  label: string | null;
+  confidence: number | null;
 }
 
-function normaliseLabel(label: string): string {
-  const lower = label.toLowerCase();
-  // CardiffNLP returns LABEL_0/1/2 for some checkpoints
-  if (lower === "label_0") return "negative";
-  if (lower === "label_1") return "neutral";
-  if (lower === "label_2") return "positive";
-  return lower;
+interface RowInference {
+  sentiment?: FieldInference | null;
+  emotion?: FieldInference | null;
+  offensive?: FieldInference | null;
+  hate?: FieldInference | null;
+  political?: FieldInference | null;
+  toxicity?: FieldInference | null;
+  formality?: FieldInference | null;
 }
 
-function rowToMap(row: HFLabelScore[]): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const s of row) {
-    out[normaliseLabel(s.label)] = s.score;
-  }
-  return out;
-}
+let _client: OpenAI | null = null;
 
-async function callHFBatch(
-  hfModel: string,
-  inputs: string[]
-): Promise<HFLabelScore[][] | null> {
-  const apiKey = process.env.HUGGINGFACE_API_KEY;
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-  try {
-    const res = await fetch(`${HF_API_URL}/${hfModel}`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        inputs,
-        options: { wait_for_model: true },
-      }),
-      signal: controller.signal,
-    });
-
-    if (!res.ok) {
-      console.warn(`HF batch ${hfModel} failed:`, res.status);
-      return null;
-    }
-
-    const data = (await res.json()) as HFLabelScore[][] | HFLabelScore[];
-    if (Array.isArray(data) && data.length > 0 && !Array.isArray(data[0])) {
-      return [data as HFLabelScore[]];
-    }
-    return data as HFLabelScore[][];
-  } catch (err) {
-    console.warn(`HF batch ${hfModel} threw:`, err instanceof Error ? err.message : err);
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
+function getClient(): OpenAI {
+  if (_client) return _client;
+  _client = new OpenAI({
+    baseURL: "https://openrouter.ai/api/v1",
+    apiKey: getOpenRouterEnv().OPENROUTER_API_KEY,
+  });
+  return _client;
 }
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -78,10 +46,257 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
+function clampConfidence(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return Math.max(0, Math.min(1, value));
+}
+
+function normaliseLabel(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim().toLowerCase();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function labelsForField(field: ClassifierField): string[] {
+  switch (field) {
+    case "sentiment":
+      return ["positive", "neutral", "negative"];
+    case "emotion":
+      return ["anger", "joy", "optimism", "sadness", "none"];
+    case "offensive":
+      return ["offensive", "not_offensive"];
+    case "hate":
+      return ["hate", "not_hate"];
+    case "political":
+      return ["left", "center", "right", "none"];
+    case "toxicity":
+      return ["toxic", "not_toxic"];
+    case "formality":
+      return ["formal", "informal", "neutral"];
+  }
+}
+
+function buildSchema(fields: ClassifierField[]) {
+  const fieldProps: Record<string, unknown> = {};
+  for (const field of fields) {
+    fieldProps[field] = {
+      anyOf: [
+        {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            label: {
+              type: "string",
+              enum: labelsForField(field),
+            },
+            confidence: {
+              type: "number",
+              minimum: 0,
+              maximum: 1,
+            },
+          },
+          required: ["label", "confidence"],
+        },
+        {
+          type: "null",
+        },
+      ],
+    };
+  }
+
+  return {
+    name: "audience_trait_batch",
+    strict: true,
+    schema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        rows: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: fieldProps,
+            required: fields,
+          },
+        },
+      },
+      required: ["rows"],
+    },
+  } as const;
+}
+
+function buildPrompt(fields: ClassifierField[], batch: string[]) {
+  return `Infer latent audience traits for each row of text. The inputs may be LinkedIn job titles, bios, customer notes, short comments, or other thin audience descriptors.
+
+You are NOT classifying the literal text tone alone. You are inferring the likely communication style and reaction posture of the person represented by each row.
+
+Field guidance:
+- sentiment: baseline stance toward bold claims or product announcements
+- emotion: likely default emotional register
+- offensive: likelihood of blunt or abrasive wording
+- hate: likelihood of identity-targeted hostility; use sparingly
+- political: only if there is a clear ideological signal, otherwise none
+- toxicity: likelihood of hostile or corrosive discourse
+- formality: expected register if this person posts publicly
+
+Rules:
+- Return one row result per input row, in the same order.
+- If evidence is weak, still make the least speculative estimate and use low confidence.
+- For political, use "none" unless the signal is genuinely present.
+- For hate, default to "not_hate" unless there is a strong reason otherwise.
+- Do not output prose.
+
+Requested fields: ${fields.join(", ")}
+
+Rows:
+${batch.map((text, index) => `${index + 1}. ${JSON.stringify(text)}`).join("\n")}`;
+}
+
+function parseResponse(
+  content: string,
+  fields: ClassifierField[],
+  batchLength: number
+): RowInference[] | null {
+  const raw = content.trim();
+  if (!raw) return null;
+  let parsed: unknown = null;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    const candidate =
+      fenceMatch?.[1]?.trim() ??
+      raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1);
+    if (!candidate) return null;
+    try {
+      parsed = JSON.parse(candidate);
+    } catch {
+      return null;
+    }
+  }
+
+  if (!parsed || typeof parsed !== "object") return null;
+  const rows = (parsed as { rows?: unknown }).rows;
+  if (!Array.isArray(rows) || rows.length !== batchLength) return null;
+
+  return rows.map((row) => {
+    if (!row || typeof row !== "object") return {};
+    const out: RowInference = {};
+    for (const field of fields) {
+      const value = (row as Record<string, unknown>)[field];
+      if (value === null) {
+        out[field] = null;
+        continue;
+      }
+      if (!value || typeof value !== "object") continue;
+      out[field] = {
+        label: normaliseLabel((value as { label?: unknown }).label),
+        confidence: clampConfidence((value as { confidence?: unknown }).confidence),
+      };
+    }
+    return out;
+  });
+}
+
+function fieldInferenceToMap(
+  field: ClassifierField,
+  inference: FieldInference | null | undefined
+): Record<string, number> | null {
+  if (!inference?.label) return null;
+  const confidence = inference.confidence ?? 0.5;
+  switch (field) {
+    case "sentiment":
+      return {
+        positive: inference.label === "positive" ? confidence : 0,
+        neutral: inference.label === "neutral" ? confidence : 0,
+        negative: inference.label === "negative" ? confidence : 0,
+      };
+    case "emotion":
+      if (inference.label === "none") return null;
+      return { [inference.label]: confidence };
+    case "offensive":
+      return {
+        offensive: inference.label === "offensive" ? confidence : 0,
+        not_offensive: inference.label === "not_offensive" ? confidence : 0,
+      };
+    case "hate":
+      return {
+        hate: inference.label === "hate" ? confidence : 0,
+        not_hate: inference.label === "not_hate" ? confidence : 0,
+      };
+    case "political":
+      if (inference.label === "none") return null;
+      return { [inference.label]: confidence };
+    case "toxicity":
+      return {
+        toxic: inference.label === "toxic" ? confidence : 0,
+        not_toxic: inference.label === "not_toxic" ? confidence : 0,
+      };
+    case "formality":
+      if (inference.label === "neutral") return { neutral: confidence };
+      return { [inference.label]: confidence };
+  }
+}
+
+async function inferBatch(
+  batch: string[],
+  fields: ClassifierField[]
+): Promise<RowInference[] | null> {
+  const schema = buildSchema(fields);
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    try {
+      const response = await getClient().chat.completions.create(
+        {
+          model: MODEL,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You infer audience traits for persona synthesis in a social discourse simulator.",
+            },
+            {
+              role: "user",
+              content: buildPrompt(fields, batch),
+            },
+          ],
+          temperature: 0.2,
+          max_tokens: Math.max(400, batch.length * 90),
+          response_format: {
+            type: "json_schema",
+            json_schema: schema,
+          },
+          provider: {
+            require_parameters: true,
+          },
+        } as never,
+        {
+          signal: controller.signal,
+        }
+      );
+
+      const content = response.choices[0]?.message?.content?.trim() ?? "";
+      const parsed = parseResponse(content, fields, batch.length);
+      if (parsed) return parsed;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`OpenRouter classify batch failed (${attempt + 1}/${MAX_RETRIES + 1}):`, message);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  return null;
+}
+
 /**
- * Run the chosen classifier set on every text. Returns a per-row map of
- * {field → {label → score}}. If a classifier fails, that field is omitted
- * from rows in its batch — synthesizer treats missing fields as "unknown".
+ * OpenRouter-backed trait inference. This replaces the old Hugging Face
+ * checkpoint bank with a single structured batch call that infers the same
+ * downstream fields from the uploaded rows directly.
  */
 export async function classifyTexts(
   texts: string[],
@@ -90,37 +305,25 @@ export async function classifyTexts(
   const classifiers = classifiersByIds(classifierIds);
   if (classifiers.length === 0) return texts.map(() => ({}));
 
-  // De-dupe by HF model id so we don't call the same checkpoint twice
-  // for fields that share a checkpoint.
-  const byModel = new Map<string, ClassifierModel[]>();
-  for (const c of classifiers) {
-    const list = byModel.get(c.hf_model) ?? [];
-    list.push(c);
-    byModel.set(c.hf_model, list);
-  }
-
+  const fields = Array.from(
+    new Set(classifiers.map((classifier: ClassifierModel) => classifier.field))
+  );
   const rows: RowScores[] = texts.map(() => ({}));
   const batches = chunk(texts, BATCH_SIZE);
 
   let cursor = 0;
   for (const batch of batches) {
-    // Call every distinct HF model in parallel within a chunk.
-    const results = await Promise.all(
-      Array.from(byModel.keys()).map(async (hfModel) => {
-        const out = await callHFBatch(hfModel, batch);
-        return { hfModel, out };
-      })
-    );
+    const inferred = await inferBatch(batch, fields);
+    if (!inferred) {
+      cursor += batch.length;
+      continue;
+    }
 
-    for (let i = 0; i < batch.length; i++) {
-      for (const { hfModel, out } of results) {
-        const row = out?.[i];
-        if (!row) continue;
-        const labelMap = rowToMap(row);
-        // Each classifier registered against this hfModel claims a field.
-        for (const cls of byModel.get(hfModel) ?? []) {
-          rows[cursor + i][cls.field] = labelMap;
-        }
+    for (let i = 0; i < batch.length; i += 1) {
+      const result = inferred[i] ?? {};
+      for (const field of fields) {
+        const mapped = fieldInferenceToMap(field, result[field]);
+        if (mapped) rows[cursor + i][field] = mapped;
       }
     }
     cursor += batch.length;
