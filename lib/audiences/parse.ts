@@ -1,7 +1,14 @@
 import { parse } from "csv-parse/sync";
+import {
+  ingestLinkedInConnections,
+  isLinkedInConnectionsCsv,
+} from "./linkedin";
 
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+// LinkedIn's role strings are short ("CTO", "Founder") so allow shorter
+// inputs than the generic 8-char floor.
 export const MIN_TEXT_CHARS = 8;
+export const LINKEDIN_MIN_TEXT_CHARS = 2;
 export const MAX_TEXT_CHARS = 1500;
 
 const TEXT_COLUMN_CANDIDATES = [
@@ -202,6 +209,30 @@ function parseCSV(content: string): ParsedUpload {
   }
 
   const headers = Object.keys(records[0]);
+
+  // LinkedIn `Connections.csv` is a special case: detect it explicitly and
+  // run the anonymization pipeline before any downstream code sees a name,
+  // email, or company.
+  if (isLinkedInConnectionsCsv(headers)) {
+    const ingested = ingestLinkedInConnections(records);
+    return {
+      rows: ingested.rows,
+      // The canonical text column for persona synthesis. We deliberately
+      // do not expose the original column name (which would leak format
+      // metadata like "Position") — it's normalized to "position".
+      text_column: "position",
+      // Headers exposed downstream are the anonymized subset, not the
+      // raw LinkedIn headers (which include First Name / Last Name / URL
+      // / Email Address / Company).
+      headers: ["position"],
+      // Synthetic = true so the AI column-selector treats this as a
+      // role-only row set; it will pick "position" as the useful column.
+      synthetic: true,
+      total_rows_in_file: ingested.total_input_rows,
+      truncated: ingested.dropped_rows > 0,
+    };
+  }
+
   const textColumn = pickColumn(headers, TEXT_COLUMN_CANDIDATES);
   const idColumn = pickColumn(headers, ID_COLUMN_CANDIDATES);
 

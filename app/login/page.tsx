@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabase/server";
-import { getOperatorAccountByUserId } from "@/lib/operator-accounts";
+import {
+  CURRENT_CONSENT_VERSION,
+  getOperatorAccountByUserId,
+} from "@/lib/operator-accounts";
 import LoginClient from "./client";
 
 export const dynamic = "force-dynamic";
@@ -36,5 +39,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     }
   }
 
-  return <LoginClient initialMode={mode} next={next} />;
+  return (
+    <LoginClient
+      initialMode={mode}
+      next={next}
+      consentVersion={CURRENT_CONSENT_VERSION}
+    />
+  );
 }

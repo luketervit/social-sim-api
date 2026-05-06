@@ -1,9 +1,14 @@
 import { NextRequest, after } from "next/server";
 import { randomUUID } from "node:crypto";
 import { createServerClient } from "@supabase/ssr";
+import { unzipSync, strFromU8 } from "fflate";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { MAX_UPLOAD_BYTES, parseUpload } from "@/lib/audiences/parse";
 import { processAudienceUpload } from "@/lib/audiences/process";
+import {
+  getOperatorAccountByUserId,
+  hasCurrentConsent,
+} from "@/lib/operator-accounts";
 
 export const maxDuration = 300;
 
@@ -41,6 +46,36 @@ export async function POST(request: NextRequest) {
   const user = await getUser(request);
   if (!user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Hard gate: no upload without recorded consent. The signup flow records
+  // consent on first sign-up, but accounts that signed up before consent
+  // checkboxes existed need to re-accept before they can upload.
+  let account;
+  try {
+    account = await getOperatorAccountByUserId(user.id);
+  } catch (err) {
+    console.error("Failed to load operator account:", err);
+    return Response.json(
+      { error: "Could not verify your account." },
+      { status: 500 }
+    );
+  }
+  if (account?.deletion_requested_at) {
+    return Response.json(
+      { error: "Your account is queued for deletion." },
+      { status: 403 }
+    );
+  }
+  if (!hasCurrentConsent(account)) {
+    return Response.json(
+      {
+        error:
+          "Please review and accept the latest terms before uploading. See /terms.",
+        code: "consent_required",
+      },
+      { status: 403 }
+    );
   }
 
   const contentType = request.headers.get("content-type") ?? "";
@@ -81,16 +116,77 @@ export async function POST(request: NextRequest) {
   const fallbackName = file.name.replace(/\.[^.]+$/, "") || "Custom audience";
   const name = sanitiseName(formData.get("name"), fallbackName);
 
+  // Detect LinkedIn data export ZIP (Basic_LinkedInDataExport_*.zip /
+  // Complete_LinkedInDataExport_*.zip / linkedin-export.zip / etc.) and
+  // extract Connections.csv before falling through to the generic CSV
+  // parser. Other files in the ZIP (Messages.csv, Posts.csv, etc.) are
+  // intentionally not used yet — they require their own per-file consent
+  // flow before we touch them.
+  const lowerName = file.name.toLowerCase();
+  const isZip =
+    lowerName.endsWith(".zip") ||
+    file.type === "application/zip" ||
+    file.type === "application/x-zip-compressed";
+
   let content: string;
-  try {
-    content = await file.text();
-  } catch {
-    return Response.json({ error: "Could not read file." }, { status: 400 });
+  let effectiveFileName = file.name;
+
+  if (isZip) {
+    let zipBuffer: ArrayBuffer;
+    try {
+      zipBuffer = await file.arrayBuffer();
+    } catch {
+      return Response.json(
+        { error: "Could not read ZIP file." },
+        { status: 400 }
+      );
+    }
+
+    let entries: ReturnType<typeof unzipSync>;
+    try {
+      entries = unzipSync(new Uint8Array(zipBuffer));
+    } catch (err) {
+      console.error("ZIP decode failed:", err);
+      return Response.json(
+        { error: "Could not unzip the file. Make sure it's a valid LinkedIn export ZIP." },
+        { status: 400 }
+      );
+    }
+
+    const connectionsKey = Object.keys(entries).find((name) =>
+      /(^|\/)Connections\.csv$/i.test(name)
+    );
+
+    if (!connectionsKey) {
+      return Response.json(
+        {
+          error:
+            "ZIP doesn't contain Connections.csv. Upload your LinkedIn data export ZIP, or extract Connections.csv and upload it directly.",
+        },
+        { status: 400 }
+      );
+    }
+
+    try {
+      content = strFromU8(entries[connectionsKey]);
+    } catch {
+      return Response.json(
+        { error: "Could not read Connections.csv from the ZIP." },
+        { status: 400 }
+      );
+    }
+    effectiveFileName = "Connections.csv";
+  } else {
+    try {
+      content = await file.text();
+    } catch {
+      return Response.json({ error: "Could not read file." }, { status: 400 });
+    }
   }
 
   let parsed;
   try {
-    parsed = parseUpload(content, file.name);
+    parsed = parseUpload(content, effectiveFileName);
   } catch (err) {
     return Response.json(
       { error: err instanceof Error ? err.message : "Could not parse file." },

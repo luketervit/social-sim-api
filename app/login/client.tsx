@@ -10,11 +10,16 @@ type Mode = "signin" | "signup";
 interface LoginClientProps {
   initialMode: Mode;
   next: string;
+  consentVersion: string;
 }
 
 const PASSWORD_MIN = 8;
 
-export default function LoginClient({ initialMode, next }: LoginClientProps) {
+export default function LoginClient({
+  initialMode,
+  next,
+  consentVersion,
+}: LoginClientProps) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState("");
@@ -22,15 +27,27 @@ export default function LoginClient({ initialMode, next }: LoginClientProps) {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [consentOwnData, setConsentOwnData] = useState(false);
+  const [consentAnonymized, setConsentAnonymized] = useState(false);
+  const [consentLicensing, setConsentLicensing] = useState(false);
+
+  const allConsentsAccepted =
+    consentOwnData && consentAnonymized && consentLicensing;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setInfo(null);
 
-    if (mode === "signup" && password.length < PASSWORD_MIN) {
-      setError(`Password must be at least ${PASSWORD_MIN} characters.`);
-      return;
+    if (mode === "signup") {
+      if (password.length < PASSWORD_MIN) {
+        setError(`Password must be at least ${PASSWORD_MIN} characters.`);
+        return;
+      }
+      if (!allConsentsAccepted) {
+        setError("Please accept all three consents to continue.");
+        return;
+      }
     }
 
     setLoading(true);
@@ -50,23 +67,49 @@ export default function LoginClient({ initialMode, next }: LoginClientProps) {
     }
 
     const { data, error } = await supabase.auth.signUp({ email, password });
-    setLoading(false);
     if (error) {
+      setLoading(false);
       setError(error.message);
       return;
     }
 
-    // Supabase may require email confirmation depending on project settings.
-    // If a session is returned, route via the gate; otherwise show a hint.
+    // If we have a session immediately, persist consent now. Otherwise the
+    // user has to confirm email first; we'll capture consent again on first
+    // sign-in via the gated dashboard flow (separate concern, recorded here
+    // best-effort so the audit trail starts at signup intent).
     if (data.session) {
+      try {
+        const res = await fetch("/api/v1/consent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            own_data: consentOwnData,
+            anonymized_processing: consentAnonymized,
+            aggregated_licensing: consentLicensing,
+            version: consentVersion,
+          }),
+        });
+        if (!res.ok) {
+          const payload = (await res.json().catch(() => null)) as {
+            error?: string;
+          } | null;
+          console.error("Consent recording failed:", payload?.error ?? res.status);
+        }
+      } catch (err) {
+        console.error("Consent recording failed:", err);
+      }
+
+      setLoading(false);
       router.replace(`/login?next=${encodeURIComponent(next)}`);
       router.refresh();
-    } else {
-      setInfo(
-        "Check your inbox to confirm your email, then come back and sign in."
-      );
-      setMode("signin");
+      return;
     }
+
+    setLoading(false);
+    setInfo(
+      "Check your inbox to confirm your email, then come back and sign in."
+    );
+    setMode("signin");
   }
 
   return (
@@ -236,14 +279,33 @@ export default function LoginClient({ initialMode, next }: LoginClientProps) {
               />
             </div>
 
+            {mode === "signup" ? (
+              <ConsentBlock
+                ownData={consentOwnData}
+                onOwnDataChange={setConsentOwnData}
+                anonymized={consentAnonymized}
+                onAnonymizedChange={setConsentAnonymized}
+                licensing={consentLicensing}
+                onLicensingChange={setConsentLicensing}
+              />
+            ) : null}
+
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || (mode === "signup" && !allConsentsAccepted)}
               className="btn-primary"
               style={{
                 marginTop: 6,
                 background: "var(--ink)",
                 color: "var(--butter-deep)",
+                opacity:
+                  loading || (mode === "signup" && !allConsentsAccepted)
+                    ? 0.55
+                    : 1,
+                cursor:
+                  loading || (mode === "signup" && !allConsentsAccepted)
+                    ? "not-allowed"
+                    : "pointer",
               }}
             >
               {loading
@@ -350,6 +412,141 @@ export default function LoginClient({ initialMode, next }: LoginClientProps) {
         </p>
       </div>
     </section>
+  );
+}
+
+function ConsentBlock({
+  ownData,
+  onOwnDataChange,
+  anonymized,
+  onAnonymizedChange,
+  licensing,
+  onLicensingChange,
+}: {
+  ownData: boolean;
+  onOwnDataChange: (v: boolean) => void;
+  anonymized: boolean;
+  onAnonymizedChange: (v: boolean) => void;
+  licensing: boolean;
+  onLicensingChange: (v: boolean) => void;
+}) {
+  return (
+    <div
+      style={{
+        marginTop: 4,
+        padding: "16px 18px",
+        borderRadius: 12,
+        background: "var(--bg-subtle)",
+        border: "1px solid var(--border)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "var(--font-data), monospace",
+          fontSize: 11,
+          letterSpacing: "0.1em",
+          textTransform: "uppercase",
+          color: "var(--text-tertiary)",
+          marginBottom: 2,
+        }}
+      >
+        How your data is used
+      </div>
+
+      <ConsentCheckbox
+        id="consent-own-data"
+        checked={ownData}
+        onChange={onOwnDataChange}
+      >
+        I&rsquo;m uploading my own LinkedIn data, exported from LinkedIn directly.
+        I will not upload anyone else&rsquo;s export.
+      </ConsentCheckbox>
+
+      <ConsentCheckbox
+        id="consent-anonymized"
+        checked={anonymized}
+        onChange={onAnonymizedChange}
+      >
+        I understand my connections are processed in anonymized form: names,
+        emails, and company identifiers are <strong>not</strong> stored on
+        personas. We never message my connections, and we don&rsquo;t store
+        their private message content.
+      </ConsentCheckbox>
+
+      <ConsentCheckbox
+        id="consent-licensing"
+        checked={licensing}
+        onChange={onLicensingChange}
+      >
+        I allow Atharias to use de-identified, aggregated insights to improve
+        shared models and to license those aggregates to research partners. I
+        can request deletion at any time.
+      </ConsentCheckbox>
+
+      <p
+        style={{
+          fontSize: 12,
+          color: "var(--text-tertiary)",
+          lineHeight: 1.55,
+          marginTop: 2,
+        }}
+      >
+        Read the full <Link href="/terms" style={{ color: "var(--text-primary)" }}>terms</Link>{" "}
+        and{" "}
+        <Link href="/privacy" style={{ color: "var(--text-primary)" }}>privacy policy</Link>.
+        You can request deletion any time via{" "}
+        <Link href="/privacy#delete" style={{ color: "var(--text-primary)" }}>
+          this page
+        </Link>{" "}
+        or by emailing luke@atharias.dev.
+      </p>
+    </div>
+  );
+}
+
+function ConsentCheckbox({
+  id,
+  checked,
+  onChange,
+  children,
+}: {
+  id: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <label
+      htmlFor={id}
+      style={{
+        display: "flex",
+        gap: 10,
+        alignItems: "flex-start",
+        fontSize: 13,
+        lineHeight: 1.55,
+        color: "var(--text-secondary)",
+        cursor: "pointer",
+      }}
+    >
+      <input
+        id={id}
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        style={{
+          marginTop: 3,
+          width: 16,
+          height: 16,
+          accentColor: "var(--ink, #14110f)",
+          flexShrink: 0,
+          cursor: "pointer",
+        }}
+      />
+      <span>{children}</span>
+    </label>
   );
 }
 

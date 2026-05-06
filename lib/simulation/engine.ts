@@ -6,6 +6,7 @@ import { getMessageId } from "./threading";
 import { buildSystemPrompt, buildUserPrompt } from "./prompts";
 import { generateReply } from "./llm";
 import { classifySentiment } from "./sentimentClassifier";
+import { parseStructuredReply } from "./parseStructured";
 
 type TargetSentiment = AgentMessage["sentiment"];
 
@@ -343,18 +344,22 @@ export async function* runSimulation(
           model: options?.generatorModel,
         });
         await options?.onAfterMessage?.(turn, round, reply.usage);
-        const sentiment = await classifySentiment(reply.content, turn.targetSentiment);
+        const structured = parseStructuredReply(reply.content);
+        const sentiment = await classifySentiment(structured.reaction, turn.targetSentiment);
 
         return {
           id: randomUUID(),
           round,
           agent_id: turn.persona.id,
           archetype: turn.persona.archetype,
-          message: reply.content,
+          message: structured.reaction,
           sentiment,
           reply_to: turn.replyTarget?.id ?? null,
           reply_to_agent_id: turn.replyTarget?.agent_id ?? null,
           timestamp: new Date().toISOString(),
+          reasoning: structured.reasoning,
+          objection: structured.objection,
+          what_would_change_my_mind: structured.what_would_change_my_mind,
         } satisfies AgentMessage;
       })
     );

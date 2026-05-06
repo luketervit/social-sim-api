@@ -4,6 +4,13 @@ const baseEnvSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY: z.string().min(1),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
+  /**
+   * Per-application secret used to salt profile-hash inputs so that the
+   * same LinkedIn URL produces a stable hash across uploads but cannot be
+   * reversed without the secret. Required for production; falls back to a
+   * dev-only sentinel locally so the app boots without env churn.
+   */
+  PROFILE_HASH_SALT: z.string().min(8).default("dev-only-do-not-ship"),
 });
 
 const openRouterEnvSchema = baseEnvSchema.extend({

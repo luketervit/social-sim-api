@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { AgentMessage } from "@/lib/simulation/types";
 import { buildResolvedThread, type ResolvedAgentMessage } from "@/lib/simulation/threading";
 
@@ -47,6 +48,78 @@ function formatTimestamp(platform: string, index: number) {
 /* ─── Twitter message ─── */
 function getIndent(depth: number) {
   return Math.min(depth, 5) * 26;
+}
+
+/**
+ * Compact, expandable surface for the reasoning fields captured at sim-time.
+ * Shows nothing if the agent didn't surface any structured reasoning (we
+ * never block on the model returning JSON).
+ */
+function ReasoningPanel({ msg }: { msg: AgentMessage }) {
+  const [open, setOpen] = useState(false);
+  const hasAny =
+    Boolean(msg.reasoning) ||
+    Boolean(msg.objection) ||
+    Boolean(msg.what_would_change_my_mind);
+  if (!hasAny) return null;
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          fontSize: 11,
+          letterSpacing: "0.04em",
+          textTransform: "uppercase",
+          color: "var(--text-tertiary)",
+          background: "none",
+          border: "none",
+          padding: 0,
+          cursor: "pointer",
+          fontFamily: "var(--font-data), monospace",
+        }}
+      >
+        {open ? "− why" : "+ why"}
+      </button>
+      {open ? (
+        <div
+          style={{
+            marginTop: 6,
+            padding: "8px 10px",
+            borderLeft: "2px solid var(--border)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+            fontSize: 12,
+            lineHeight: 1.5,
+            color: "var(--text-secondary)",
+          }}
+        >
+          {msg.reasoning ? (
+            <div>
+              <strong style={{ color: "var(--text-primary)" }}>Reasoning:</strong>{" "}
+              {msg.reasoning}
+            </div>
+          ) : null}
+          {msg.objection ? (
+            <div>
+              <strong style={{ color: "var(--text-primary)" }}>Objection:</strong>{" "}
+              {msg.objection}
+            </div>
+          ) : null}
+          {msg.what_would_change_my_mind ? (
+            <div>
+              <strong style={{ color: "var(--text-primary)" }}>
+                What would change my mind:
+              </strong>{" "}
+              {msg.what_would_change_my_mind}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function ReplyMeta({
@@ -159,6 +232,8 @@ function TwitterMessage({
               {msg.message}
             </p>
 
+            <ReasoningPanel msg={msg} />
+
             {/* Engagement bar */}
             <div
               className="mt-2 flex items-center gap-5"
@@ -237,6 +312,8 @@ function RedditMessage({
         >
           {msg.message}
         </p>
+
+        <ReasoningPanel msg={msg} />
 
         {/* Action bar */}
         <div
@@ -330,6 +407,8 @@ function SlackMessage({
         >
           {msg.message}
         </p>
+
+        <ReasoningPanel msg={msg} />
       </div>
     </div>
   );

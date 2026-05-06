@@ -10,6 +10,18 @@ export interface AgentMessage {
   reply_to: string | null;
   reply_to_agent_id?: string | null;
   timestamp: string;
+  /**
+   * Internal reasoning the agent surfaced for this reply. Used in the
+   * simulator UI to expand "why did this agent react this way" and as
+   * higher-quality demo material for VC pitches. Optional because some
+   * model outputs may fail JSON parsing — in that case the message is
+   * still kept (we never drop messages over a parse failure).
+   */
+  reasoning?: string | null;
+  /** What this agent would push back on, if anything. */
+  objection?: string | null;
+  /** What would change the agent's mind. */
+  what_would_change_my_mind?: string | null;
 }
 
 export interface TokenUsage {
