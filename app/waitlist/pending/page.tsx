@@ -92,7 +92,7 @@ export default async function WaitlistPendingPage() {
             {[
               "Try the public playground on the homepage",
               "Read how the simulation engine works in the docs",
-              "Reply to your invite email with the audience you want to simulate first",
+              "Email luke@atharias.dev with the audience you want to simulate first",
             ].map((item) => (
               <li
                 key={item}

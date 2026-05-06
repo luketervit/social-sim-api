@@ -64,9 +64,9 @@ export default function WaitlistPage() {
                 maxWidth: 480,
               }}
             >
-              Once you sign up, you&apos;ll be able to upload any CSV of your
-              customer data and run simulations on it for accurate results.
-              We&apos;ll email you when access opens up.
+              Drop your email and we&apos;ll save you a seat. Access is
+              rolling out by hand in small batches — when it&apos;s your turn
+              we&apos;ll reach out personally.
             </p>
 
             <div
@@ -90,9 +90,9 @@ export default function WaitlistPage() {
                 }}
               >
                 {[
-                  "Upload any CSV of your customer data",
-                  "Run simulations on your real audience",
-                  "We'll email you when access opens up",
+                  "Your seat is saved on the list",
+                  "Access rolls out by hand in small batches",
+                  "We reach out personally when it's your turn",
                 ].map((item) => (
                   <li
                     key={item}
@@ -216,7 +216,7 @@ export default function WaitlistPage() {
                     marginTop: 10,
                   }}
                 >
-                  We&apos;ll email you the moment Atharias opens up.
+                  We&apos;ll save your seat and reach out when access is ready.
                 </p>
 
                 <form
