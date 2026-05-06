@@ -27,9 +27,9 @@ Return JSON only, in this exact shape:
 {"useful": ["Column A", "Column B"], "reasoning": "one short sentence"}
 
 Rules:
-- Pick every column that helps describe what kind of person this row represents — job titles, company, bios, headlines, free-text fields, location, industry, role, gripes, messages, anything voicey.
-- Drop URLs, email addresses, raw timestamps, internal numeric IDs, and dates that don't add character.
-- Keep names if they're the only identifying signal.
+- Personas are fully anonymised. Pick columns that describe what KIND of person this row is — job title, role, seniority, industry, function, bio/about copy, free-text messages, gripes, location.
+- ALWAYS drop personally identifying columns: full names, first/last names, usernames, handles, screen names, emails, phone numbers, company / employer / organisation names, URLs, raw timestamps, and internal IDs. These leak identity even when other columns are anonymised.
+- A column whose values are mostly proper nouns (people, companies, places-as-employer) is identifying — drop it.
 - Use the EXACT header strings from the input (preserving case + punctuation).
 - Reasoning must be one sentence, under 140 characters.`;
 

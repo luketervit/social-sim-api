@@ -12,14 +12,6 @@ const ROLE_FIELD_KEYS = [
   "current position",
 ];
 
-const COMPANY_FIELD_KEYS = [
-  "company",
-  "organization",
-  "organisation",
-  "employer",
-  "current company",
-];
-
 const SENIORITY = {
   exec: /(founder|ceo|cto|cmo|cfo|coo|cpo|chief|president|owner|managing partner|partner)\b/i,
   vp: /\b(vp|vice president|svp|evp)\b/i,
@@ -52,19 +44,26 @@ function pickField(
   return null;
 }
 
+function anonymiseRole(rawRole: string): string {
+  // Strip "Engineer at Acme" / "Engineer @ Acme" / "Engineer - Acme" /
+  // "Engineer | Acme" → "Engineer". Whatever follows these separators is
+  // almost always a company name and would leak identity.
+  let cleaned = rawRole.replace(/\s+/g, " ").trim();
+  cleaned = cleaned.split(/\s+(?:at|@)\s+/i)[0] ?? cleaned;
+  cleaned = cleaned.split(/\s*[|·•—–-]\s*/)[0] ?? cleaned;
+  cleaned = cleaned.replace(/\s*\([^)]*\)\s*/g, " ").trim();
+  return cleaned.slice(0, 60);
+}
+
 function extractArchetypeFromFields(
   fields: Record<string, string> | undefined
 ): { label: string; role: string } | null {
   if (!fields) return null;
   const role = pickField(fields, ROLE_FIELD_KEYS);
   if (!role) return null;
-  const company = pickField(fields, COMPANY_FIELD_KEYS);
-  // Trim role to ~50 chars so the chip layout stays clean.
-  const cleanRole = role.replace(/\s+/g, " ").trim().slice(0, 60);
-  const label = company
-    ? `${cleanRole} · ${company.replace(/\s+/g, " ").trim().slice(0, 40)}`
-    : cleanRole;
-  return { label, role: cleanRole };
+  const cleanRole = anonymiseRole(role);
+  if (cleanRole.length === 0) return null;
+  return { label: cleanRole, role: cleanRole };
 }
 
 function reactivityFromRole(role: string): number {
@@ -245,18 +244,21 @@ export function synthesizePersona(
 
   const archetypeLabel = fieldArchetype
     ? baseArchetype
-    : row.source_id
-      ? row.source_id
-      : emotionLabel
-        ? `${capitalize(emotionLabel)} ${baseArchetype}`
-        : baseArchetype;
+    : emotionLabel
+      ? `${capitalize(emotionLabel)} ${baseArchetype}`
+      : baseArchetype;
 
   const keywords = topKeywords(row.text);
-  const idSuffix = row.source_id
-    ? row.source_id.slice(0, 24).replace(/[^a-zA-Z0-9_-]/g, "")
-    : `r${row.index}`;
+  const idSuffix = `r${row.index}`;
 
-  const voiceSnippet = row.text.slice(0, 240).trim();
+  const personaPrompt = buildAnonymousPersonaPrompt({
+    role: fieldArchetype?.role ?? null,
+    archetype: archetypeLabel,
+    reactivity,
+    sophistication,
+    brandAffinity,
+    keywords,
+  });
 
   return {
     id: `upload-${audienceId.slice(0, 8)}-${idSuffix}`,
@@ -265,8 +267,68 @@ export function synthesizePersona(
     sophistication,
     brand_affinity: brandAffinity,
     core_values: keywords.length > 0 ? keywords : ["candor"],
-    persona_prompt: `You write things like: "${voiceSnippet}"`,
+    persona_prompt: personaPrompt,
   };
+}
+
+function describeReactivity(r: number): string {
+  if (r >= 0.7) return "vocal and quick to react";
+  if (r >= 0.5) return "engaged, willing to push back";
+  if (r >= 0.3) return "thoughtful, replies when something matters";
+  return "quiet, mostly observes";
+}
+
+function describeSophistication(s: number): string {
+  if (s >= 0.8) return "speaks with depth and precision";
+  if (s >= 0.6) return "speaks with practical authority";
+  if (s >= 0.4) return "casual, plain-spoken";
+  return "brief, surface-level";
+}
+
+function describeBrandAffinity(a: number): string {
+  if (a >= 0.4) return "leans positive on bold or novel ideas";
+  if (a <= -0.4) return "leans skeptical of bold or novel ideas";
+  return "neutral until convinced";
+}
+
+function describeVoice(role: string | null): string | null {
+  if (!role) return null;
+  if (VOICE.loud.test(role)) return "punchy, narrative-driven";
+  if (VOICE.technical.test(role)) return "evidence-driven, skeptical of hype";
+  if (VOICE.design.test(role)) return "taste-driven, focused on craft";
+  if (VOICE.ops.test(role)) return "risk-aware, pragmatic";
+  return null;
+}
+
+interface PersonaPromptInput {
+  role: string | null;
+  archetype: string;
+  reactivity: number;
+  sophistication: number;
+  brandAffinity: number;
+  keywords: string[];
+}
+
+function buildAnonymousPersonaPrompt(input: PersonaPromptInput): string {
+  const lines: string[] = [];
+  lines.push(`You are a ${input.archetype}.`);
+
+  const voice = describeVoice(input.role);
+  if (voice) lines.push(`Voice: ${voice}.`);
+
+  lines.push(`Tone: ${describeReactivity(input.reactivity)}.`);
+  lines.push(`${capitalize(describeSophistication(input.sophistication))}.`);
+  lines.push(`Disposition: ${describeBrandAffinity(input.brandAffinity)}.`);
+
+  if (input.keywords.length > 0) {
+    lines.push(`You care about: ${input.keywords.slice(0, 3).join(", ")}.`);
+  }
+
+  lines.push(
+    "Stay anonymous. Never invent or mention real names, companies, products, or your own identity."
+  );
+
+  return lines.join(" ");
 }
 
 function capitalize(s: string): string {
