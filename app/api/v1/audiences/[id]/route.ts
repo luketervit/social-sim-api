@@ -86,6 +86,31 @@ export async function DELETE(
 
   const { id } = await params;
   const db = supabaseAdmin();
+
+  const { data: owned, error: ownerError } = await db
+    .from("audiences")
+    .select("id")
+    .eq("id", id)
+    .eq("owner_user_id", user.id)
+    .maybeSingle();
+
+  if (ownerError) {
+    return Response.json({ error: "Failed to delete audience." }, { status: 500 });
+  }
+  if (!owned) {
+    return Response.json({ error: "Audience not found." }, { status: 404 });
+  }
+
+  // simulations.audience_id has no ON DELETE rule — clear references so the
+  // audience delete doesn't fail with a FK violation.
+  const { error: simError } = await db
+    .from("simulations")
+    .delete()
+    .eq("audience_id", id);
+  if (simError) {
+    return Response.json({ error: "Failed to delete audience." }, { status: 500 });
+  }
+
   const { data, error } = await db
     .from("audiences")
     .delete()

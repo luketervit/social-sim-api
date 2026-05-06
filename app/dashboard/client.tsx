@@ -69,6 +69,20 @@ const LOADING_REPORT_HTML = `<!doctype html>
   <p>Claude is reading every reply and writing a strategic analysis. Usually 8–15 seconds.</p>
 </div></body></html>`;
 
+type ConfirmModalState =
+  | {
+      kind: "confirm";
+      title: string;
+      message: string;
+      confirmLabel: string;
+      onConfirm: () => void;
+    }
+  | {
+      kind: "error";
+      title: string;
+      message: string;
+    };
+
 interface ConvoMessage {
   id: string;
   role: "atharias" | "user" | "system";
@@ -93,6 +107,9 @@ export default function DashboardClient({
   );
   const [viewedAudienceLoading, setViewedAudienceLoading] = useState(false);
   const [viewedAudienceError, setViewedAudienceError] = useState<string | null>(
+    null
+  );
+  const [confirmModal, setConfirmModal] = useState<ConfirmModalState | null>(
     null
   );
 
@@ -282,12 +299,7 @@ export default function DashboardClient({
     []
   );
 
-  async function handleDeleteAudience(audience: AudienceSummary) {
-    const confirmed = window.confirm(
-      `Delete "${audience.name}"? Personas and history attached to it will be removed.`
-    );
-    if (!confirmed) return;
-
+  async function performDeleteAudience(audience: AudienceSummary) {
     try {
       const res = await fetch(`/api/v1/audiences/${audience.id}`, {
         method: "DELETE",
@@ -327,10 +339,26 @@ export default function DashboardClient({
         )
       );
     } catch (err) {
-      window.alert(
-        err instanceof Error ? err.message : "Could not delete audience."
-      );
+      setConfirmModal({
+        kind: "error",
+        title: "Couldn't delete audience",
+        message:
+          err instanceof Error ? err.message : "Could not delete audience.",
+      });
     }
+  }
+
+  function handleDeleteAudience(audience: AudienceSummary) {
+    setConfirmModal({
+      kind: "confirm",
+      title: "Delete audience",
+      message: `Delete "${audience.name}"? Personas and history attached to it will be removed.`,
+      confirmLabel: "Delete",
+      onConfirm: () => {
+        setConfirmModal(null);
+        void performDeleteAudience(audience);
+      },
+    });
   }
 
   async function handleViewAudience(audience: AudienceSummary) {
@@ -917,6 +945,12 @@ export default function DashboardClient({
       }}
     >
       <OnboardingModal />
+      {confirmModal && (
+        <ConfirmDialog
+          state={confirmModal}
+          onClose={() => setConfirmModal(null)}
+        />
+      )}
       <Sidebar
         email={email}
         chats={chats}
@@ -4155,4 +4189,132 @@ function buildReportMarkdown(chat: ChatState): string {
   }
 
   return lines.join("\n");
+}
+
+function ConfirmDialog({
+  state,
+  onClose,
+}: {
+  state: ConfirmModalState;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+      if (e.key === "Enter" && state.kind === "confirm") state.onConfirm();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [state, onClose]);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={state.title}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 250,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "clamp(16px, 4vw, 48px)",
+      }}
+    >
+      <div
+        aria-hidden="true"
+        onClick={onClose}
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: "rgba(20, 20, 19, 0.42)",
+          backdropFilter: "blur(8px)",
+          WebkitBackdropFilter: "blur(8px)",
+        }}
+      />
+      <div
+        style={{
+          position: "relative",
+          width: "min(440px, 100%)",
+          background: "var(--surface)",
+          borderRadius: 20,
+          padding: "28px 28px 24px",
+          boxShadow:
+            "0 0 0 1px rgba(0,0,0,0.04), 0 12px 36px rgba(20,20,19,0.18), 0 1px 3px rgba(0,0,0,0.04)",
+        }}
+      >
+        <h2
+          style={{
+            fontFamily: "var(--font-display), Georgia, serif",
+            fontSize: 22,
+            fontWeight: 500,
+            letterSpacing: "-0.02em",
+            margin: 0,
+            color: "var(--text-primary)",
+          }}
+        >
+          {state.title}
+        </h2>
+        <p
+          style={{
+            marginTop: 10,
+            marginBottom: 0,
+            fontSize: 14,
+            lineHeight: 1.55,
+            color: "var(--text-secondary)",
+          }}
+        >
+          {state.message}
+        </p>
+        <div
+          style={{
+            marginTop: 24,
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: 10,
+          }}
+        >
+          {state.kind === "confirm" && (
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                background: "transparent",
+                border: "1px solid var(--border)",
+                borderRadius: 999,
+                padding: "9px 18px",
+                fontSize: 14,
+                color: "var(--text-primary)",
+                cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+          )}
+          <button
+            type="button"
+            autoFocus
+            onClick={() => {
+              if (state.kind === "confirm") state.onConfirm();
+              else onClose();
+            }}
+            style={{
+              background:
+                state.kind === "confirm" ? "#B3261E" : "var(--ink)",
+              color: state.kind === "confirm" ? "#FFF" : "var(--butter-deep)",
+              border: "none",
+              borderRadius: 999,
+              padding: "9px 20px",
+              fontSize: 14,
+              fontWeight: 500,
+              cursor: "pointer",
+            }}
+          >
+            {state.kind === "confirm" ? state.confirmLabel : "OK"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
