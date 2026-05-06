@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { randomUUID } from "node:crypto";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { ensureOperatorAccount } from "@/lib/operator-accounts";
 
 export const runtime = "nodejs";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PASSWORD_MIN = 8;
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -19,9 +19,19 @@ export async function POST(request: Request) {
     typeof (body as { email?: unknown })?.email === "string"
       ? (body as { email: string }).email.trim().toLowerCase()
       : "";
+  const password =
+    typeof (body as { password?: unknown })?.password === "string"
+      ? (body as { password: string }).password
+      : "";
 
   if (!email || email.length > 320 || !EMAIL_REGEX.test(email)) {
     return NextResponse.json({ error: "Enter a valid email." }, { status: 400 });
+  }
+  if (password.length < PASSWORD_MIN) {
+    return NextResponse.json(
+      { error: `Password must be at least ${PASSWORD_MIN} characters.` },
+      { status: 400 }
+    );
   }
 
   const admin = supabaseAdmin();
@@ -52,7 +62,7 @@ export async function POST(request: Request) {
     const { data: created, error: createError } =
       await admin.auth.admin.createUser({
         email,
-        password: randomUUID(),
+        password,
         email_confirm: true,
       });
 
@@ -70,33 +80,13 @@ export async function POST(request: Request) {
           { status: 502 }
         );
       }
-
-      // Fall back to a paginated scan to find the existing user id.
-      let page = 1;
-      while (page < 50 && !userId) {
-        const { data: pageData, error: pageError } =
-          await admin.auth.admin.listUsers({ page, perPage: 200 });
-        if (pageError) {
-          console.error("waitlist listUsers paged failed", pageError);
-          return NextResponse.json(
-            { error: "Couldn't add you to the waitlist." },
-            { status: 502 }
-          );
-        }
-        userId =
-          pageData.users.find((u) => u.email?.toLowerCase() === email)?.id ??
-          null;
-        if (pageData.users.length < 200) break;
-        page += 1;
-      }
-
-      if (!userId) {
-        console.error("waitlist user exists but not found in scan", { email });
-        return NextResponse.json(
-          { error: "Couldn't add you to the waitlist." },
-          { status: 502 }
-        );
-      }
+      return NextResponse.json(
+        {
+          error:
+            "This email already has an account. Sign in instead, or use reset password if you joined under the old waitlist flow.",
+        },
+        { status: 409 }
+      );
     } else {
       userId = created.user?.id ?? null;
     }

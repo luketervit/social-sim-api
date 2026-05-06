@@ -384,6 +384,16 @@ export default function LoginClient({
               >
                 Request access
               </button>
+              <span> · </span>
+              <Link
+                href="/reset-password"
+                style={{
+                  color: "var(--text-primary)",
+                  textDecoration: "underline",
+                }}
+              >
+                Reset password
+              </Link>
             </>
           ) : (
             <>

@@ -1,9 +1,13 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
+
+const PASSWORD_MIN = 8;
 
 export default function WaitlistPage() {
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -19,7 +23,7 @@ export default function WaitlistPage() {
       response = await fetch("/api/waitlist/join", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, password }),
       });
     } catch {
       setLoading(false);
@@ -73,8 +77,8 @@ export default function WaitlistPage() {
               }}
             >
               Drop your email and we&apos;ll save you a seat. Access is
-              rolling out by hand in small batches — when it&apos;s your turn
-              we&apos;ll reach out personally.
+              rolling out by hand in small batches. Create your password now so
+              once you&apos;re approved, you can just sign in.
             </p>
 
             <div
@@ -99,8 +103,9 @@ export default function WaitlistPage() {
               >
                 {[
                   "Your seat is saved on the list",
+                  "Your password is already set for later sign-in",
                   "Access rolls out by hand in small batches",
-                  "We reach out personally when it's your turn",
+                  "Once approved, you sign in instead of signing up again",
                 ].map((item) => (
                   <li
                     key={item}
@@ -176,9 +181,8 @@ export default function WaitlistPage() {
                   <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>
                     {submittedEmail}
                   </span>{" "}
-                  is on the waitlist. Once access opens up, you&apos;ll be able
-                  to upload any CSV of your customer data and run simulations on
-                  it for accurate results.
+                  is on the waitlist. Your password is already set. Once access
+                  opens up, just sign in and you&apos;re in.
                 </p>
 
                 <div
@@ -214,7 +218,7 @@ export default function WaitlistPage() {
                     color: "var(--text-primary)",
                   }}
                 >
-                  Just leave your email.
+                  Reserve your seat.
                 </h2>
                 <p
                   style={{
@@ -224,7 +228,8 @@ export default function WaitlistPage() {
                     marginTop: 10,
                   }}
                 >
-                  We&apos;ll save your seat and reach out when access is ready.
+                  Create your account now. We&apos;ll hold it on the waitlist
+                  until access is ready.
                 </p>
 
                 <form
@@ -256,6 +261,50 @@ export default function WaitlistPage() {
                       autoComplete="email"
                       className="input"
                     />
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="password"
+                      style={{
+                        display: "block",
+                        marginBottom: 8,
+                        fontSize: 13,
+                        color: "var(--text-secondary)",
+                        letterSpacing: "-0.01em",
+                      }}
+                    >
+                      Password
+                    </label>
+                    <input
+                      id="password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder={`At least ${PASSWORD_MIN} characters`}
+                      required
+                      minLength={PASSWORD_MIN}
+                      autoComplete="new-password"
+                      className="input"
+                    />
+                    <p
+                      style={{
+                        fontSize: 12,
+                        color: "var(--text-tertiary)",
+                        lineHeight: 1.5,
+                        marginTop: 8,
+                      }}
+                    >
+                      If you already joined under the old flow, don&apos;t sign
+                      up again. Use{" "}
+                      <Link
+                        href="/reset-password"
+                        style={{ color: "var(--text-primary)" }}
+                      >
+                        reset password
+                      </Link>
+                      .
+                    </p>
                   </div>
 
                   <button

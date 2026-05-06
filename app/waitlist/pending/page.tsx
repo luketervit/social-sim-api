@@ -64,9 +64,13 @@ export default async function WaitlistPendingPage() {
           >
             {user.email}
           </span>{" "}
-          is on the list for early access. When your seat is ready, we&apos;ll
-          email you a link to set a password — then you can upload any CSV of
-          your audience and run simulations on it.
+          is on the list for early access. If you joined recently, your
+          password is already set and you&apos;ll just sign in once approved.
+          If you joined under the old flow and never picked a password, use{" "}
+          <Link href="/reset-password" style={{ color: "var(--text-primary)" }}>
+            reset password
+          </Link>{" "}
+          once your seat is approved.
         </p>
 
         <div
