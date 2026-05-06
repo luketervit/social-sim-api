@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { createSupabaseBrowser } from "@/lib/supabase/browser";
 
 export default function WaitlistPage() {
   const [email, setEmail] = useState("");
@@ -15,23 +14,32 @@ export default function WaitlistPage() {
     setSubmittedEmail(null);
     setLoading(true);
 
-    const supabase = createSupabaseBrowser();
-    // No product behind the waitlist yet — generate a throwaway password so
-    // Supabase auth can record the email. Users won't sign in anywhere.
-    const throwawayPassword = crypto.randomUUID();
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password: throwawayPassword,
-    });
-
-    setLoading(false);
-
-    if (error) {
-      setError(error.message);
+    let response: Response;
+    try {
+      response = await fetch("/api/waitlist/join", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+    } catch {
+      setLoading(false);
+      setError("Network error. Try again in a moment.");
       return;
     }
 
-    setSubmittedEmail(data.user?.email ?? email);
+    setLoading(false);
+
+    if (!response.ok) {
+      let message = "Couldn't add you to the waitlist.";
+      try {
+        const data = (await response.json()) as { error?: string };
+        if (data.error) message = data.error;
+      } catch {}
+      setError(message);
+      return;
+    }
+
+    setSubmittedEmail(email);
   }
 
   return (

@@ -47,6 +47,17 @@ async function grant(email: string) {
     }
   }
 
+  // Anyone who joined via the old client-side signup got an auto-session in
+  // their browser. Revoke it so they can't slip into the app without setting
+  // a real password first.
+  const { error: signOutError } = await supabase.auth.admin.signOut(account.id);
+  if (signOutError) {
+    // Not fatal — log and continue so the email still goes out.
+    console.warn(
+      `  · could not revoke existing sessions for ${account.email}: ${signOutError.message}`
+    );
+  }
+
   const { error: emailError } = await supabase.auth.resetPasswordForEmail(
     account.email,
     { redirectTo }
@@ -56,7 +67,7 @@ async function grant(email: string) {
     throw emailError;
   }
 
-  console.log(`✓ ${account.email} — access granted, set-password email sent`);
+  console.log(`✓ ${account.email} — access granted, sessions revoked, set-password email sent`);
 }
 
 (async () => {
