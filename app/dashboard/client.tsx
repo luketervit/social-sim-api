@@ -3990,11 +3990,6 @@ function buildReportHtml(
     <button class="close" onclick="window.close()">Close</button>
   </div>
 </div>
-<script>
-  window.addEventListener("load", function () {
-    setTimeout(function () { window.print(); }, 350);
-  });
-</script>
 </body>
 </html>`;
 }
