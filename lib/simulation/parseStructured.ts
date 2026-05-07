@@ -43,6 +43,65 @@ function tryParseJsonChunk(chunk: string): StructuredReply | null {
   }
 }
 
+function extractQuotedField(
+  chunk: string,
+  field: "reaction" | "reasoning" | "objection" | "what_would_change_my_mind",
+  nextField?: "reasoning" | "objection" | "what_would_change_my_mind"
+) {
+  const escapedField = field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (nextField) {
+    const escapedNext = nextField.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const pattern = new RegExp(
+      `"${escapedField}"\\s*:\\s*"([\\s\\S]*?)"\\s*,\\s*"${escapedNext}"\\s*:`,
+      "i"
+    );
+    const match = chunk.match(pattern);
+    return match?.[1] ?? null;
+  }
+
+  const tailPattern = new RegExp(
+    `"${escapedField}"\\s*:\\s*"([\\s\\S]*?)"\\s*}\\s*$`,
+    "i"
+  );
+  const tailMatch = chunk.match(tailPattern);
+  return tailMatch?.[1] ?? null;
+}
+
+function extractNullableField(
+  chunk: string,
+  field: "objection" | "what_would_change_my_mind"
+) {
+  const escapedField = field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const nullPattern = new RegExp(`"${escapedField}"\\s*:\\s*null`, "i");
+  if (nullPattern.test(chunk)) return null;
+  return undefined;
+}
+
+function tryParseLooseStructuredChunk(chunk: string): StructuredReply | null {
+  const reaction = extractQuotedField(chunk, "reaction", "reasoning");
+  const reasoning = extractQuotedField(chunk, "reasoning", "objection");
+  const objectionNull = extractNullableField(chunk, "objection");
+  const objection =
+    objectionNull === null
+      ? null
+      : extractQuotedField(chunk, "objection", "what_would_change_my_mind");
+  const mindNull = extractNullableField(chunk, "what_would_change_my_mind");
+  const mind =
+    mindNull === null
+      ? null
+      : extractQuotedField(chunk, "what_would_change_my_mind");
+
+  const normalizedReaction = clamp(reaction);
+  if (!normalizedReaction) return null;
+
+  return {
+    reaction: normalizedReaction,
+    reasoning: clamp(reasoning),
+    objection: objection === null ? null : clamp(objection),
+    what_would_change_my_mind: mind === null ? null : clamp(mind),
+  };
+}
+
 /**
  * Find the largest substring that parses as JSON. Used when the model
  * wraps its JSON in prose or markdown fences.
@@ -76,12 +135,16 @@ export function parseStructuredReply(content: string): StructuredReply {
   // 1) Try the whole thing as JSON.
   const direct = tryParseJsonChunk(raw);
   if (direct) return direct;
+  const looseDirect = tryParseLooseStructuredChunk(raw);
+  if (looseDirect) return looseDirect;
 
   // 2) Try the largest JSON-shaped span.
   const span = extractJsonSpan(raw);
   if (span) {
     const fromSpan = tryParseJsonChunk(span);
     if (fromSpan) return fromSpan;
+    const looseSpan = tryParseLooseStructuredChunk(span);
+    if (looseSpan) return looseSpan;
   }
 
   // 3) Fallback: treat the whole text as the reaction. We deliberately

@@ -1,15 +1,19 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { getAnthropicEnv } from "@/lib/env";
+import OpenAI from "openai";
+import { getOpenRouterEnv } from "@/lib/env";
 import type { AgentMessage } from "./types";
 
-const MODEL = "claude-haiku-4-5-20251001";
+const MODEL =
+  process.env.OPENROUTER_CHAT_ANALYSIS_MODEL ||
+  process.env.OPENROUTER_LINKEDIN_MODEL ||
+  "qwen/qwen3-235b-a22b-2507";
 
-let _client: Anthropic | null = null;
-function getClient(): Anthropic | null {
+let _client: OpenAI | null = null;
+function getClient(): OpenAI {
   if (_client) return _client;
-  const env = getAnthropicEnv();
-  if (!env) return null;
-  _client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  _client = new OpenAI({
+    baseURL: "https://openrouter.ai/api/v1",
+    apiKey: getOpenRouterEnv().OPENROUTER_API_KEY,
+  });
   return _client;
 }
 
@@ -31,18 +35,42 @@ export interface AnalyzeChatInput {
 
 export interface ChatAnalysis {
   recommendedIndex: number;
-  recommendedHeadline: string; // "Ship the original" / "Ship Variant 1"
-  whyThisWins: string; // 2-3 sentences
-  expectedReaction: string; // 2-3 sentences describing what the audience will likely say
-  risksToWatch: string[]; // 2-4 concrete risks/pushback themes
+  recommendedHeadline: string;
+  whyThisWins: string;
+  expectedReaction: string;
+  risksToWatch: string[];
   alternateNotes: Array<{
     index: number;
-    summary: string; // 1-2 sentences why this variant didn't win
+    summary: string;
   }>;
 }
 
+function countSentiment(thread: AgentMessage[], sentiment: AgentMessage["sentiment"]) {
+  return thread.filter((msg) => msg.sentiment === sentiment).length;
+}
+
+function badnessScore(variant: AnalyzeVariantInput) {
+  const hostile = countSentiment(variant.thread, "hostile");
+  const negative = countSentiment(variant.thread, "negative");
+  const positive = countSentiment(variant.thread, "positive");
+  const total = Math.max(variant.thread.length, 1);
+  return (hostile * 3 + negative * 1.5 - positive * 1.2) / total;
+}
+
+function percent(count: number, total: number) {
+  return Math.round((count / Math.max(total, 1)) * 100);
+}
+
+function topArchetypeSummary(
+  topArchetypes: Array<{ archetype: string; count: number }>
+) {
+  return topArchetypes
+    .slice(0, 4)
+    .map((item) => item.archetype)
+    .join(", ");
+}
+
 function summariseReplies(thread: AgentMessage[]): string {
-  // Bucket by sentiment, keep ~3 representative quotes per bucket.
   const buckets: Record<AgentMessage["sentiment"], string[]> = {
     positive: [],
     neutral: [],
@@ -68,32 +96,81 @@ function summariseReplies(thread: AgentMessage[]): string {
   return sections.join("\n\n");
 }
 
+function deterministicAlternateSummary(
+  loser: AnalyzeVariantInput,
+  winner: AnalyzeVariantInput
+) {
+  const loserTotal = Math.max(loser.thread.length, 1);
+  const winnerTotal = Math.max(winner.thread.length, 1);
+  const loserBad = percent(
+    countSentiment(loser.thread, "negative") + countSentiment(loser.thread, "hostile"),
+    loserTotal
+  );
+  const winnerBad = percent(
+    countSentiment(winner.thread, "negative") + countSentiment(winner.thread, "hostile"),
+    winnerTotal
+  );
+  const loserPositive = percent(countSentiment(loser.thread, "positive"), loserTotal);
+  const winnerPositive = percent(countSentiment(winner.thread, "positive"), winnerTotal);
+
+  if (loserBad > winnerBad + 10) {
+    return `This version triggered more pushback than the winner (${loserBad}% vs ${winnerBad}% negative + hostile), so the room read it as riskier and less clean to ship.`;
+  }
+  if (loserPositive + 6 < winnerPositive) {
+    return `This version did not convert enough supporters (${loserPositive}% vs ${winnerPositive}% positive), so it created less upside even where it avoided outright hostility.`;
+  }
+  return "This version landed less cleanly overall, with weaker support and a messier reply mix than the recommended draft.";
+}
+
 function defaultAnalysis(input: AnalyzeChatInput): ChatAnalysis {
-  // Best guess from the raw counts when Claude isn't reachable.
-  const ranked = [...input.variants].sort((a, b) => {
-    const aBad =
-      a.thread.filter((m) => m.sentiment === "hostile").length * 3 +
-      a.thread.filter((m) => m.sentiment === "negative").length * 1.5 -
-      a.thread.filter((m) => m.sentiment === "positive").length * 1.2;
-    const bBad =
-      b.thread.filter((m) => m.sentiment === "hostile").length * 3 +
-      b.thread.filter((m) => m.sentiment === "negative").length * 1.5 -
-      b.thread.filter((m) => m.sentiment === "positive").length * 1.2;
-    return aBad - bBad;
-  });
+  const ranked = [...input.variants].sort((a, b) => badnessScore(a) - badnessScore(b));
   const winner = ranked[0];
+  const audienceSummary = topArchetypeSummary(input.topArchetypes);
+  const total = Math.max(winner?.thread.length ?? 0, 1);
+  const positive = percent(countSentiment(winner?.thread ?? [], "positive"), total);
+  const negative = percent(countSentiment(winner?.thread ?? [], "negative"), total);
+  const hostile = percent(countSentiment(winner?.thread ?? [], "hostile"), total);
+  const neutral = percent(countSentiment(winner?.thread ?? [], "neutral"), total);
+  const bad = negative + hostile;
+
+  const whyThisWins = winner
+    ? `${winner.index === 0 ? "The original" : `Variant ${winner.index}`} produced the cleanest reply mix: ${bad}% negative + hostile with ${positive}% positive. ${audienceSummary ? `It reads best for the dominant audience pockets here (${audienceSummary}).` : "It leaves less surface area for easy dunking while still giving supporters something to agree with."}`
+    : "This draft produced the cleanest reaction mix across the simulated audience.";
+
+  const expectedReaction =
+    positive >= bad
+      ? `Expect a mostly neutral-to-positive thread. The core response pattern is agreement or curiosity first, with criticism present but not driving the conversation.`
+      : `Expect a mixed thread. Most replies should stay neutral, but a visible minority will push back on the framing rather than the underlying claim.`;
+
+  const risksToWatch: string[] = [];
+  if (hostile > 0) {
+    risksToWatch.push(`A small hostile pocket is still present (${hostile}% of replies), so quote-tweets and dunk-style replies are still plausible.`);
+  }
+  if (negative >= 30) {
+    risksToWatch.push(`Negative replies are still material at ${negative}%, so the main risk is that the post reads as overclaiming or self-mythologising.`);
+  }
+  if (neutral >= 45) {
+    risksToWatch.push(`A large neutral block means the post is safe enough to survive, but not obviously sharp enough to create strong advocacy on its own.`);
+  }
+
   return {
     recommendedIndex: winner ? winner.index : 0,
     recommendedHeadline:
       winner && winner.index === 0
         ? "Ship the original"
         : `Ship Variant ${winner?.index ?? 0}`,
-    whyThisWins:
-      "This draft drew the cleanest reaction across the simulated audience. Detailed analysis is unavailable right now — see the raw sentiment breakdown below.",
-    expectedReaction:
-      "The room's reaction skews toward neutral and positive responses, with negative voices in the minority.",
-    risksToWatch: [],
-    alternateNotes: [],
+    whyThisWins,
+    expectedReaction,
+    risksToWatch: risksToWatch.slice(0, 3),
+    alternateNotes: input.variants
+      .filter((variant) => !winner || variant.index !== winner.index)
+      .map((variant) => ({
+        index: variant.index,
+        summary: winner
+          ? deterministicAlternateSummary(variant, winner)
+          : "This version was not the strongest option in the room.",
+      }))
+      .slice(0, 6),
   };
 }
 
@@ -112,22 +189,53 @@ function safeParseJSON(text: string): unknown {
   }
 }
 
+function isStructuredOutputCompatibilityError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  return (
+    message.includes("response_format") ||
+    message.includes("json_schema") ||
+    message.includes("structured output") ||
+    message.includes("unsupported parameter") ||
+    message.includes("require_parameters")
+  );
+}
+
+async function createCompletion(
+  systemPrompt: string,
+  userPrompt: string,
+  structured: boolean
+) {
+  const payload: Record<string, unknown> = {
+    model: MODEL,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    max_tokens: 1500,
+    temperature: 0.4,
+  };
+
+  if (structured) {
+    payload.response_format = { type: "json_object" };
+  }
+
+  return getClient().chat.completions.create(payload as never);
+}
+
 export async function analyzeChat(
   input: AnalyzeChatInput
 ): Promise<ChatAnalysis> {
-  const client = getClient();
-  if (!client) return defaultAnalysis(input);
   if (input.variants.length === 0) return defaultAnalysis(input);
 
-  const systemPrompt = `You are a senior comms strategist reading the results of a simulated social-media test. The user ran 1-3 drafts of the same post against a simulated audience and got back hundreds of synthetic replies. Your job is to tell them which draft to ship and why.
+  const systemPrompt = `You are a senior comms strategist reading the results of a simulated social-media test. The user ran drafts of the same post against a simulated audience and got back synthetic replies. Your job is to tell them which draft to ship and why.
 
-Be direct, specific, and grounded in what the synthetic audience actually said. Quote them sparingly when it strengthens the point. Avoid corporate-speak, avoid hedging.
+Be direct, specific, and grounded in what the audience actually said. Avoid fluff, avoid generic marketing language, avoid empty "data shows" phrasing.
 
 Return JSON only, in this exact shape:
 {
   "recommendedIndex": <integer index into the variants array>,
   "recommendedHeadline": "Ship the original" or "Ship Variant N — Label",
-  "whyThisWins": "2-3 sentences explaining why this draft lands cleanest with this specific audience. Reference the audience composition + their actual reactions.",
+  "whyThisWins": "2-3 sentences explaining why this draft lands cleanest with this specific audience. Reference the audience composition + actual reactions.",
   "expectedReaction": "2-3 sentences predicting how the real audience will respond. Concrete: who will agree, who will pushback, what tone the conversation takes.",
   "risksToWatch": ["1 short sentence per risk", "another", "another"],
   "alternateNotes": [
@@ -137,10 +245,10 @@ Return JSON only, in this exact shape:
 
 Rules:
 - recommendedIndex: pick the variant with the cleanest reaction. Lowest hostile+negative share usually wins, but break ties by who has the highest positive share or lowest aggression.
-- whyThisWins: ground it in audience makeup + actual sample replies. Don't say "the data shows" or "based on analysis" — just say what's true.
-- expectedReaction: write it like you're briefing a founder before they ship. Concrete predictions.
-- risksToWatch: 2-4 entries, each one a specific failure mode. NOT generic ("some users may disagree") — point at real patterns from the replies.
-- alternateNotes: include EVERY non-winning variant. Be specific about what made each one worse.`;
+- whyThisWins: ground it in audience makeup + actual reply patterns.
+- expectedReaction: write it like you're briefing a founder before they ship.
+- risksToWatch: 2-4 entries, each one a specific failure mode.
+- alternateNotes: include every non-winning variant with a concrete reason it lost.`;
 
   const variantsBlock = input.variants
     .map(
@@ -168,93 +276,89 @@ ${variantsBlock}
 
 Pick the draft to ship. Explain why. Tell them what to expect when they post it.`;
 
+  let response: Awaited<ReturnType<typeof createCompletion>>;
   try {
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 1500,
-      temperature: 0.4,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
-    });
-
-    const text = response.content
-      .filter((b) => b.type === "text")
-      .map((b) => ("text" in b ? b.text : ""))
-      .join("\n");
-
-    const parsed = safeParseJSON(text);
-    if (!parsed || typeof parsed !== "object") {
-      return defaultAnalysis(input);
+    try {
+      response = await createCompletion(systemPrompt, userPrompt, true);
+    } catch (structuredError) {
+      if (!isStructuredOutputCompatibilityError(structuredError)) {
+        throw structuredError;
+      }
+      response = await createCompletion(systemPrompt, userPrompt, false);
     }
-
-    const obj = parsed as {
-      recommendedIndex?: unknown;
-      recommendedHeadline?: unknown;
-      whyThisWins?: unknown;
-      expectedReaction?: unknown;
-      risksToWatch?: unknown;
-      alternateNotes?: unknown;
-    };
-
-    const recIndex =
-      typeof obj.recommendedIndex === "number" &&
-      obj.recommendedIndex >= 0 &&
-      obj.recommendedIndex < input.variants.length
-        ? Math.floor(obj.recommendedIndex)
-        : 0;
-
-    return {
-      recommendedIndex: recIndex,
-      recommendedHeadline:
-        typeof obj.recommendedHeadline === "string" &&
-        obj.recommendedHeadline.trim().length > 0
-          ? obj.recommendedHeadline.trim().slice(0, 120)
-          : recIndex === 0
-            ? "Ship the original"
-            : `Ship Variant ${recIndex}`,
-      whyThisWins:
-        typeof obj.whyThisWins === "string"
-          ? obj.whyThisWins.trim().slice(0, 1200)
-          : "",
-      expectedReaction:
-        typeof obj.expectedReaction === "string"
-          ? obj.expectedReaction.trim().slice(0, 1200)
-          : "",
-      risksToWatch: Array.isArray(obj.risksToWatch)
-        ? (obj.risksToWatch
-            .filter((r) => typeof r === "string")
-            .map((r) => (r as string).trim().slice(0, 240))
-            .filter((r) => r.length > 0)
-            .slice(0, 6) as string[])
-        : [],
-      alternateNotes: Array.isArray(obj.alternateNotes)
-        ? (obj.alternateNotes
-            .map((n) => {
-              if (!n || typeof n !== "object") return null;
-              const note = n as { index?: unknown; summary?: unknown };
-              if (
-                typeof note.index !== "number" ||
-                note.index < 0 ||
-                note.index >= input.variants.length
-              ) {
-                return null;
-              }
-              const summary =
-                typeof note.summary === "string"
-                  ? note.summary.trim().slice(0, 600)
-                  : "";
-              if (!summary) return null;
-              return { index: Math.floor(note.index), summary };
-            })
-            .filter((n): n is { index: number; summary: string } => n !== null)
-            .slice(0, 4))
-        : [],
-    };
   } catch (err) {
-    console.error(
-      "analyzeChat failed:",
-      err instanceof Error ? err.message : err
-    );
+    console.error("analyzeChat failed:", err instanceof Error ? err.message : err);
     return defaultAnalysis(input);
   }
+
+  const text = response.choices[0]?.message?.content?.trim() ?? "";
+  const parsed = safeParseJSON(text);
+  if (!parsed || typeof parsed !== "object") {
+    return defaultAnalysis(input);
+  }
+
+  const obj = parsed as {
+    recommendedIndex?: unknown;
+    recommendedHeadline?: unknown;
+    whyThisWins?: unknown;
+    expectedReaction?: unknown;
+    risksToWatch?: unknown;
+    alternateNotes?: unknown;
+  };
+
+  const recIndex =
+    typeof obj.recommendedIndex === "number" &&
+    obj.recommendedIndex >= 0 &&
+    obj.recommendedIndex < input.variants.length
+      ? Math.floor(obj.recommendedIndex)
+      : 0;
+
+  return {
+    recommendedIndex: recIndex,
+    recommendedHeadline:
+      typeof obj.recommendedHeadline === "string" &&
+      obj.recommendedHeadline.trim().length > 0
+        ? obj.recommendedHeadline.trim().slice(0, 120)
+        : recIndex === 0
+          ? "Ship the original"
+          : `Ship Variant ${recIndex}`,
+    whyThisWins:
+      typeof obj.whyThisWins === "string" && obj.whyThisWins.trim().length > 0
+        ? obj.whyThisWins.trim().slice(0, 1200)
+        : defaultAnalysis(input).whyThisWins,
+    expectedReaction:
+      typeof obj.expectedReaction === "string" &&
+      obj.expectedReaction.trim().length > 0
+        ? obj.expectedReaction.trim().slice(0, 1200)
+        : defaultAnalysis(input).expectedReaction,
+    risksToWatch: Array.isArray(obj.risksToWatch)
+      ? (obj.risksToWatch
+          .filter((r) => typeof r === "string")
+          .map((r) => (r as string).trim().slice(0, 240))
+          .filter((r) => r.length > 0)
+          .slice(0, 6) as string[])
+      : defaultAnalysis(input).risksToWatch,
+    alternateNotes: Array.isArray(obj.alternateNotes)
+      ? (obj.alternateNotes
+          .map((n) => {
+            if (!n || typeof n !== "object") return null;
+            const note = n as { index?: unknown; summary?: unknown };
+            if (
+              typeof note.index !== "number" ||
+              note.index < 0 ||
+              note.index >= input.variants.length
+            ) {
+              return null;
+            }
+            const summary =
+              typeof note.summary === "string"
+                ? note.summary.trim().slice(0, 600)
+                : "";
+            if (!summary) return null;
+            return { index: Math.floor(note.index), summary };
+          })
+          .filter((n): n is { index: number; summary: string } => n !== null)
+          .slice(0, 8))
+      : defaultAnalysis(input).alternateNotes,
+  };
 }
