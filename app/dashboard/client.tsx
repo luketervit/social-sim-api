@@ -47,7 +47,7 @@ interface DashboardClientProps {
   initialChats?: ChatState[];
 }
 
-const ACCEPTED_EXTENSIONS = [".csv", ".json", ".ndjson"];
+const ACCEPTED_EXTENSIONS = [".csv", ".json", ".ndjson", ".zip"];
 const POLL_INTERVAL_MS = 2000;
 const SIM_POLL_INTERVAL_MS = 1500;
 
@@ -256,9 +256,61 @@ export default function DashboardClient({
 
   function handleNewChat() {
     const fresh = makeChat();
-    setChats((prev) => [fresh, ...prev]);
-    setActiveChatId(fresh.id);
+
+    // If the user already has a ready audience, default the new chat to the
+    // most recent one so they don't have to re-pick on every new chat.
+    const defaultAudience = audiences
+      .filter((a) => a.status === "ready")
+      .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))[0];
+
+    const seeded: ChatState = defaultAudience
+      ? {
+          ...fresh,
+          audienceId: defaultAudience.id,
+          audienceName: defaultAudience.name,
+          audienceRowCount: defaultAudience.row_count,
+          audienceLoading: true,
+          platform:
+            defaultAudience.platform === "twitter" ||
+            defaultAudience.platform === "reddit" ||
+            defaultAudience.platform === "slack" ||
+            defaultAudience.platform === "linkedin"
+              ? (defaultAudience.platform as Platform)
+              : inferPlatformFromFilename(defaultAudience.name),
+        }
+      : fresh;
+
+    setChats((prev) => [seeded, ...prev]);
+    setActiveChatId(seeded.id);
     setView("chat");
+
+    if (defaultAudience) {
+      void (async () => {
+        try {
+          const { personas, platform } =
+            await fetchPersonasForAudience(defaultAudience);
+          updateChatById(seeded.id, (c) => ({
+            audiencePersonas: personas,
+            audienceLoading: false,
+            personaCap: personas.length,
+            platform:
+              c.platform ??
+              (platform === "twitter" ||
+              platform === "reddit" ||
+              platform === "slack" ||
+              platform === "linkedin"
+                ? (platform as Platform)
+                : inferPlatformFromFilename(defaultAudience.name)),
+          }));
+        } catch (err) {
+          updateChatById(seeded.id, {
+            audienceLoading: false,
+            audienceError:
+              err instanceof Error ? err.message : "Could not load audience.",
+          });
+        }
+      })();
+    }
   }
 
   function handleSelectChat(id: string) {
@@ -460,7 +512,7 @@ export default function DashboardClient({
       setUploadError(null);
       const lower = file.name.toLowerCase();
       if (!ACCEPTED_EXTENSIONS.some((ext) => lower.endsWith(ext))) {
-        setUploadError("Needs to be a .csv, .json, or .ndjson file.");
+        setUploadError("Needs to be a .csv, .json, .ndjson, or .zip file.");
         return;
       }
       const guess = file.name.replace(/\.[^.]+$/, "").slice(0, 60) || "Audience";
@@ -1913,7 +1965,28 @@ function UploadDropzone({
           transition: "font-style 200ms ease",
         }}
       >
-        {dragActive ? "Drop to upload" : "Drop a .csv and I'll bring the room"}
+        {dragActive ? (
+          "Drop to upload"
+        ) : (
+          <>
+            Drop your{" "}
+            <code
+              style={{
+                fontFamily: "var(--font-data), monospace",
+                fontSize: 16,
+                padding: "2px 8px",
+                borderRadius: 6,
+                background: "var(--bg-subtle)",
+                color: "var(--text-primary)",
+                border: "1px solid var(--border)",
+                fontStyle: "normal",
+              }}
+            >
+              Connections.csv
+            </code>{" "}
+            and I&apos;ll bring the room
+          </>
+        )}
       </div>
       <div
         style={{
@@ -1924,8 +1997,24 @@ function UploadDropzone({
           letterSpacing: "0.04em",
         }}
       >
-        Up to 10 MB · any CSV — we pick the useful columns
+        Or the full LinkedIn data-export <code>.zip</code> · up to 10 MB
       </div>
+      <a
+        href="https://www.linkedin.com/mypreferences/d/download-my-data"
+        target="_blank"
+        rel="noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          marginTop: 12,
+          display: "inline-block",
+          fontSize: 12,
+          color: "var(--text-secondary)",
+          textDecoration: "underline",
+          textUnderlineOffset: 3,
+        }}
+      >
+        How to download Connections.csv from LinkedIn →
+      </a>
       {hint ? (
         <div
           style={{
@@ -1941,7 +2030,7 @@ function UploadDropzone({
       <input
         ref={fileInputRef}
         type="file"
-        accept=".csv,.json,.ndjson,text/csv,application/json"
+        accept=".csv,.json,.ndjson,.zip,text/csv,application/json,application/zip,application/x-zip-compressed"
         style={{ display: "none" }}
         onChange={(e) => {
           const f = e.target.files?.[0];
