@@ -1,5 +1,27 @@
 import { z } from "zod";
 
+export const PersonaSenioritySchema = z.enum([
+  "junior",
+  "mid",
+  "senior",
+  "director",
+  "executive",
+]);
+
+export const PersonaRoleFamilySchema = z.enum([
+  "founder",
+  "marketing",
+  "sales",
+  "product",
+  "engineering",
+  "operations",
+  "finance",
+  "people",
+  "design",
+  "investor",
+  "generalist",
+]);
+
 export const PersonaSchema = z.object({
   id: z.string(),
   archetype: z.string(),
@@ -8,6 +30,11 @@ export const PersonaSchema = z.object({
   brand_affinity: z.number().min(-1).max(1),
   core_values: z.array(z.string()),
   persona_prompt: z.string(),
+  role_hint: z.string().optional(),
+  seniority: PersonaSenioritySchema.optional(),
+  role_family: PersonaRoleFamilySchema.optional(),
+  topical_expertise: z.array(z.string()).optional(),
+  professional_voice: z.string().optional(),
 });
 
 export type Persona = z.infer<typeof PersonaSchema>;

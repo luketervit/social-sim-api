@@ -1,10 +1,12 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import type { LinkedInPostEvalRow } from "./linkedinExport";
 import { classifyTexts } from "./classify";
 import { synthesizePersona } from "./synthesize";
 import { enrichPersonasWithModel } from "./persona-writer";
 import { MAX_TEXT_CHARS, MIN_TEXT_CHARS, type ParsedRow } from "./parse";
 import { selectUsefulColumns } from "./select-columns";
 import { routeAudience } from "@/lib/models/router";
+import { evaluateLinkedInPrivateDataset } from "@/lib/evals/linkedinPrivate";
 import {
   DEFAULT_CLASSIFIER_IDS,
   DEFAULT_GENERATOR_ID,
@@ -71,6 +73,12 @@ export async function processAudienceUpload({
 }: ProcessAudienceInput): Promise<void> {
   const db = supabaseAdmin();
   try {
+    const { data: existingAudience } = await db
+      .from("audiences")
+      .select("metadata")
+      .eq("id", audienceId)
+      .maybeSingle();
+
     let workingRows = rows;
     let columnSelection: {
       useful: string[];
@@ -154,10 +162,37 @@ export async function processAudienceUpload({
         }
       : decision;
 
+    const existingMetadata =
+      existingAudience && existingAudience.metadata && typeof existingAudience.metadata === "object"
+        ? (existingAudience.metadata as Record<string, unknown>)
+        : {};
+    const linkedInExport =
+      existingMetadata.linkedin_export &&
+      typeof existingMetadata.linkedin_export === "object"
+        ? (existingMetadata.linkedin_export as Record<string, unknown>)
+        : null;
+    const linkedInPosts = Array.isArray(linkedInExport?.posts)
+      ? (linkedInExport.posts as LinkedInPostEvalRow[])
+      : [];
+    const linkedInEval =
+      platform === "linkedin" && linkedInPosts.length > 0
+        ? evaluateLinkedInPrivateDataset(personas, linkedInPosts)
+        : null;
+    const metadata = linkedInExport
+      ? {
+          ...existingMetadata,
+          linkedin_export: {
+            ...linkedInExport,
+            eval: linkedInEval,
+          },
+        }
+      : existingMetadata;
+
     const { error } = await db
       .from("audiences")
       .update({
         personas,
+        metadata,
         status: "ready",
         row_count: personas.length,
         processed_at: new Date().toISOString(),

@@ -244,6 +244,8 @@ PLATFORM NORMS:
 PLATFORM NORMS:
 - Your name and current role are visible on every comment, so reputation is at stake. Most people stay constructive even when they disagree.
 - Common behaviors: agreement spam ("Couldn't agree more", "Well said", "100% this"), name-tagging colleagues ("@Jane have you seen this?"), reposting with a one-line take, performative thoughtfulness, lessons-learned framings.
+- You do NOT comment on everything you see. Relevance to your work, trust in the author, and whether you have something useful to add matter more than impulse.
+- Posts that earn respect usually feel specific, experience-backed, and professionally relevant. Generic bait and vague inspiration get eye-rolls.
 - Disagreement is softened: "Respectfully disagree because…", "I'd offer a different perspective…", "Worth noting that…". Direct hostility is rare and gets noticed.
 - The "broetry" format is real for original posts (one short sentence per line) but comments are usually 1-3 sentences in normal prose.
 - Hashtags appear at the end of original posts, 0-2 max — never in comments. Don't use them.
@@ -251,6 +253,7 @@ PLATFORM NORMS:
 - Hot takes get dressed up as "lessons" or "things every founder/PM/leader needs to hear".
 - LinkedIn is performative — replies are as much for *your* network seeing you engage thoughtfully as they are for the OP.
 - Engagement floor is high (likes, congrats, generic praise) but real arguments get fewer responses than on Twitter.
+- Real value on LinkedIn often looks like: adding a nuance, sharing a concrete example, asking a sharp question, or pushing back without sounding unserious.
 - DO NOT use Twitter-style ratios, dunks, or slang. DO NOT write essays — comments are short.`,
 };
 
@@ -263,10 +266,15 @@ function buildLinkedInUserPrompt(
   thread: AgentMessage[],
   targetSentiment: TargetSentiment,
   replyTarget: AgentMessage | null,
-  respondToRoot: boolean
+  respondToRoot: boolean,
+  engagementSignals?: AgentMessage["engagement_signals"] | null
 ): string {
+  const signalLine = engagementSignals
+    ? `Internal context: the post feels ${engagementSignals.relevance >= 0.65 ? "highly relevant" : engagementSignals.relevance >= 0.4 ? "somewhat relevant" : "marginally relevant"} to your work; trust in the post is ${engagementSignals.trust >= 0.65 ? "high" : engagementSignals.trust >= 0.4 ? "mixed" : "low"}; your comment should add professional value, not filler.`
+    : "Internal context: comment only if you have something professionally useful to add.";
+
   if (thread.length === 0) {
-    return `Someone in your network just posted this on LinkedIn:\n\n"${input}"\n\nWrite your comment reacting to it. Keep it 1-3 sentences. Use your real-name voice.\n\n${buildAudienceReminder(targetSentiment)}`;
+    return `Someone in your network just posted this on LinkedIn:\n\n"${input}"\n\nWrite your comment reacting to it. Keep it 1-3 sentences. Use your real-name voice. Avoid generic praise unless that is genuinely all you would say.\n\n${signalLine}\n\n${buildAudienceReminder(targetSentiment)}`;
   }
 
   const fullContext = thread
@@ -288,6 +296,8 @@ You're replying to ${replyTarget.archetype.replace(/\s+/g, " ")} who said:
 
 Write your reply comment. Engage with what they said. 1-3 sentences. Keep the LinkedIn-professional tone — name-tagging colleagues is fine, dunks are not.
 
+${signalLine}
+
 ${buildAudienceReminder(targetSentiment)}`;
   }
 
@@ -299,6 +309,8 @@ ${fullContext}
 
 You're commenting directly on the original post, not on a specific reply. 1-3 sentences.
 
+${signalLine}
+
 ${buildAudienceReminder(targetSentiment)}`;
   }
 
@@ -308,6 +320,8 @@ Recent comments:
 ${fullContext}
 
 Write a fresh top-level comment. 1-3 sentences. Keep it professional.
+
+${signalLine}
 
 ${buildAudienceReminder(targetSentiment)}`;
 }
@@ -491,10 +505,22 @@ function buildAudienceReminder(targetSentiment: TargetSentiment): string {
 export function buildSystemPrompt(
   platform: string,
   persona: Persona,
-  targetSentiment: TargetSentiment
+  targetSentiment: TargetSentiment,
+  engagementSignals?: AgentMessage["engagement_signals"] | null
 ): string {
   const platformPrompt = PLATFORM_SYSTEM[platform] || PLATFORM_SYSTEM.twitter;
   const profile = buildPersonaProfile(platform, persona);
+  const linkedinEngagementBlock =
+    platform === "linkedin" && engagementSignals
+      ? `
+LINKEDIN FEED CONTEXT:
+- This post's estimated professional relevance to you is ${engagementSignals.relevance.toFixed(2)}.
+- Author/profile fit is ${engagementSignals.author_fit.toFixed(2)}.
+- Trust/credibility is ${engagementSignals.trust.toFixed(2)}.
+- Depth/value is ${engagementSignals.depth.toFixed(2)}.
+- Comment only if you have a real professional angle, objection, or nuance to add.
+- Generic praise, engagement bait, and empty "well said" filler are common on LinkedIn but low-value. Prefer substance.`
+      : "";
 
   return `${platformPrompt}
 
@@ -510,6 +536,7 @@ ARGUMENT STYLE: ${profile.argumentStyle}
 VOCABULARY: You sometimes use phrases or framing like: ${profile.vocab.map((v) => `"${v}"`).join(", ")}. Use them naturally — not every reply needs them, and don't force them.
 
 CURRENT STANCE FOR THIS REPLY: ${STANCE_GUIDANCE[targetSentiment]}
+${linkedinEngagementBlock}
 
 RULES:
 - You are a MEMBER OF THE AUDIENCE reacting to a post someone else made. You are NOT the author, company, or organization that made the post.
@@ -540,7 +567,8 @@ export function buildUserPrompt(
   totalRounds: number,
   replyTarget: AgentMessage | null,
   respondToRoot: boolean,
-  platform?: string
+  platform?: string,
+  engagementSignals?: AgentMessage["engagement_signals"] | null
 ): string {
   switch (platform) {
     case "reddit":
@@ -548,7 +576,14 @@ export function buildUserPrompt(
     case "slack":
       return buildSlackUserPrompt(input, thread, targetSentiment, replyTarget, respondToRoot);
     case "linkedin":
-      return buildLinkedInUserPrompt(input, thread, targetSentiment, replyTarget, respondToRoot);
+      return buildLinkedInUserPrompt(
+        input,
+        thread,
+        targetSentiment,
+        replyTarget,
+        respondToRoot,
+        engagementSignals
+      );
     case "twitter":
     default:
       return buildTwitterUserPrompt(input, thread, targetSentiment, replyTarget, respondToRoot);

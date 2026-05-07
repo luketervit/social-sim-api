@@ -1,10 +1,10 @@
 import { NextRequest, after } from "next/server";
 import { randomUUID } from "node:crypto";
 import { createServerClient } from "@supabase/ssr";
-import { unzipSync, strFromU8 } from "fflate";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { MAX_UPLOAD_BYTES, parseUpload } from "@/lib/audiences/parse";
 import { processAudienceUpload } from "@/lib/audiences/process";
+import { parseLinkedInCompleteExportAttachment } from "@/lib/audiences/linkedinExport";
 import {
   getOperatorAccountByUserId,
   hasCurrentConsent,
@@ -116,12 +116,9 @@ export async function POST(request: NextRequest) {
   const fallbackName = file.name.replace(/\.[^.]+$/, "") || "Custom audience";
   const name = sanitiseName(formData.get("name"), fallbackName);
 
-  // Detect LinkedIn data export ZIP (Basic_LinkedInDataExport_*.zip /
-  // Complete_LinkedInDataExport_*.zip / linkedin-export.zip / etc.) and
-  // extract Connections.csv before falling through to the generic CSV
-  // parser. Other files in the ZIP (Messages.csv, Posts.csv, etc.) are
-  // intentionally not used yet — they require their own per-file consent
-  // flow before we touch them.
+  // Detect LinkedIn data export ZIP and extract Connections.csv. If the
+  // archive is a complete export, also attach a post-history eval bundle
+  // so the audience can be benchmarked against the user's real posts.
   const lowerName = file.name.toLowerCase();
   const isZip =
     lowerName.endsWith(".zip") ||
@@ -130,6 +127,7 @@ export async function POST(request: NextRequest) {
 
   let content: string;
   let effectiveFileName = file.name;
+  let linkedInAttachment: ReturnType<typeof parseLinkedInCompleteExportAttachment>["attachment"] | null = null;
 
   if (isZip) {
     let zipBuffer: ArrayBuffer;
@@ -142,9 +140,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let entries: ReturnType<typeof unzipSync>;
     try {
-      entries = unzipSync(new Uint8Array(zipBuffer));
+      const parsedArchive = parseLinkedInCompleteExportAttachment(
+        new Uint8Array(zipBuffer)
+      );
+      content = parsedArchive.connections_csv ?? "";
+      linkedInAttachment = parsedArchive.attachment;
     } catch (err) {
       console.error("ZIP decode failed:", err);
       return Response.json(
@@ -153,25 +154,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const connectionsKey = Object.keys(entries).find((name) =>
-      /(^|\/)Connections\.csv$/i.test(name)
-    );
-
-    if (!connectionsKey) {
+    if (!content) {
       return Response.json(
         {
           error:
             "ZIP doesn't contain Connections.csv. Upload your LinkedIn data export ZIP, or extract Connections.csv and upload it directly.",
         },
-        { status: 400 }
-      );
-    }
-
-    try {
-      content = strFromU8(entries[connectionsKey]);
-    } catch {
-      return Response.json(
-        { error: "Could not read Connections.csv from the ZIP." },
         { status: 400 }
       );
     }
@@ -213,6 +201,7 @@ export async function POST(request: NextRequest) {
       synthetic: parsed.synthetic,
       total_rows_in_file: parsed.total_rows_in_file,
       truncated: parsed.truncated,
+      linkedin_export: linkedInAttachment,
     },
     personas: [],
     owner_user_id: user.id,
@@ -266,7 +255,7 @@ export async function GET(request: NextRequest) {
   const { data, error } = await db
     .from("audiences")
     .select(
-      "id, name, platform, status, row_count, error_message, created_at, processed_at, generator_model, classifier_models, routing_decision"
+      "id, name, platform, status, row_count, error_message, created_at, processed_at, generator_model, classifier_models, routing_decision, metadata"
     )
     .eq("owner_user_id", user.id)
     .order("created_at", { ascending: false });

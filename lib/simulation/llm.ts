@@ -9,8 +9,18 @@ import type { TokenUsage } from "./types";
 // We previously defaulted to Dolphin-Mistral 24B Venice but its only OpenRouter
 // endpoint is the ":free" lane (8 RPM, kills the engine). Hermes 4 70B is the
 // closest replacement with paid throughput.
-const MODEL =
+const DEFAULT_MODEL =
   process.env.OPENROUTER_MODEL || "nousresearch/hermes-4-70b";
+const PLATFORM_DEFAULT_MODELS: Record<string, string> = {
+  linkedin:
+    process.env.OPENROUTER_LINKEDIN_MODEL || "qwen/qwen3-235b-a22b-2507",
+  slack:
+    process.env.OPENROUTER_SLACK_MODEL || "anthropic/claude-haiku-4.5",
+  reddit:
+    process.env.OPENROUTER_REDDIT_MODEL || DEFAULT_MODEL,
+  twitter:
+    process.env.OPENROUTER_TWITTER_MODEL || DEFAULT_MODEL,
+};
 
 // Dissertation final params (Table 4.3): temperature 0.9, response length 150 tokens.
 // Higher temperature (1.2) hurt composite by 0.085; longer responses didn't improve realism.
@@ -195,10 +205,13 @@ async function createCompletion(
 export async function generateReply(
   systemPrompt: string,
   userPrompt: string,
-  options?: { model?: string }
+  options?: { model?: string; platform?: string }
 ): Promise<{ content: string; usage: TokenUsage }> {
   let attempt = 0;
-  const modelToUse = options?.model || MODEL;
+  const modelToUse =
+    options?.model ||
+    (options?.platform ? PLATFORM_DEFAULT_MODELS[options.platform] : null) ||
+    DEFAULT_MODEL;
 
   while (true) {
     try {

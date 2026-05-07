@@ -50,7 +50,8 @@ function sanitiseSimulationError(error: unknown): string {
 
 async function loadAudience(
   audienceId: string,
-  personaCap?: number | null
+  personaCap?: number | null,
+  platform?: string
 ): Promise<{ personas: Persona[]; generatorModel: string | null }> {
   const db = supabaseAdmin();
   const { data, error } = await db
@@ -83,6 +84,19 @@ async function loadAudience(
       saved.endsWith(":free") ||
       saved === "cognitivecomputations/dolphin-mistral-24b-venice-edition";
     generatorModel = broken ? null : saved;
+  }
+
+  if (platform === "linkedin") {
+    const weakLinkedInModels = new Set([
+      "nousresearch/hermes-4-70b",
+      "nousresearch/hermes-3-llama-3.1-70b",
+      "cognitivecomputations/dolphin-llama-3.1-8b",
+      "meta-llama/llama-3.3-70b-instruct",
+    ]);
+    if (!generatorModel || weakLinkedInModels.has(generatorModel)) {
+      generatorModel =
+        process.env.OPENROUTER_LINKEDIN_MODEL || "qwen/qwen3-235b-a22b-2507";
+    }
   }
 
   return {
@@ -127,7 +141,11 @@ export async function runSimulationInline(job: SimulationJob): Promise<void> {
   let refundedCredits = 0;
 
   try {
-    const { personas, generatorModel } = await loadAudience(job.audience_id, job.persona_cap);
+    const { personas, generatorModel } = await loadAudience(
+      job.audience_id,
+      job.persona_cap,
+      job.platform
+    );
 
     for await (const message of runSimulation(
       personas,

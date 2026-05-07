@@ -1,6 +1,14 @@
 import { NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import {
+  getOperatorAccountByUserId,
+  hasCurrentConsent,
+} from "@/lib/operator-accounts";
+import { MAX_UPLOAD_BYTES } from "@/lib/audiences/parse";
+import { parseLinkedInCompleteExportAttachment } from "@/lib/audiences/linkedinExport";
+import { evaluateLinkedInPrivateDataset } from "@/lib/evals/linkedinPrivate";
+import type { Persona } from "@/lib/schemas";
 
 async function getUser(request: NextRequest) {
   const supabase = createServerClient(
@@ -127,4 +135,140 @@ export async function DELETE(
   }
 
   return Response.json({ deleted: true, id });
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const user = await getUser(request);
+  if (!user) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const account = await getOperatorAccountByUserId(user.id);
+  if (!hasCurrentConsent(account)) {
+    return Response.json(
+      {
+        error:
+          "Please review and accept the latest terms before uploading. See /terms.",
+        code: "consent_required",
+      },
+      { status: 403 }
+    );
+  }
+
+  const contentType = request.headers.get("content-type") ?? "";
+  if (!contentType.includes("multipart/form-data")) {
+    return Response.json(
+      { error: "Upload must be multipart/form-data with a 'file' field." },
+      { status: 400 }
+    );
+  }
+
+  const formData = await request.formData();
+  const file = formData.get("file");
+  if (!(file instanceof File)) {
+    return Response.json({ error: "Missing 'file' field." }, { status: 400 });
+  }
+  if (file.size === 0) {
+    return Response.json({ error: "File is empty." }, { status: 400 });
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return Response.json(
+      { error: `File too large. Max ${MAX_UPLOAD_BYTES / 1024 / 1024}MB.` },
+      { status: 413 }
+    );
+  }
+
+  const lowerName = file.name.toLowerCase();
+  const isZip =
+    lowerName.endsWith(".zip") ||
+    file.type === "application/zip" ||
+    file.type === "application/x-zip-compressed";
+  if (!isZip) {
+    return Response.json(
+      { error: "Upload your complete LinkedIn export ZIP." },
+      { status: 400 }
+    );
+  }
+
+  const { id } = await params;
+  const db = supabaseAdmin();
+  const { data: audience, error: audienceError } = await db
+    .from("audiences")
+    .select("id, platform, owner_user_id, metadata, personas")
+    .eq("id", id)
+    .eq("owner_user_id", user.id)
+    .maybeSingle();
+
+  if (audienceError) {
+    return Response.json({ error: "Failed to load audience." }, { status: 500 });
+  }
+  if (!audience) {
+    return Response.json({ error: "Audience not found." }, { status: 404 });
+  }
+  if (audience.platform !== "linkedin") {
+    return Response.json(
+      { error: "LinkedIn post history can only be attached to LinkedIn audiences." },
+      { status: 400 }
+    );
+  }
+
+  const zipBuffer = new Uint8Array(await file.arrayBuffer());
+  let parsed;
+  try {
+    parsed = parseLinkedInCompleteExportAttachment(zipBuffer);
+  } catch {
+    return Response.json(
+      { error: "Could not unzip the file. Make sure it's a valid LinkedIn export ZIP." },
+      { status: 400 }
+    );
+  }
+
+  if (!parsed.attachment) {
+    return Response.json(
+      { error: "This export did not contain post history. Upload the complete LinkedIn export ZIP." },
+      { status: 400 }
+    );
+  }
+
+  const personas = Array.isArray(audience.personas)
+    ? (audience.personas as Persona[])
+    : [];
+  const evalResult =
+    personas.length > 0
+      ? evaluateLinkedInPrivateDataset(personas, parsed.attachment.posts)
+      : null;
+  const metadata =
+    audience.metadata && typeof audience.metadata === "object"
+      ? (audience.metadata as Record<string, unknown>)
+      : {};
+
+  const { error: updateError } = await db
+    .from("audiences")
+    .update({
+      metadata: {
+        ...metadata,
+        linkedin_export: {
+          ...parsed.attachment,
+          eval: evalResult,
+        },
+      },
+    })
+    .eq("id", id)
+    .eq("owner_user_id", user.id);
+
+  if (updateError) {
+    return Response.json({ error: "Failed to attach LinkedIn post history." }, { status: 500 });
+  }
+
+  return Response.json({
+    ok: true,
+    audience_id: id,
+    linkedin_export: {
+      summary: parsed.attachment.summary,
+      eval: evalResult,
+    },
+  });
 }

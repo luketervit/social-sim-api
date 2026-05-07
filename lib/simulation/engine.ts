@@ -7,6 +7,13 @@ import { buildSystemPrompt, buildUserPrompt } from "./prompts";
 import { generateReply } from "./llm";
 import { classifySentiment } from "./sentimentClassifier";
 import { parseStructuredReply } from "./parseStructured";
+import {
+  inferGenericLinkedInCommentQuality,
+  inferLinkedInEngagementSignals,
+  inferLinkedInTargetSentiment,
+  replyProbabilityForLinkedIn,
+  shouldPreferRootComment,
+} from "./linkedinSignals";
 
 type TargetSentiment = AgentMessage["sentiment"];
 
@@ -15,6 +22,7 @@ interface PlannedTurn {
   targetSentiment: TargetSentiment;
   replyTarget: AgentMessage | null;
   respondToRoot: boolean;
+  engagementSignals?: AgentMessage["engagement_signals"] | null;
 }
 
 interface RunSimulationOptions {
@@ -220,7 +228,9 @@ function chooseReplyContext(
   persona: Persona,
   input: string,
   thread: AgentMessage[],
-  allPersonas: Persona[]
+  allPersonas: Persona[],
+  platform: string,
+  engagementSignals?: AgentMessage["engagement_signals"] | null
 ): Pick<PlannedTurn, "replyTarget" | "respondToRoot"> {
   if (thread.length === 0) {
     return {
@@ -239,6 +249,14 @@ function chooseReplyContext(
     return {
       replyTarget: null,
       respondToRoot: true,
+    };
+  }
+
+  if (platform === "linkedin" && engagementSignals) {
+    const preferRoot = shouldPreferRootComment(engagementSignals, thread);
+    return {
+      replyTarget: preferRoot ? null : replyTarget,
+      respondToRoot: preferRoot,
     };
   }
 
@@ -268,25 +286,65 @@ function chooseReplyContext(
 
 function chooseRoundParticipants(
   personas: Persona[],
+  platform: string,
   input: string,
   thread: AgentMessage[],
   allPersonas: Persona[]
 ): PlannedTurn[] {
-  const selected = personas.flatMap((persona) => {
+  const selected: PlannedTurn[] = [];
+  for (const persona of personas) {
+    if (platform === "linkedin") {
+      const engagementSignals = inferLinkedInEngagementSignals(
+        persona,
+        input,
+        thread,
+        (thread.at(-1)?.round ?? 0) + 1
+      );
+      if (Math.random() > replyProbabilityForLinkedIn(persona, engagementSignals, (thread.at(-1)?.round ?? 0) + 1)) {
+        continue;
+      }
+
+      const targetSentiment = inferLinkedInTargetSentiment(persona, engagementSignals);
+      const { replyTarget, respondToRoot } = chooseReplyContext(
+        persona,
+        input,
+        thread,
+        allPersonas,
+        platform,
+        engagementSignals
+      );
+
+      selected.push({
+        persona,
+        targetSentiment,
+        replyTarget,
+        respondToRoot,
+        engagementSignals,
+      });
+      continue;
+    }
+
     if (Math.random() > replyProbability(persona, input, thread)) {
-      return [];
+      continue;
     }
 
     const targetSentiment = inferRoundSentiment(persona, thread);
-    const { replyTarget, respondToRoot } = chooseReplyContext(persona, input, thread, allPersonas);
+    const { replyTarget, respondToRoot } = chooseReplyContext(
+      persona,
+      input,
+      thread,
+      allPersonas,
+      platform
+    );
 
-    return [{
+    selected.push({
       persona,
       targetSentiment,
       replyTarget,
       respondToRoot,
-    }];
-  });
+      engagementSignals: null,
+    });
+  }
 
   selected.sort(() => Math.random() - 0.5);
   return selected;
@@ -313,6 +371,7 @@ export async function* runSimulation(
     state.round = round;
     const roundParticipants = chooseRoundParticipants(
       state.personas,
+      state.platform,
       state.input,
       state.thread,
       state.personas
@@ -328,7 +387,12 @@ export async function* runSimulation(
       roundParticipants.map(async (turn) => {
         await options?.onBeforeMessage?.(turn, round);
 
-        const systemPrompt = buildSystemPrompt(state.platform, turn.persona, turn.targetSentiment);
+        const systemPrompt = buildSystemPrompt(
+          state.platform,
+          turn.persona,
+          turn.targetSentiment,
+          turn.engagementSignals
+        );
         const userPrompt = buildUserPrompt(
           state.input,
           priorThread,
@@ -337,15 +401,31 @@ export async function* runSimulation(
           SIMULATION_ROUNDS,
           turn.replyTarget,
           turn.respondToRoot,
-          state.platform
+          state.platform,
+          turn.engagementSignals
         );
 
         const reply = await generateReply(systemPrompt, userPrompt, {
           model: options?.generatorModel,
+          platform: state.platform,
         });
         await options?.onAfterMessage?.(turn, round, reply.usage);
         const structured = parseStructuredReply(reply.content);
         const sentiment = await classifySentiment(structured.reaction, turn.targetSentiment);
+        const engagementSignals = turn.engagementSignals
+          ? {
+              ...turn.engagementSignals,
+              depth:
+                state.platform === "linkedin"
+                  ? clamp(
+                      (turn.engagementSignals.depth * 0.7) +
+                        (inferGenericLinkedInCommentQuality(structured.reaction) * 0.3),
+                      0,
+                      1
+                    )
+                  : turn.engagementSignals.depth,
+            }
+          : null;
 
         return {
           id: randomUUID(),
@@ -360,6 +440,7 @@ export async function* runSimulation(
           reasoning: structured.reasoning,
           objection: structured.objection,
           what_would_change_my_mind: structured.what_would_change_my_mind,
+          engagement_signals: engagementSignals,
         } satisfies AgentMessage;
       })
     );

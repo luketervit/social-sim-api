@@ -22,7 +22,7 @@ const CARDS: CardSpec[] = [
   {
     eyebrow: "Step 1",
     title: "Upload an audience",
-    body: "Drop a CSV — LinkedIn connections, customer messages, support tickets, anything text-based. We pick the useful columns automatically and turn each row into a persona you can simulate against.",
+    body: "Drop a CSV — LinkedIn connections, customer messages, support tickets, anything text-based. If you have your complete LinkedIn export ZIP, upload that instead: we’ll build personas from connections and attach your real post history for private evals.",
     illustration: <MascotGreeting />,
   },
   {

@@ -1,5 +1,14 @@
 import type { Persona } from "@/lib/schemas";
 
+export interface AgentEngagementSignals {
+  relevance: number;
+  author_fit: number;
+  trust: number;
+  depth: number;
+  save_intent: number;
+  comment_intent: number;
+}
+
 export interface AgentMessage {
   id?: string;
   round: number;
@@ -22,6 +31,8 @@ export interface AgentMessage {
   objection?: string | null;
   /** What would change the agent's mind. */
   what_would_change_my_mind?: string | null;
+  /** Latent feed and engagement features used by relevance-aware platforms. */
+  engagement_signals?: AgentEngagementSignals | null;
 }
 
 export interface TokenUsage {

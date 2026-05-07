@@ -14,6 +14,18 @@ interface AudienceRow {
   processed_at: string | null;
   generator_model?: string | null;
   classifier_models?: string[] | null;
+  metadata?: {
+    linkedin_export?: {
+      summary?: {
+        post_count?: number;
+      };
+      eval?: {
+        sample_size?: number;
+        spearman_rank_correlation?: number | null;
+        top_quartile_overlap?: number | null;
+      } | null;
+    } | null;
+  } | null;
   routing_decision?: {
     classifier_ids?: string[];
     generator_id?: string;
@@ -27,7 +39,7 @@ interface AudiencesClientProps {
   initialAudiences: AudienceRow[];
 }
 
-const ACCEPTED_EXTENSIONS = [".csv", ".json", ".ndjson"];
+const ACCEPTED_EXTENSIONS = [".csv", ".json", ".ndjson", ".zip"];
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleString("en-US", {
@@ -54,7 +66,10 @@ export default function AudiencesClient({ initialAudiences }: AudiencesClientPro
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [uploadingLinkedInId, setUploadingLinkedInId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const linkedInUpdateRef = useRef<HTMLInputElement | null>(null);
+  const pendingLinkedInAudienceId = useRef<string | null>(null);
 
   // Poll for status updates while any audience is still processing.
   useEffect(() => {
@@ -85,7 +100,7 @@ export default function AudiencesClient({ initialAudiences }: AudiencesClientPro
     }
     const lower = f.name.toLowerCase();
     if (!ACCEPTED_EXTENSIONS.some((ext) => lower.endsWith(ext))) {
-      setError("File must be .csv, .json, or .ndjson");
+      setError("File must be .csv, .json, .ndjson, or .zip");
       return;
     }
     setFile(f);
@@ -248,7 +263,7 @@ export default function AudiencesClient({ initialAudiences }: AudiencesClientPro
           ) : (
             <div>
               <div style={{ fontSize: 14, color: "var(--text-secondary)" }}>
-                Drop a .csv or .json file, or click to browse
+                Drop a .csv, .json, or LinkedIn export .zip, or click to browse
               </div>
               <div
                 style={{
@@ -257,14 +272,14 @@ export default function AudiencesClient({ initialAudiences }: AudiencesClientPro
                   marginTop: 6,
                 }}
               >
-                Max 10 MB · any CSV — we&apos;ll pick the best text column or combine fields
+                Max 10 MB · LinkedIn complete export zips attach post history automatically
               </div>
             </div>
           )}
           <input
             ref={fileInputRef}
             type="file"
-            accept=".csv,.json,.ndjson,text/csv,application/json"
+            accept=".csv,.json,.ndjson,.zip,text/csv,application/json,application/zip,application/x-zip-compressed"
             style={{ display: "none" }}
             onChange={(e) => onFileChosen(e.target.files?.[0] ?? null)}
           />
@@ -424,6 +439,33 @@ export default function AudiencesClient({ initialAudiences }: AudiencesClientPro
                     <span>{audience.row_count ?? "—"} personas</span>
                     <span>Created {formatDate(audience.created_at)}</span>
                   </div>
+                  {audience.platform === "linkedin" &&
+                  audience.metadata?.linkedin_export?.summary ? (
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 12,
+                        flexWrap: "wrap",
+                        fontSize: 12,
+                        color: "var(--text-secondary)",
+                        marginTop: 4,
+                      }}
+                    >
+                      <span>
+                        {audience.metadata.linkedin_export.summary.post_count ?? 0} posts attached
+                      </span>
+                      {typeof audience.metadata.linkedin_export.eval?.sample_size === "number" ? (
+                        <span>
+                          eval n={audience.metadata.linkedin_export.eval.sample_size}
+                        </span>
+                      ) : null}
+                      {typeof audience.metadata.linkedin_export.eval?.spearman_rank_correlation === "number" ? (
+                        <span>
+                          rank corr {audience.metadata.linkedin_export.eval.spearman_rank_correlation.toFixed(2)}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
                   {audience.error_message ? (
                     <p
                       style={{
@@ -530,6 +572,30 @@ export default function AudiencesClient({ initialAudiences }: AudiencesClientPro
                       Run sim
                     </Link>
                   ) : null}
+                  {audience.platform === "linkedin" ? (
+                    <button
+                      onClick={() => {
+                        pendingLinkedInAudienceId.current = audience.id;
+                        linkedInUpdateRef.current?.click();
+                      }}
+                      disabled={uploadingLinkedInId === audience.id}
+                      style={{
+                        background: "none",
+                        border: "1px solid var(--border)",
+                        borderRadius: 8,
+                        padding: "6px 12px",
+                        fontSize: 12,
+                        color: "var(--text-primary)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {uploadingLinkedInId === audience.id
+                        ? "Updating…"
+                        : audience.metadata?.linkedin_export?.summary
+                          ? "Update posts"
+                          : "Attach posts"}
+                    </button>
+                  ) : null}
                   <button
                     onClick={() => handleDelete(audience.id)}
                     style={{
@@ -550,6 +616,50 @@ export default function AudiencesClient({ initialAudiences }: AudiencesClientPro
           </div>
         )}
       </div>
+      <input
+        ref={linkedInUpdateRef}
+        type="file"
+        accept=".zip,application/zip,application/x-zip-compressed"
+        style={{ display: "none" }}
+        onChange={async (e) => {
+          const selected = e.target.files?.[0] ?? null;
+          const audienceId = pendingLinkedInAudienceId.current;
+          pendingLinkedInAudienceId.current = null;
+          if (!selected || !audienceId) return;
+
+          setError(null);
+          setUploadingLinkedInId(audienceId);
+          try {
+            const fd = new FormData();
+            fd.append("file", selected);
+            const res = await fetch(`/api/v1/audiences/${audienceId}`, {
+              method: "PATCH",
+              body: fd,
+            });
+            const payload = await res.json().catch(() => null);
+            if (!res.ok) {
+              throw new Error(payload?.error ?? "Could not attach LinkedIn post history.");
+            }
+
+            const listRes = await fetch("/api/v1/audiences");
+            if (listRes.ok) {
+              const data = await listRes.json();
+              if (Array.isArray(data.audiences)) {
+                setAudiences(data.audiences);
+              }
+            }
+          } catch (err) {
+            setError(
+              err instanceof Error
+                ? err.message
+                : "Could not attach LinkedIn post history."
+            );
+          } finally {
+            setUploadingLinkedInId(null);
+            if (linkedInUpdateRef.current) linkedInUpdateRef.current.value = "";
+          }
+        }}
+      />
     </div>
   );
 }

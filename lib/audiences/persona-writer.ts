@@ -5,7 +5,7 @@ import type { ParsedRow } from "./parse";
 import type { RowScores } from "./classify";
 
 const MODEL =
-  process.env.PERSONA_WRITER_MODEL || "qwen/qwen3-32b";
+  process.env.PERSONA_WRITER_MODEL || "qwen/qwen3-235b-a22b-2507";
 const MAX_CONCURRENCY = 8;
 const REQUEST_TIMEOUT_MS = 15_000;
 
@@ -76,6 +76,10 @@ function buildUserPrompt(
     brand_affinity: Number(persona.brand_affinity.toFixed(2)),
     current_core_values: persona.core_values.slice(0, 5),
     role_hint: role ? clampText(role, 80) : null,
+    role_family: persona.role_family ?? null,
+    seniority: persona.seniority ?? null,
+    topical_expertise: persona.topical_expertise?.slice(0, 6) ?? [],
+    professional_voice: persona.professional_voice ?? null,
     keyword_hints: persona.core_values.slice(0, 5),
     classifier_summary: summariseScores(scores),
   };
@@ -86,6 +90,8 @@ Constraints:
 - Never mention any real names, companies, products, URLs, emails, locations, or unique identifiers.
 - Never mention scores, probabilities, classifiers, or that these are inferred traits.
 - Keep it specific and human, not corporate or generic.
+- For LinkedIn/professional audiences, make the persona sound like a real operator, buyer, or practitioner with reputation concerns.
+- Avoid cartoon archetypes, viral-slop phrasing, generic "thought leader" language, and internet-forum edginess unless the structured traits clearly justify it.
 - The persona_prompt should describe posting voice, likely concerns, rhetorical style, and default reaction posture.
 - The persona is an audience member reacting to posts, not a brand spokesperson.
 
@@ -124,7 +130,7 @@ async function writeOne(
           {
             role: "system",
             content:
-              "You create de-identified synthetic audience personas for a social discourse simulator.",
+              "You create de-identified synthetic audience personas for a social discourse simulator. Your personas must read like plausible humans, especially for professional networks such as LinkedIn.",
           },
           {
             role: "user",

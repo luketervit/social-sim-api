@@ -1,6 +1,12 @@
 import type { Persona } from "@/lib/schemas";
 import type { ParsedRow } from "./parse";
 import type { RowScores } from "./classify";
+import {
+  defaultPrioritiesForRoleFamily,
+  extractLinkedInExpertise,
+  inferRoleFamilyFromText,
+  inferSeniorityFromText,
+} from "@/lib/simulation/linkedinSignals";
 
 const ROLE_FIELD_KEYS = [
   "position",
@@ -161,6 +167,25 @@ function topKeywords(text: string, limit = 3): string[] {
     .map(([word]) => word);
 }
 
+function uniqueProfessionalKeywords(
+  roleHint: string | null,
+  keywords: string[],
+  roleFamily: Persona["role_family"] | undefined
+) {
+  const defaults = roleFamily ? defaultPrioritiesForRoleFamily(roleFamily) : [];
+  const roleTokens = roleHint
+    ? roleHint
+        .toLowerCase()
+        .replace(/[^a-z0-9\s/&+-]/g, " ")
+        .split(/\s+/)
+        .filter((token) => token.length >= 4 && !STOPWORDS.has(token))
+    : [];
+
+  return Array.from(
+    new Set([...keywords, ...roleTokens.slice(0, 2), ...defaults])
+  ).slice(0, 5);
+}
+
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
 }
@@ -267,15 +292,25 @@ export function synthesizePersona(
       : baseArchetype;
 
   const keywords = topKeywords(row.text);
+  const roleHint = fieldArchetype?.role ?? null;
+  const roleFamily = roleHint ? inferRoleFamilyFromText(roleHint) : undefined;
+  const seniority = roleHint ? inferSeniorityFromText(roleHint) : undefined;
+  const personaKeywords = uniqueProfessionalKeywords(roleHint, keywords, roleFamily);
+  const expertise = extractLinkedInExpertise(roleHint, personaKeywords);
+  const professionalVoice = roleHint ? describeVoice(roleHint) : null;
   const idSuffix = `r${row.index}`;
 
   const personaPrompt = buildAnonymousPersonaPrompt({
-    role: fieldArchetype?.role ?? null,
+    role: roleHint,
+    roleFamily,
+    seniority,
     archetype: archetypeLabel,
     reactivity,
     sophistication,
     brandAffinity,
-    keywords,
+    keywords: personaKeywords,
+    expertise,
+    professionalVoice,
     aggression,
     sentiment: topLabel(scores.sentiment),
     emotion: emotionLabel,
@@ -289,8 +324,13 @@ export function synthesizePersona(
     reactivity_baseline: reactivity,
     sophistication,
     brand_affinity: brandAffinity,
-    core_values: keywords.length > 0 ? keywords : ["candor"],
+    core_values: personaKeywords.length > 0 ? personaKeywords : ["professional value"],
     persona_prompt: personaPrompt,
+    role_hint: roleHint ?? undefined,
+    seniority,
+    role_family: roleFamily,
+    topical_expertise: expertise.length > 0 ? expertise : undefined,
+    professional_voice: professionalVoice ?? undefined,
   };
 }
 
@@ -323,13 +363,44 @@ function describeVoice(role: string | null): string | null {
   return null;
 }
 
+function roleFamilyLabel(roleFamily: Persona["role_family"] | undefined): string {
+  switch (roleFamily) {
+    case "founder":
+      return "commercial, narrative-aware, and sensitive to market signal";
+    case "marketing":
+      return "audience-aware, messaging-sensitive, and alert to distribution quality";
+    case "sales":
+      return "buyer-aware, conversion-minded, and quick to test credibility";
+    case "product":
+      return "user-centered, structured, and focused on tradeoffs";
+    case "engineering":
+      return "technical, skeptical of hype, and attentive to implementation detail";
+    case "operations":
+      return "process-minded, risk-aware, and practical";
+    case "finance":
+      return "economically disciplined and quick to ask about material impact";
+    case "people":
+      return "trust-sensitive, culture-aware, and alert to leadership signals";
+    case "design":
+      return "taste-aware and highly sensitive to clarity and craft";
+    case "investor":
+      return "signal-seeking, pattern-matching, and focused on leverage";
+    default:
+      return "professionally observant and selective about what feels worth engaging with";
+  }
+}
+
 interface PersonaPromptInput {
   role: string | null;
+  roleFamily?: Persona["role_family"];
+  seniority?: Persona["seniority"];
   archetype: string;
   reactivity: number;
   sophistication: number;
   brandAffinity: number;
   keywords: string[];
+  expertise: string[];
+  professionalVoice: string | null;
   aggression: number;
   sentiment: string | null;
   emotion: string | null;
@@ -341,8 +412,11 @@ function buildAnonymousPersonaPrompt(input: PersonaPromptInput): string {
   const lines: string[] = [];
   lines.push(`You are a ${input.archetype}.`);
 
-  const voice = describeVoice(input.role);
+  const voice = input.professionalVoice ?? describeVoice(input.role);
   if (voice) lines.push(`Voice: ${voice}.`);
+  if (input.role) lines.push(`Work context: ${input.role}.`);
+  if (input.roleFamily) lines.push(`Professional lens: ${roleFamilyLabel(input.roleFamily)}.`);
+  if (input.seniority) lines.push(`Seniority: ${input.seniority}.`);
 
   lines.push(`Tone: ${describeReactivity(input.reactivity)}.`);
   lines.push(`${capitalize(describeSophistication(input.sophistication))}.`);
@@ -361,9 +435,17 @@ function buildAnonymousPersonaPrompt(input: PersonaPromptInput): string {
   const formality = describeFormality(input.formality);
   if (formality) lines.push(`Register: ${formality}.`);
 
+  if (input.expertise.length > 0) {
+    lines.push(`Professional topics you naturally clock: ${input.expertise.slice(0, 4).join(", ")}.`);
+  }
+
   if (input.keywords.length > 0) {
     lines.push(`You care about: ${input.keywords.slice(0, 3).join(", ")}.`);
   }
+
+  lines.push(
+    "You react like a real professional whose name and reputation are attached to every comment. You do not sound like an internet caricature."
+  );
 
   lines.push(
     "Stay anonymous. Never invent or mention real names, companies, products, or your own identity."
