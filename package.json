@@ -11,7 +11,8 @@
     "mock-runs": "tsx --env-file=.env scripts/mock-runs.ts",
     "grant": "tsx --env-file=.env scripts/grant-access.ts",
     "eval:linkedin": "tsx --env-file=.env scripts/eval-linkedin-sim.ts",
-    "eval:linkedin:private": "tsx --env-file=.env scripts/eval-linkedin-private.ts"
+    "eval:linkedin:private": "tsx --env-file=.env scripts/eval-linkedin-private.ts",
+    "eval:linkedin:global": "tsx --env-file=.env scripts/eval-linkedin-global.ts"
   },
   "keywords": [],
   "author": "",
