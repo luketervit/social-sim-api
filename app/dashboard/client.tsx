@@ -3678,6 +3678,32 @@ function affinityWord(affinity: number): string {
   return "supportive";
 }
 
+function reportVariantName(index: number, label: string) {
+  return index === 0 ? "Original" : `Variant ${index}`;
+}
+
+function variantReportStats(variant: VariantRun) {
+  const breakdown = sentimentBreakdown(variant.thread);
+  const total = Math.max(variant.thread.length, 1);
+  const positivePct = Math.round((breakdown.positive / total) * 100);
+  const neutralPct = Math.round((breakdown.neutral / total) * 100);
+  const negativePct = Math.round((breakdown.negative / total) * 100);
+  const hostilePct = Math.round((breakdown.hostile / total) * 100);
+  const badPct = negativePct + hostilePct;
+  const score = variantScore(variant);
+
+  return {
+    breakdown,
+    total,
+    positivePct,
+    neutralPct,
+    negativePct,
+    hostilePct,
+    badPct,
+    score,
+  };
+}
+
 function buildReportHtml(
   chat: ChatState,
   analysis: ChatAnalysis | null
@@ -3746,6 +3772,15 @@ function buildReportHtml(
         })
       : "";
 
+  const sectionDecisionBoard =
+    completed.length > 1
+      ? buildDecisionBoardSection({
+          chat,
+          completed,
+          recommendedId: recommended?.id ?? null,
+        })
+      : "";
+
   const sectionEvidence = buildEvidenceSection({
     chat,
     completed,
@@ -3781,13 +3816,22 @@ function buildReportHtml(
   header.brand .tag { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--tertiary); }
   .meta-line { margin-top: 12px; font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tertiary); }
   .meta-line strong { color: var(--text); font-weight: 500; }
+  .stack { display: flex; flex-direction: column; gap: 30px; margin-top: 28px; }
 
   /* Recommendation hero */
-  .hero { margin-top: 28px; padding: 32px 32px 30px; background: var(--ink); color: rgba(245, 244, 242, 0.95); border-radius: 18px; page-break-inside: avoid; }
+  .hero { padding: 34px 34px 32px; background:
+      radial-gradient(circle at top right, rgba(232, 210, 122, 0.18), transparent 32%),
+      linear-gradient(180deg, #181716 0%, #111111 100%);
+    color: rgba(245, 244, 242, 0.95); border-radius: 22px; page-break-inside: avoid; box-shadow: 0 18px 50px rgba(0,0,0,0.12); }
   .hero .eyebrow { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--butter); }
   .hero h1 { font-family: "Fraunces", Georgia, serif; font-size: 30px; letter-spacing: -0.02em; line-height: 1.15; margin: 12px 0 18px; font-weight: 500; }
   .hero h1 em { color: var(--butter); font-style: italic; font-weight: 400; }
   .hero .post-card { background: rgba(245, 244, 242, 0.07); border: 1px solid rgba(245, 244, 242, 0.14); border-radius: 12px; padding: 18px 20px; font-family: "Fraunces", Georgia, serif; font-size: 16px; line-height: 1.55; color: rgba(245, 244, 242, 0.95); white-space: pre-wrap; }
+  .hero .summary-grid { margin-top: 22px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .hero .summary-card { padding: 14px 14px 13px; border-radius: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); }
+  .hero .summary-card .kicker { display: block; font-family: "SF Mono", Menlo, monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(245,244,242,0.48); margin-bottom: 6px; }
+  .hero .summary-card .value { display: block; font-family: "Fraunces", Georgia, serif; font-size: 25px; line-height: 1; color: var(--butter); }
+  .hero .summary-card .note { display: block; margin-top: 7px; font-size: 12px; line-height: 1.45; color: rgba(245,244,242,0.78); }
   .hero .why-block { margin-top: 22px; }
   .hero .why-label { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(245, 244, 242, 0.5); margin-bottom: 6px; }
   .hero .why-text { font-size: 14px; line-height: 1.6; color: rgba(245, 244, 242, 0.9); margin: 0; }
@@ -3795,7 +3839,7 @@ function buildReportHtml(
   .hero .breakdown strong { color: rgba(245, 244, 242, 0.95); font-weight: 600; }
 
   /* Standard sections */
-  .section { margin-top: 32px; padding: 24px 26px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; page-break-inside: avoid; }
+  .section { padding: 24px 26px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; page-break-inside: avoid; box-shadow: 0 8px 24px rgba(20,20,19,0.04); }
   .section .eyebrow { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--tertiary); }
   .section h2 { font-family: "Fraunces", Georgia, serif; font-size: 21px; letter-spacing: -0.02em; line-height: 1.2; margin: 8px 0 14px; font-weight: 500; }
   .section p { margin: 0 0 12px; font-size: 14px; line-height: 1.6; color: var(--text); }
@@ -3806,8 +3850,22 @@ function buildReportHtml(
   ul.risks li { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; background: var(--bg); border-radius: 10px; font-size: 13px; line-height: 1.55; color: var(--text); }
   ul.risks li::before { content: "▲"; color: var(--coral); font-size: 9px; line-height: 22px; flex-shrink: 0; }
 
+  /* Decision board */
+  .board { overflow: hidden; }
+  .board-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  .board-table th, .board-table td { padding: 13px 0; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .board-table th { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tertiary); font-weight: 500; }
+  .board-table td { font-size: 13px; color: var(--text); }
+  .board-table tr:last-child td { border-bottom: none; }
+  .board-table .draft-name { display: flex; flex-direction: column; gap: 3px; }
+  .board-table .draft-name strong { font-size: 14px; font-weight: 600; color: var(--text); }
+  .board-table .draft-name span { color: var(--muted); }
+  .winner-pill { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 999px; background: rgba(232,210,122,0.18); color: var(--ink); font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; }
+  .metric-good { color: #1F8A55; font-weight: 600; }
+  .metric-warn { color: var(--coral); font-weight: 600; }
+
   /* Alternates */
-  .alternates { margin-top: 32px; }
+  .alternates { display: flex; flex-direction: column; gap: 12px; }
   .alternates h2 { font-family: "Fraunces", Georgia, serif; font-size: 19px; letter-spacing: -0.02em; margin: 0 0 16px; font-weight: 500; color: var(--text); }
   .alt-card { padding: 18px 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 12px; page-break-inside: avoid; }
   .alt-card .alt-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
@@ -3816,14 +3874,16 @@ function buildReportHtml(
   .alt-card .alt-stat { margin-left: auto; font-family: "SF Mono", Menlo, monospace; font-size: 11px; letter-spacing: 0.04em; color: var(--coral); text-transform: uppercase; }
   .alt-card .alt-post { font-family: "Fraunces", Georgia, serif; font-size: 14px; line-height: 1.5; color: var(--muted); padding: 10px 12px; background: var(--bg); border-radius: 8px; margin: 0 0 10px; white-space: pre-wrap; }
   .alt-card .alt-summary { font-size: 13px; line-height: 1.55; color: var(--text); margin: 0; }
+  .alt-card .alt-meta { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 10px; font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--tertiary); }
 
   /* Evidence appendix */
-  .evidence { margin-top: 36px; padding-top: 22px; border-top: 1px solid var(--border); }
+  .evidence { padding-top: 4px; }
   .evidence .eyebrow { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tertiary); margin-bottom: 12px; display: block; }
   .ev-row { padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 10px; page-break-inside: avoid; }
   .ev-row .ev-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
   .ev-row .ev-eyebrow { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tertiary); }
   .ev-row .ev-label { font-size: 13px; font-weight: 500; color: var(--text); }
+  .ev-row .ev-meta { margin-left: auto; font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--tertiary); }
   .ev-row.is-winner { background: rgba(232, 210, 122, 0.12); border-color: rgba(232, 210, 122, 0.4); }
   .ev-row.is-winner .ev-eyebrow { color: var(--ink); }
   .bars { display: flex; flex-direction: column; gap: 6px; }
@@ -3833,7 +3893,7 @@ function buildReportHtml(
   .bar-count { text-align: right; color: var(--text); font-weight: 600; }
 
   /* Audience strip */
-  .audience-strip { margin-top: 22px; padding: 16px 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+  .audience-strip { padding: 18px 20px; background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(250,249,247,0.92)); border: 1px solid var(--border); border-radius: 16px; }
   .audience-strip .eyebrow { font-family: "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tertiary); }
   .audience-strip .name { font-family: "Fraunces", Georgia, serif; font-size: 17px; font-weight: 500; margin-top: 6px; color: var(--text); }
   .audience-strip .meta { margin-top: 8px; font-size: 12px; color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; font-family: "SF Mono", Menlo, monospace; letter-spacing: 0.04em; text-transform: uppercase; }
@@ -3846,6 +3906,11 @@ function buildReportHtml(
   .actions button { padding: 8px 16px; border-radius: 999px; border: none; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; }
   .actions .save { background: var(--ink); color: var(--butter); }
   .actions .close { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  @media screen and (max-width: 760px) {
+    .hero .summary-grid { grid-template-columns: 1fr; }
+    .board-table th:nth-child(4), .board-table td:nth-child(4),
+    .board-table th:nth-child(5), .board-table td:nth-child(5) { display: none; }
+  }
   @media print {
     .actions { display: none; }
     .page { padding: 0; }
@@ -3865,6 +3930,7 @@ function buildReportHtml(
 
   <p class="meta-line">For <strong>${escapeHtml(audienceName)}</strong> on <strong>${escapeHtml(platformLabel)}</strong> · ${personaCount}${chat.audienceRowCount ? `/${chat.audienceRowCount}` : ""} personas tested${chat.variants.length > 1 ? ` · ${chat.variants.length} drafts compared` : ""}</p>
 
+  <div class="stack">
   ${sectionRecommendation}
 
   <div class="audience-strip">
@@ -3887,9 +3953,10 @@ function buildReportHtml(
     }
   </div>
 
+  ${sectionDecisionBoard}
   ${sectionAlternates}
-
   ${sectionEvidence}
+  </div>
 
   <footer>
     <span>Atharias · Social Simulation Engine</span>
@@ -3921,11 +3988,7 @@ function buildRecommendationSection({
   recommendedHeadline: string;
   analysis: ChatAnalysis | null;
 }): string {
-  const breakdown = sentimentBreakdown(recommended.thread);
-  const total = recommended.thread.length || 1;
-  const positivePct = ((breakdown.positive / total) * 100).toFixed(0);
-  const negativePct = ((breakdown.negative / total) * 100).toFixed(0);
-  const hostilePct = ((breakdown.hostile / total) * 100).toFixed(0);
+  const stats = variantReportStats(recommended);
 
   const headline = analysis?.recommendedHeadline ?? recommendedHeadline;
   const headlineHtml = (() => {
@@ -3936,6 +3999,25 @@ function buildRecommendationSection({
     }
     return `<em>${escapeHtml(headline)}</em>`;
   })();
+
+  const summaryGrid = `
+    <div class="summary-grid">
+      <div class="summary-card">
+        <span class="kicker">Conversation risk</span>
+        <span class="value">${stats.badPct}%</span>
+        <span class="note">negative + hostile replies</span>
+      </div>
+      <div class="summary-card">
+        <span class="kicker">Support pocket</span>
+        <span class="value">${stats.positivePct}%</span>
+        <span class="note">positive replies willing to back it</span>
+      </div>
+      <div class="summary-card">
+        <span class="kicker">Reply volume</span>
+        <span class="value">${recommended.thread.length}</span>
+        <span class="note">${recommended.aggression ? `${escapeHtml(recommended.aggression)} aggression` : "simulated direct responses"}</span>
+      </div>
+    </div>`;
 
   const whyHtml = analysis?.whyThisWins
     ? `<div class="why-block">
@@ -3969,18 +4051,72 @@ function buildRecommendationSection({
       <span class="eyebrow">Recommendation${recommendedIdx === 0 ? "" : ` · Variant ${recommendedIdx}`}</span>
       <h1>${headlineHtml}</h1>
       <div class="post-card">${escapeHtml(recommended.post)}</div>
+      ${summaryGrid}
       ${whyHtml}
       ${expectationHtml}
       <div class="breakdown">
         <span><strong>${recommended.thread.length}</strong> total replies</span>
-        <span><strong>${positivePct}%</strong> positive</span>
-        <span><strong>${negativePct}%</strong> negative</span>
-        <span><strong>${hostilePct}%</strong> hostile</span>
+        <span><strong>${stats.positivePct}%</strong> positive</span>
+        <span><strong>${stats.neutralPct}%</strong> neutral</span>
+        <span><strong>${stats.negativePct}%</strong> negative</span>
+        <span><strong>${stats.hostilePct}%</strong> hostile</span>
         ${recommended.aggression ? `<span><strong>${escapeHtml(recommended.aggression)}</strong> aggression</span>` : ""}
       </div>
     </section>
     ${risksHtml}
   `;
+}
+
+function buildDecisionBoardSection({
+  chat,
+  completed,
+  recommendedId,
+}: {
+  chat: ChatState;
+  completed: VariantRun[];
+  recommendedId: string | null;
+}): string {
+  const rows = completed
+    .map((variant) => {
+      const idx = chat.variants.findIndex((x) => x.id === variant.id);
+      const stats = variantReportStats(variant);
+      const isWinner = variant.id === recommendedId;
+      return `
+        <tr>
+          <td>
+            <div class="draft-name">
+              <strong>${escapeHtml(reportVariantName(idx, variant.label))}</strong>
+              <span>${escapeHtml(variant.label)}</span>
+            </div>
+          </td>
+          <td>${isWinner ? `<span class="winner-pill">Recommended</span>` : "—"}</td>
+          <td class="${stats.badPct <= 40 ? "metric-good" : "metric-warn"}">${stats.badPct}%</td>
+          <td>${stats.positivePct}%</td>
+          <td>${variant.thread.length}</td>
+          <td>${variant.aggression ? escapeHtml(variant.aggression) : "—"}</td>
+        </tr>`;
+    })
+    .join("");
+
+  return `
+    <section class="section board">
+      <span class="eyebrow">Decision board</span>
+      <h2>How each draft performed</h2>
+      <p>The winning draft is the cleanest combination of low backlash, enough upside, and manageable reply tone.</p>
+      <table class="board-table">
+        <thead>
+          <tr>
+            <th>Draft</th>
+            <th>Verdict</th>
+            <th>Pushback</th>
+            <th>Support</th>
+            <th>Replies</th>
+            <th>Aggression</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </section>`;
 }
 
 function buildAlternatesSection({
@@ -4007,16 +4143,20 @@ function buildAlternatesSection({
   const cards = others
     .map((v) => {
       const idx = chat.variants.findIndex((x) => x.id === v.id);
-      const b = sentimentBreakdown(v.thread);
-      const total = v.thread.length || 1;
-      const bad = (((b.hostile + b.negative) / total) * 100).toFixed(0);
+      const stats = variantReportStats(v);
       const summary = altNoteByIndex.get(idx);
       return `
         <div class="alt-card">
           <div class="alt-head">
-            <span class="alt-eyebrow">${idx === 0 ? "Original" : `Variant ${idx}`}</span>
+            <span class="alt-eyebrow">${reportVariantName(idx, v.label)}</span>
             <span class="alt-label">${escapeHtml(v.label)}</span>
-            <span class="alt-stat">${bad}% negative + hostile</span>
+            <span class="alt-stat">${stats.badPct}% pushback</span>
+          </div>
+          <div class="alt-meta">
+            <span>${stats.positivePct}% positive</span>
+            <span>${stats.neutralPct}% neutral</span>
+            <span>${v.thread.length} replies</span>
+            <span>${v.aggression ? escapeHtml(v.aggression) : "—"} aggression</span>
           </div>
           <p class="alt-post">${escapeHtml(v.post)}</p>
           ${summary ? `<p class="alt-summary">${escapeHtml(summary)}</p>` : ""}
@@ -4025,8 +4165,10 @@ function buildAlternatesSection({
     .join("");
 
   return `
-    <div class="alternates">
+    <div class="alternates section">
+      <span class="eyebrow">Alternates</span>
       <h2>Why not the others</h2>
+      <p>These drafts either invited more pushback or failed to create enough support to justify shipping them first.</p>
       ${cards}
     </div>`;
 }
@@ -4045,33 +4187,33 @@ function buildEvidenceSection({
   const rows = completed
     .map((v) => {
       const idx = chat.variants.findIndex((x) => x.id === v.id);
-      const b = sentimentBreakdown(v.thread);
-      const total = v.thread.length || 1;
+      const stats = variantReportStats(v);
       const isWinner = v.id === recommendedId;
       const bars = `
         <div class="bars">
           <div class="bar"><span class="bar-label">Positive</span>
-            <span class="bar-track"><span class="bar-fill" style="width:${(b.positive / total) * 100}%; background:#1F8A55"></span></span>
-            <span class="bar-count">${b.positive}</span>
+            <span class="bar-track"><span class="bar-fill" style="width:${stats.positivePct}%; background:#1F8A55"></span></span>
+            <span class="bar-count">${stats.breakdown.positive}</span>
           </div>
           <div class="bar"><span class="bar-label">Neutral</span>
-            <span class="bar-track"><span class="bar-fill" style="width:${(b.neutral / total) * 100}%; background:#9E9E9E"></span></span>
-            <span class="bar-count">${b.neutral}</span>
+            <span class="bar-track"><span class="bar-fill" style="width:${stats.neutralPct}%; background:#9E9E9E"></span></span>
+            <span class="bar-count">${stats.breakdown.neutral}</span>
           </div>
           <div class="bar"><span class="bar-label">Negative</span>
-            <span class="bar-track"><span class="bar-fill" style="width:${(b.negative / total) * 100}%; background:#C8552B"></span></span>
-            <span class="bar-count">${b.negative}</span>
+            <span class="bar-track"><span class="bar-fill" style="width:${stats.negativePct}%; background:#C8552B"></span></span>
+            <span class="bar-count">${stats.breakdown.negative}</span>
           </div>
           <div class="bar"><span class="bar-label">Hostile</span>
-            <span class="bar-track"><span class="bar-fill" style="width:${(b.hostile / total) * 100}%; background:#B23226"></span></span>
-            <span class="bar-count">${b.hostile}</span>
+            <span class="bar-track"><span class="bar-fill" style="width:${stats.hostilePct}%; background:#B23226"></span></span>
+            <span class="bar-count">${stats.breakdown.hostile}</span>
           </div>
         </div>`;
       return `
         <div class="ev-row${isWinner ? " is-winner" : ""}">
           <div class="ev-head">
-            <span class="ev-eyebrow">${idx === 0 ? "Original" : `Variant ${idx}`}${isWinner ? " · Recommended" : ""}</span>
+            <span class="ev-eyebrow">${reportVariantName(idx, v.label)}${isWinner ? " · Recommended" : ""}</span>
             <span class="ev-label">${escapeHtml(v.label)}</span>
+            <span class="ev-meta">${stats.badPct}% pushback · ${stats.positivePct}% support</span>
           </div>
           ${bars}
         </div>`;
@@ -4079,8 +4221,10 @@ function buildEvidenceSection({
     .join("");
 
   return `
-    <section class="evidence">
+    <section class="section evidence">
       <span class="eyebrow">Sentiment breakdown · per draft</span>
+      <h2>Reply mix by draft</h2>
+      <p>This is the raw distribution behind the recommendation. The winner should feel cleaner here, not just louder.</p>
       ${rows}
     </section>`;
 }
