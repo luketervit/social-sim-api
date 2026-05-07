@@ -46,21 +46,102 @@ const PLATFORM_TONE: Record<ViralIdeaInput["platform"], string> = {
     "Real-name voice. 2-5 short sentences, one-line-per-thought broetry style is fine. 0-1 hashtags max. Confident but not corny.",
 };
 
-function fallbackIdeas(input: ViralIdeaInput): ViralIdea[] {
-  // Last-resort templates only — no raw context appended. The post text is
-  // generic on purpose so a broken LLM call still returns *something* without
-  // injecting the user's draft text twice.
-  const max = PLATFORM_LIMITS[input.platform];
-  const items = [
+function normalizeIdeaText(text: string) {
+  return text
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[^\w\s]/g, "")
+    .trim();
+}
+
+function clampPost(text: string, max: number) {
+  return text.replace(/\s+/g, " ").trim().slice(0, max);
+}
+
+function localTemplateIdeas(input: ViralIdeaInput): Omit<ViralIdea, "id">[] {
+  const raw = input.topic.trim().replace(/\s+/g, " ");
+  const base = raw.replace(/[.!?\s]+$/, "");
+
+  return [
     {
       label: "Sharp take",
-      hook: "Lead with a strong opinion to invite pushback quickly.",
-      post: input.topic.slice(0, max),
-      rationale:
-        "Variations couldn't be drafted right now — using your original. Re-run when the model is back up.",
+      hook: "Lead with a more polarizing framing to trigger reaction fast.",
+      post: `Hot take: ${base}.`,
+      rationale: "Tests whether a stronger opinion framing gets more immediate engagement.",
+    },
+    {
+      label: "Curiosity gap",
+      hook: "Turn the claim into an open loop people want explained.",
+      post: `${base}. The interesting part is what that actually says about timing, leverage, and luck.`,
+      rationale: "Tests whether intrigue beats certainty for this audience.",
+    },
+    {
+      label: "Story frame",
+      hook: "Make it feel like the start of a story instead of a headline.",
+      post: `A short version of the story: ${base}. What happened next matters more than the headline.`,
+      rationale: "Tests whether narrative framing feels more native than a blunt claim.",
+    },
+    {
+      label: "Context drop",
+      hook: "Add a little interpretation so the post does more than state the fact.",
+      post: `${base}. On its own that sounds impressive. In practice it mostly shows how weird startup timing can be.`,
+      rationale: "Tests whether extra context improves credibility and depth.",
     },
   ];
-  return items.map((idea, index) => ({ ...idea, id: `idea-${index + 1}` }));
+}
+
+function finalizeIdeas(
+  input: ViralIdeaInput,
+  ideas: Array<Omit<ViralIdea, "id"> | null | undefined>
+) {
+  const max = PLATFORM_LIMITS[input.platform];
+  const originalNorm = normalizeIdeaText(input.topic);
+  const seen = new Set<string>();
+  const out: ViralIdea[] = [];
+
+  for (const idea of ideas) {
+    if (!idea) continue;
+    const post = clampPost(idea.post, max);
+    if (!post) continue;
+    const normalized = normalizeIdeaText(post);
+    if (!normalized || normalized === originalNorm || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    out.push({
+      id: `idea-${out.length + 1}`,
+      label: idea.label.trim().slice(0, 40) || `Variant ${out.length + 1}`,
+      hook: idea.hook.trim().slice(0, 140),
+      post,
+      rationale: idea.rationale.trim().slice(0, 200),
+    });
+    if (out.length >= 3) break;
+  }
+
+  if (out.length >= 3) return out;
+
+  for (const idea of localTemplateIdeas(input)) {
+    const post = clampPost(idea.post, max);
+    const normalized = normalizeIdeaText(post);
+    if (!normalized || normalized === originalNorm || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    out.push({
+      id: `idea-${out.length + 1}`,
+      label: idea.label,
+      hook: idea.hook,
+      post,
+      rationale: idea.rationale,
+    });
+    if (out.length >= 3) break;
+  }
+
+  return out;
+}
+
+function fallbackIdeas(input: ViralIdeaInput): ViralIdea[] {
+  return finalizeIdeas(input, localTemplateIdeas(input));
 }
 
 function safeParseJSON(text: string): unknown {
@@ -127,14 +208,10 @@ Return 3 alternative drafts of this same post, each taking a different strategic
       .join("\n");
 
     const parsed = safeParseJSON(text);
-    if (!parsed || typeof parsed !== "object") {
-      return fallbackIdeas(input);
-    }
+    if (!parsed || typeof parsed !== "object") return fallbackIdeas(input);
 
     const ideas = (parsed as { ideas?: unknown }).ideas;
-    if (!Array.isArray(ideas) || ideas.length === 0) {
-      return fallbackIdeas(input);
-    }
+    if (!Array.isArray(ideas) || ideas.length === 0) return fallbackIdeas(input);
 
     const cleaned = ideas
       .slice(0, 3)
@@ -148,7 +225,6 @@ Return 3 alternative drafts of this same post, each taking a different strategic
         const post = typeof obj.post === "string" ? obj.post.trim() : "";
         if (!post) return null;
         return {
-          id: `idea-${index + 1}`,
           label:
             typeof obj.label === "string" && obj.label.trim().length > 0
               ? obj.label.trim().slice(0, 40)
@@ -162,10 +238,9 @@ Return 3 alternative drafts of this same post, each taking a different strategic
               : "",
         };
       })
-      .filter((v): v is ViralIdea => v !== null);
+      .filter((v): v is Omit<ViralIdea, "id"> => v !== null);
 
-    if (cleaned.length === 0) return fallbackIdeas(input);
-    return cleaned;
+    return finalizeIdeas(input, cleaned);
   } catch (err) {
     console.error(
       "generateViralIdeas failed:",

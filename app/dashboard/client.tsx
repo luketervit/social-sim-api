@@ -1320,7 +1320,7 @@ function ChatConversation(props: ChatConversationProps) {
                 <strong style={{ color: "var(--text-primary)" }}>
                   3 variations
                 </strong>{" "}
-                to compare against your draft. This takes ~5 seconds.
+                plus your original draft. This takes ~5 seconds.
               </>
             ),
           });
@@ -1350,8 +1350,8 @@ function ChatConversation(props: ChatConversationProps) {
                 <strong style={{ color: "var(--text-primary)" }}>
                   {chat.variants.length}
                 </strong>{" "}
-                drafts. Edit any of them, drop the ones you don&apos;t want, then
-                run all.
+                drafts total: your original plus 3 variations. Edit any of them,
+                drop the ones you don&apos;t want, then run all.
               </>
             ),
           });
@@ -2869,7 +2869,7 @@ function PostComposer({
             gap: 8,
           }}
         >
-          {draftingVariations ? "Drafting…" : "Draft variations →"}
+          {draftingVariations ? "Drafting…" : "Draft 3 variations →"}
           <span
             style={{
               fontFamily: "var(--font-data), monospace",
