@@ -111,7 +111,12 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     console.error("Variations generation failed:", err);
     return Response.json(
-      { error: "Could not generate variations." },
+      {
+        error:
+          err instanceof Error
+            ? err.message
+            : "Could not generate variations.",
+      },
       { status: 500 }
     );
   }

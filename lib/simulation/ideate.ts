@@ -1,14 +1,18 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { getAnthropicEnv } from "@/lib/env";
+import OpenAI from "openai";
+import { getOpenRouterEnv } from "@/lib/env";
 
-const MODEL = "claude-haiku-4-5-20251001";
+const MODEL =
+  process.env.OPENROUTER_VARIATIONS_MODEL ||
+  process.env.OPENROUTER_LINKEDIN_MODEL ||
+  "qwen/qwen3-235b-a22b-2507";
 
-let _client: Anthropic | null = null;
-function getClient(): Anthropic | null {
+let _client: OpenAI | null = null;
+function getClient(): OpenAI {
   if (_client) return _client;
-  const env = getAnthropicEnv();
-  if (!env) return null;
-  _client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  _client = new OpenAI({
+    baseURL: "https://openrouter.ai/api/v1",
+    apiKey: getOpenRouterEnv().OPENROUTER_API_KEY,
+  });
   return _client;
 }
 
@@ -58,38 +62,6 @@ function clampPost(text: string, max: number) {
   return text.replace(/\s+/g, " ").trim().slice(0, max);
 }
 
-function localTemplateIdeas(input: ViralIdeaInput): Omit<ViralIdea, "id">[] {
-  const raw = input.topic.trim().replace(/\s+/g, " ");
-  const base = raw.replace(/[.!?\s]+$/, "");
-
-  return [
-    {
-      label: "Sharp take",
-      hook: "Lead with a more polarizing framing to trigger reaction fast.",
-      post: `Hot take: ${base}.`,
-      rationale: "Tests whether a stronger opinion framing gets more immediate engagement.",
-    },
-    {
-      label: "Curiosity gap",
-      hook: "Turn the claim into an open loop people want explained.",
-      post: `${base}. The interesting part is what that actually says about timing, leverage, and luck.`,
-      rationale: "Tests whether intrigue beats certainty for this audience.",
-    },
-    {
-      label: "Story frame",
-      hook: "Make it feel like the start of a story instead of a headline.",
-      post: `A short version of the story: ${base}. What happened next matters more than the headline.`,
-      rationale: "Tests whether narrative framing feels more native than a blunt claim.",
-    },
-    {
-      label: "Context drop",
-      hook: "Add a little interpretation so the post does more than state the fact.",
-      post: `${base}. On its own that sounds impressive. In practice it mostly shows how weird startup timing can be.`,
-      rationale: "Tests whether extra context improves credibility and depth.",
-    },
-  ];
-}
-
 function finalizeIdeas(
   input: ViralIdeaInput,
   ideas: Array<Omit<ViralIdea, "id"> | null | undefined>
@@ -118,30 +90,7 @@ function finalizeIdeas(
     if (out.length >= 3) break;
   }
 
-  if (out.length >= 3) return out;
-
-  for (const idea of localTemplateIdeas(input)) {
-    const post = clampPost(idea.post, max);
-    const normalized = normalizeIdeaText(post);
-    if (!normalized || normalized === originalNorm || seen.has(normalized)) {
-      continue;
-    }
-    seen.add(normalized);
-    out.push({
-      id: `idea-${out.length + 1}`,
-      label: idea.label,
-      hook: idea.hook,
-      post,
-      rationale: idea.rationale,
-    });
-    if (out.length >= 3) break;
-  }
-
   return out;
-}
-
-function fallbackIdeas(input: ViralIdeaInput): ViralIdea[] {
-  return finalizeIdeas(input, localTemplateIdeas(input));
 }
 
 function safeParseJSON(text: string): unknown {
@@ -159,12 +108,42 @@ function safeParseJSON(text: string): unknown {
   }
 }
 
+function isStructuredOutputCompatibilityError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  return (
+    message.includes("response_format") ||
+    message.includes("json_schema") ||
+    message.includes("structured output") ||
+    message.includes("unsupported parameter") ||
+    message.includes("require_parameters")
+  );
+}
+
+async function createCompletion(
+  systemPrompt: string,
+  userPrompt: string,
+  structured: boolean
+) {
+  const payload: Record<string, unknown> = {
+    model: MODEL,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    max_tokens: 1200,
+    temperature: 0.85,
+  };
+
+  if (structured) {
+    payload.response_format = { type: "json_object" };
+  }
+
+  return getClient().chat.completions.create(payload as never);
+}
+
 export async function generateViralIdeas(
   input: ViralIdeaInput
 ): Promise<ViralIdea[]> {
-  const client = getClient();
-  if (!client) return fallbackIdeas(input);
-
   const maxLen = PLATFORM_LIMITS[input.platform];
   const platformTone = PLATFORM_TONE[input.platform];
 
@@ -174,7 +153,8 @@ Return JSON only, in this exact shape:
 {"ideas":[{"label":"...","hook":"...","post":"...","rationale":"..."}]}
 
 Rules:
-- Return EXACTLY 3 ideas, all rewriting the same underlying message — never the same wording, never the same angle.
+- Return EXACTLY 3 ideas, all rewriting the same underlying message.
+- Never repeat the original wording, and never return two ideas with the same angle.
 - Each idea has its own strategic angle. Suggested angles: sharp/hot take, informational/explainer, curiosity-driven question, contrarian reframe, story/anecdote, frame as data point. Pick 3 that genuinely differ.
 - Each "post" is the FULL rewritten draft, ready to paste. NEVER include the user's original text verbatim, NEVER append "Context:" or any meta tag, NEVER mention the audience by name.
 - Posts must stay under ${maxLen} characters and feel native to ${input.platform}. ${platformTone}
@@ -193,59 +173,65 @@ ${input.brand?.trim() ? `Brand voice: ${input.brand.trim()}` : ""}
 
 Return 3 alternative drafts of this same post, each taking a different strategic angle.`;
 
+  let response: Awaited<ReturnType<typeof createCompletion>>;
   try {
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 1200,
-      temperature: 0.85,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
-    });
-
-    const text = response.content
-      .filter((b) => b.type === "text")
-      .map((b) => ("text" in b ? b.text : ""))
-      .join("\n");
-
-    const parsed = safeParseJSON(text);
-    if (!parsed || typeof parsed !== "object") return fallbackIdeas(input);
-
-    const ideas = (parsed as { ideas?: unknown }).ideas;
-    if (!Array.isArray(ideas) || ideas.length === 0) return fallbackIdeas(input);
-
-    const cleaned = ideas
-      .slice(0, 3)
-      .map((raw, index) => {
-        const obj = raw as {
-          label?: unknown;
-          hook?: unknown;
-          post?: unknown;
-          rationale?: unknown;
-        };
-        const post = typeof obj.post === "string" ? obj.post.trim() : "";
-        if (!post) return null;
-        return {
-          label:
-            typeof obj.label === "string" && obj.label.trim().length > 0
-              ? obj.label.trim().slice(0, 40)
-              : `Variant ${index + 1}`,
-          hook:
-            typeof obj.hook === "string" ? obj.hook.trim().slice(0, 140) : "",
-          post: post.slice(0, maxLen),
-          rationale:
-            typeof obj.rationale === "string"
-              ? obj.rationale.trim().slice(0, 200)
-              : "",
-        };
-      })
-      .filter((v): v is Omit<ViralIdea, "id"> => v !== null);
-
-    return finalizeIdeas(input, cleaned);
+    try {
+      response = await createCompletion(systemPrompt, userPrompt, true);
+    } catch (structuredError) {
+      if (!isStructuredOutputCompatibilityError(structuredError)) {
+        throw structuredError;
+      }
+      response = await createCompletion(systemPrompt, userPrompt, false);
+    }
   } catch (err) {
-    console.error(
-      "generateViralIdeas failed:",
-      err instanceof Error ? err.message : err
-    );
-    return fallbackIdeas(input);
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`Variation generation provider failed: ${message}`);
   }
+
+  const text = response.choices[0]?.message?.content?.trim() ?? "";
+  const parsed = safeParseJSON(text);
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("Variation model returned invalid JSON.");
+  }
+
+  const ideas = (parsed as { ideas?: unknown }).ideas;
+  if (!Array.isArray(ideas) || ideas.length === 0) {
+    throw new Error("Variation model returned no draft ideas.");
+  }
+
+  const cleaned = ideas
+    .slice(0, 3)
+    .map((raw, index) => {
+      const obj = raw as {
+        label?: unknown;
+        hook?: unknown;
+        post?: unknown;
+        rationale?: unknown;
+      };
+      const post = typeof obj.post === "string" ? obj.post.trim() : "";
+      if (!post) return null;
+      return {
+        label:
+          typeof obj.label === "string" && obj.label.trim().length > 0
+            ? obj.label.trim().slice(0, 40)
+            : `Variant ${index + 1}`,
+        hook:
+          typeof obj.hook === "string" ? obj.hook.trim().slice(0, 140) : "",
+        post: post.slice(0, maxLen),
+        rationale:
+          typeof obj.rationale === "string"
+            ? obj.rationale.trim().slice(0, 200)
+            : "",
+      };
+    })
+    .filter((v): v is Omit<ViralIdea, "id"> => v !== null);
+
+  const finalized = finalizeIdeas(input, cleaned);
+  if (finalized.length < 3) {
+    throw new Error(
+      `Variation model returned only ${finalized.length} distinct drafts.`
+    );
+  }
+
+  return finalized;
 }
