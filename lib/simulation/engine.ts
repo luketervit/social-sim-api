@@ -128,7 +128,9 @@ function computeAggressionScore(persona: Persona, input: string, thread: AgentMe
 
 function replyProbability(persona: Persona, input: string, thread: AgentMessage[]): number {
   const aggression = computeAggressionScore(persona, input, thread);
-  return Math.min(0.25, 0.05 + 0.15 * aggression);
+  // Roughly matches real social engagement rates (1-3% of viewers comment).
+  // Across SIMULATION_ROUNDS this yields ~5-25% cumulative participation.
+  return Math.min(0.025, 0.005 + 0.015 * aggression);
 }
 
 // ---------------------------------------------------------------------------
@@ -386,68 +388,86 @@ export async function* runSimulation(
 
     // Simultaneous activation: all agents in this round see the same thread snapshot
     const priorThread = [...state.thread];
-    const roundMessages = await Promise.all(
+    const roundResults = await Promise.all(
       roundParticipants.map(async (turn) => {
-        await options?.onBeforeMessage?.(turn, round);
+        try {
+          await options?.onBeforeMessage?.(turn, round);
 
-        const systemPrompt = buildSystemPrompt(
-          state.platform,
-          turn.persona,
-          turn.targetSentiment,
-          turn.engagementSignals
-        );
-        const userPrompt = buildUserPrompt(
-          state.input,
-          state.image_analysis,
-          priorThread,
-          turn.targetSentiment,
-          round,
-          SIMULATION_ROUNDS,
-          turn.replyTarget,
-          turn.respondToRoot,
-          state.platform,
-          turn.engagementSignals
-        );
+          const systemPrompt = buildSystemPrompt(
+            state.platform,
+            turn.persona,
+            turn.targetSentiment,
+            turn.engagementSignals
+          );
+          const userPrompt = buildUserPrompt(
+            state.input,
+            state.image_analysis,
+            priorThread,
+            turn.targetSentiment,
+            round,
+            SIMULATION_ROUNDS,
+            turn.replyTarget,
+            turn.respondToRoot,
+            state.platform,
+            turn.engagementSignals
+          );
 
-        const reply = await generateReply(systemPrompt, userPrompt, {
-          model: options?.generatorModel,
-          platform: state.platform,
-        });
-        await options?.onAfterMessage?.(turn, round, reply.usage);
-        const structured = parseStructuredReply(reply.content);
-        const sentiment = await classifySentiment(structured.reaction, turn.targetSentiment);
-        const engagementSignals = turn.engagementSignals
-          ? {
-              ...turn.engagementSignals,
-              depth:
-                state.platform === "linkedin"
-                  ? clamp(
-                      (turn.engagementSignals.depth * 0.7) +
-                        (inferGenericLinkedInCommentQuality(structured.reaction) * 0.3),
-                      0,
-                      1
-                    )
-                  : turn.engagementSignals.depth,
-            }
-          : null;
+          const reply = await generateReply(systemPrompt, userPrompt, {
+            model: options?.generatorModel,
+            platform: state.platform,
+          });
+          await options?.onAfterMessage?.(turn, round, reply.usage);
+          const structured = parseStructuredReply(reply.content);
+          const sentiment = await classifySentiment(
+            structured.reaction,
+            turn.targetSentiment
+          );
+          const engagementSignals = turn.engagementSignals
+            ? {
+                ...turn.engagementSignals,
+                depth:
+                  state.platform === "linkedin"
+                    ? clamp(
+                        turn.engagementSignals.depth * 0.7 +
+                          inferGenericLinkedInCommentQuality(structured.reaction) * 0.3,
+                        0,
+                        1
+                      )
+                    : turn.engagementSignals.depth,
+              }
+            : null;
 
-        return {
-          id: randomUUID(),
-          round,
-          agent_id: turn.persona.id,
-          archetype: turn.persona.archetype,
-          message: structured.reaction,
-          sentiment,
-          reply_to: turn.replyTarget?.id ?? null,
-          reply_to_agent_id: turn.replyTarget?.agent_id ?? null,
-          timestamp: new Date().toISOString(),
-          reasoning: structured.reasoning,
-          objection: structured.objection,
-          what_would_change_my_mind: structured.what_would_change_my_mind,
-          engagement_signals: engagementSignals,
-        } satisfies AgentMessage;
+          return {
+            id: randomUUID(),
+            round,
+            agent_id: turn.persona.id,
+            archetype: turn.persona.archetype,
+            message: structured.reaction,
+            sentiment,
+            reply_to: turn.replyTarget?.id ?? null,
+            reply_to_agent_id: turn.replyTarget?.agent_id ?? null,
+            timestamp: new Date().toISOString(),
+            reasoning: structured.reasoning,
+            objection: structured.objection,
+            what_would_change_my_mind: structured.what_would_change_my_mind,
+            engagement_signals: engagementSignals,
+          } satisfies AgentMessage;
+        } catch (err) {
+          // Don't let one bad provider response (e.g. truncated JSON, transient
+          // 5xx, HF empty body) kill the whole simulation. Skip this persona.
+          console.error("Persona turn failed; skipping:", {
+            personaId: turn.persona.id,
+            round,
+            err: err instanceof Error ? err.message : err,
+          });
+          return null;
+        }
       })
     );
+    const roundMessages: AgentMessage[] = [];
+    for (const message of roundResults) {
+      if (message) roundMessages.push(message);
+    }
 
     // Commit stage: all messages from this round committed synchronously
     state.thread.push(...roundMessages);

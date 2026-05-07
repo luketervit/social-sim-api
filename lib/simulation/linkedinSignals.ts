@@ -659,12 +659,12 @@ export function replyProbabilityForLinkedIn(
     0.62;
 
   const raw =
-    0.008 +
-    signals.comment_intent * 0.085 * phaseBoost +
-    signals.relevance * 0.018 +
-    Math.max(0, -persona.brand_affinity) * 0.01;
+    0.0008 +
+    signals.comment_intent * 0.0085 * phaseBoost +
+    signals.relevance * 0.0018 +
+    Math.max(0, -persona.brand_affinity) * 0.001;
 
-  return clamp(raw, 0.004, 0.16);
+  return clamp(raw, 0.0004, 0.016);
 }
 
 export function shouldPreferRootComment(
