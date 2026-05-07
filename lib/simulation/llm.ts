@@ -1,6 +1,10 @@
 import OpenAI from "openai";
 import { getOpenRouterEnv } from "@/lib/env";
 import type { TokenUsage } from "./types";
+import {
+  SimulationImageAnalysisSchema,
+  type SimulationImageAnalysis,
+} from "./imageAnalysis";
 
 // Hermes 4 70B by NousResearch — uncensored-friendly Llama 3.1 70B fine-tune.
 // Steerable, low refusal rate, $0.13/M input + $0.40/M output (~$0.06/sim at
@@ -21,6 +25,8 @@ const PLATFORM_DEFAULT_MODELS: Record<string, string> = {
   twitter:
     process.env.OPENROUTER_TWITTER_MODEL || DEFAULT_MODEL,
 };
+const VISION_MODEL =
+  process.env.OPENROUTER_VISION_MODEL || "openai/gpt-4.1-mini";
 
 // Dissertation final params (Table 4.3): temperature 0.9, response length 150 tokens.
 // Higher temperature (1.2) hurt composite by 0.085; longer responses didn't improve realism.
@@ -202,6 +208,64 @@ async function createCompletion(
   return getClient().chat.completions.create(payload as never);
 }
 
+async function createVisionCompletion(
+  postText: string,
+  platform: string,
+  imageUrl: string
+) {
+  return getClient().chat.completions.create({
+    model: VISION_MODEL,
+    messages: [
+      {
+        role: "system",
+        content: `You analyze images attached to social posts and return strict JSON only.
+
+You are evaluating how an attached image affects interpretation of a ${platform} post.
+
+Return a JSON object with exactly these keys:
+- literal_description: string
+- image_type: string
+- visible_elements: string[]
+- tone_signals: string[]
+- linkedin_interpretation: string
+- text_interaction: string
+- audience_effects: string[]
+- risk_flags: string[]
+- uncertainty_notes: string[]
+
+Rules:
+- Be concrete and concise.
+- Do not infer ungrounded facts from faces, logos, or settings.
+- If something is ambiguous, put that in uncertainty_notes.
+- Treat "linkedin_interpretation" as "professional social-feed interpretation" when the platform is not LinkedIn.
+- No markdown and no prose outside the JSON object.`,
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: `Platform: ${platform}
+Post text:
+${postText}
+
+Analyze the attached image in the context of this post.`,
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: imageUrl,
+            },
+          },
+        ],
+      },
+    ],
+    max_tokens: 500,
+    temperature: 0.2,
+    response_format: { type: "json_object" },
+  } as never);
+}
+
 export async function generateReply(
   systemPrompt: string,
   userPrompt: string,
@@ -272,6 +336,51 @@ export async function generateReply(
 
       attempt += 1;
       await sleep(delayMs);
+    }
+  }
+}
+
+export async function analyzePostImage(
+  postText: string,
+  platform: string,
+  imageUrl: string
+): Promise<{ analysis: SimulationImageAnalysis; usage: TokenUsage }> {
+  let attempt = 0;
+
+  while (true) {
+    try {
+      const response = await createVisionCompletion(postText, platform, imageUrl);
+      const raw = response.choices[0]?.message?.content?.trim() || "{}";
+      const analysis = SimulationImageAnalysisSchema.parse(JSON.parse(raw));
+      return {
+        analysis,
+        usage: {
+          prompt_tokens: response.usage?.prompt_tokens ?? 0,
+          completion_tokens: response.usage?.completion_tokens ?? 0,
+          total_tokens: response.usage?.total_tokens ?? 0,
+        },
+      };
+    } catch (error) {
+      const rateLimited = isRateLimitError(error);
+
+      if (attempt >= MAX_RETRIES) {
+        if (rateLimited) {
+          throw new SimulationCapacityError(
+            "Image analysis hit a temporary capacity limit. Please retry in a moment."
+          );
+        }
+        throw error;
+      }
+
+      if (!rateLimited && !isTransientNetworkError(error)) {
+        throw error;
+      }
+
+      const delayMs = rateLimited
+        ? getRateLimitDelayMs(error, attempt)
+        : getRetryDelayMs(attempt);
+      await sleep(delayMs);
+      attempt += 1;
     }
   }
 }

@@ -74,6 +74,8 @@ export interface ChatState {
   audienceError: string | null;
   platform: Platform | null;
   post: string;
+  imageDataUrl: string | null;
+  imageName: string | null;
   personaCap: number;
   mode: RunMode | null;
   variants: VariantRun[];
@@ -95,6 +97,8 @@ export function makeChat(): ChatState {
     audienceError: null,
     platform: null,
     post: "",
+    imageDataUrl: null,
+    imageName: null,
     personaCap: DEFAULT_PERSONA_CAP,
     mode: null,
     variants: [],

@@ -154,6 +154,7 @@ export async function runSimulationInline(job: SimulationJob): Promise<void> {
       job.input,
       {
         generatorModel: generatorModel ?? undefined,
+        imageAnalysis: job.image_analysis,
         async onAfterMessage(_turn, _round, usage) {
           totalTokensUsed += usage.total_tokens;
         },

@@ -1,5 +1,6 @@
 import type { AgentMessage } from "./types";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import type { SimulationImageAnalysis } from "./imageAnalysis";
 
 export type SimulationJobStatus = "queued" | "running" | "completed" | "failed";
 
@@ -10,6 +11,8 @@ export interface SimulationJob {
   persona_cap: number | null;
   platform: string;
   input: string;
+  image_url: string | null;
+  image_analysis: SimulationImageAnalysis | null;
   thread: AgentMessage[];
   aggression_score: string | null;
   status: SimulationJobStatus;
@@ -30,6 +33,8 @@ interface CreateSimulationJobInput {
   personaCap?: number | null;
   platform: string;
   input: string;
+  imageUrl?: string | null;
+  imageAnalysis?: SimulationImageAnalysis | null;
   reservedCredits: number;
 }
 
@@ -39,6 +44,8 @@ export async function createSimulationJob({
   personaCap,
   platform,
   input,
+  imageUrl,
+  imageAnalysis,
   reservedCredits,
 }: CreateSimulationJobInput): Promise<SimulationJob> {
   const db = supabaseAdmin();
@@ -50,6 +57,8 @@ export async function createSimulationJob({
       persona_cap: personaCap ?? null,
       platform,
       input,
+      image_url: imageUrl ?? null,
+      image_analysis: imageAnalysis ?? null,
       status: "queued",
       progress_messages: 0,
       reserved_credits: reservedCredits,
@@ -57,7 +66,7 @@ export async function createSimulationJob({
       thread: [],
     })
     .select(
-      "id, api_key, audience_id, persona_cap, platform, input, thread, aggression_score, status, progress_messages, reserved_credits, refunded_credits, error_message, started_at, completed_at, claimed_by, lease_expires_at, created_at"
+      "id, api_key, audience_id, persona_cap, platform, input, image_url, image_analysis, thread, aggression_score, status, progress_messages, reserved_credits, refunded_credits, error_message, started_at, completed_at, claimed_by, lease_expires_at, created_at"
     )
     .single();
 
@@ -73,7 +82,7 @@ export async function getSimulationJob(id: string, apiKey: string): Promise<Simu
   const { data, error } = await db
     .from("simulations")
     .select(
-      "id, api_key, audience_id, persona_cap, platform, input, thread, aggression_score, status, progress_messages, reserved_credits, refunded_credits, error_message, started_at, completed_at, claimed_by, lease_expires_at, created_at"
+      "id, api_key, audience_id, persona_cap, platform, input, image_url, image_analysis, thread, aggression_score, status, progress_messages, reserved_credits, refunded_credits, error_message, started_at, completed_at, claimed_by, lease_expires_at, created_at"
     )
     .eq("id", id)
     .eq("api_key", apiKey)

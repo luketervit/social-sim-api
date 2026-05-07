@@ -1,5 +1,9 @@
 import type { Persona } from "@/lib/schemas";
 import type { AgentMessage } from "./types";
+import {
+  buildImageContextBlock,
+  type SimulationImageAnalysis,
+} from "./imageAnalysis";
 
 type TargetSentiment = AgentMessage["sentiment"];
 
@@ -263,18 +267,22 @@ PLATFORM NORMS:
 
 function buildLinkedInUserPrompt(
   input: string,
+  imageAnalysis: SimulationImageAnalysis | null | undefined,
   thread: AgentMessage[],
   targetSentiment: TargetSentiment,
   replyTarget: AgentMessage | null,
   respondToRoot: boolean,
   engagementSignals?: AgentMessage["engagement_signals"] | null
 ): string {
+  const imageContext = buildImageContextBlock(imageAnalysis);
   const signalLine = engagementSignals
     ? `Internal context: the post feels ${engagementSignals.relevance >= 0.65 ? "highly relevant" : engagementSignals.relevance >= 0.4 ? "somewhat relevant" : "marginally relevant"} to your work; trust in the post is ${engagementSignals.trust >= 0.65 ? "high" : engagementSignals.trust >= 0.4 ? "mixed" : "low"}; your comment should add professional value, not filler.`
     : "Internal context: comment only if you have something professionally useful to add.";
 
   if (thread.length === 0) {
-    return `Someone in your network just posted this on LinkedIn:\n\n"${input}"\n\nWrite your comment reacting to it. Keep it 1-3 sentences. Use your real-name voice. Avoid generic praise unless that is genuinely all you would say.\n\n${signalLine}\n\n${buildAudienceReminder(targetSentiment)}`;
+    return `Someone in your network just posted this on LinkedIn:\n\n"${input}"${
+      imageContext ? `\n\n${imageContext}` : ""
+    }\n\nWrite your comment reacting to it. Keep it 1-3 sentences. Use your real-name voice. Avoid generic praise unless that is genuinely all you would say.\n\n${signalLine}\n\n${buildAudienceReminder(targetSentiment)}`;
   }
 
   const fullContext = thread
@@ -286,7 +294,9 @@ function buildLinkedInUserPrompt(
     .join("\n");
 
   if (replyTarget) {
-    return `Original LinkedIn post: "${input}"
+    return `Original LinkedIn post: "${input}"${
+      imageContext ? `\n\n${imageContext}` : ""
+    }
 
 Recent comments in the thread:
 ${fullContext}
@@ -302,7 +312,9 @@ ${buildAudienceReminder(targetSentiment)}`;
   }
 
   if (respondToRoot) {
-    return `Original LinkedIn post: "${input}"
+    return `Original LinkedIn post: "${input}"${
+      imageContext ? `\n\n${imageContext}` : ""
+    }
 
 Recent comments in the thread:
 ${fullContext}
@@ -314,7 +326,9 @@ ${signalLine}
 ${buildAudienceReminder(targetSentiment)}`;
   }
 
-  return `Original LinkedIn post: "${input}"
+  return `Original LinkedIn post: "${input}"${
+    imageContext ? `\n\n${imageContext}` : ""
+  }
 
 Recent comments:
 ${fullContext}
@@ -328,13 +342,17 @@ ${buildAudienceReminder(targetSentiment)}`;
 
 function buildTwitterUserPrompt(
   input: string,
+  imageAnalysis: SimulationImageAnalysis | null | undefined,
   thread: AgentMessage[],
   targetSentiment: TargetSentiment,
   replyTarget: AgentMessage | null,
   respondToRoot: boolean
 ): string {
+  const imageContext = buildImageContextBlock(imageAnalysis);
   if (thread.length === 0) {
-    return `This tweet just went viral:\n\n"${input}"\n\nYou're one of the first people to see it. Write your tweet reacting to it. Keep it under 280 characters.\n\n${buildAudienceReminder(targetSentiment)}`;
+    return `This tweet just went viral:\n\n"${input}"${
+      imageContext ? `\n\n${imageContext}` : ""
+    }\n\nYou're one of the first people to see it. Write your tweet reacting to it. Keep it under 280 characters.\n\n${buildAudienceReminder(targetSentiment)}`;
   }
 
   const fullContext = thread
@@ -343,7 +361,9 @@ function buildTwitterUserPrompt(
     .join("\n");
 
   if (replyTarget) {
-    return `Original tweet: "${input}"
+    return `Original tweet: "${input}"${
+      imageContext ? `\n\n${imageContext}` : ""
+    }
 
 Recent replies in the thread:
 ${fullContext}
@@ -357,7 +377,9 @@ ${buildAudienceReminder(targetSentiment)}`;
   }
 
   if (respondToRoot) {
-    return `Original tweet: "${input}"
+    return `Original tweet: "${input}"${
+      imageContext ? `\n\n${imageContext}` : ""
+    }
 
 Recent replies in the thread:
 ${fullContext}
@@ -367,7 +389,9 @@ You're replying directly to the original tweet, not to any specific reply. Under
 ${buildAudienceReminder(targetSentiment)}`;
   }
 
-  return `Original tweet: "${input}"
+  return `Original tweet: "${input}"${
+    imageContext ? `\n\n${imageContext}` : ""
+  }
 
 Recent replies in the thread:
 ${fullContext}
@@ -379,13 +403,17 @@ ${buildAudienceReminder(targetSentiment)}`;
 
 function buildRedditUserPrompt(
   input: string,
+  imageAnalysis: SimulationImageAnalysis | null | undefined,
   thread: AgentMessage[],
   targetSentiment: TargetSentiment,
   replyTarget: AgentMessage | null,
   respondToRoot: boolean
 ): string {
+  const imageContext = buildImageContextBlock(imageAnalysis);
   if (thread.length === 0) {
-    return `Someone just posted this:\n\n"${input}"\n\nYou're one of the first commenters. Write your top-level Reddit comment reacting to the post.\n\n${buildAudienceReminder(targetSentiment)}`;
+    return `Someone just posted this:\n\n"${input}"${
+      imageContext ? `\n\n${imageContext}` : ""
+    }\n\nYou're one of the first commenters. Write your top-level Reddit comment reacting to the post.\n\n${buildAudienceReminder(targetSentiment)}`;
   }
 
   const fullContext = thread
@@ -394,7 +422,9 @@ function buildRedditUserPrompt(
     .join("\n\n");
 
   if (replyTarget) {
-    return `The original post was: "${input}"
+    return `The original post was: "${input}"${
+      imageContext ? `\n\n${imageContext}` : ""
+    }
 
 Recent comments in the thread:
 ${fullContext}
@@ -408,7 +438,9 @@ ${buildAudienceReminder(targetSentiment)}`;
   }
 
   if (respondToRoot) {
-    return `The original post was: "${input}"
+    return `The original post was: "${input}"${
+      imageContext ? `\n\n${imageContext}` : ""
+    }
 
 Recent comments in the thread:
 ${fullContext}
@@ -418,7 +450,9 @@ You are writing a top-level reply to the original post.
 ${buildAudienceReminder(targetSentiment)}`;
   }
 
-  return `The original post was: "${input}"
+  return `The original post was: "${input}"${
+    imageContext ? `\n\n${imageContext}` : ""
+  }
 
 Recent comments in the thread:
 ${fullContext}
@@ -430,13 +464,17 @@ ${buildAudienceReminder(targetSentiment)}`;
 
 function buildSlackUserPrompt(
   input: string,
+  imageAnalysis: SimulationImageAnalysis | null | undefined,
   thread: AgentMessage[],
   targetSentiment: TargetSentiment,
   replyTarget: AgentMessage | null,
   respondToRoot: boolean
 ): string {
+  const imageContext = buildImageContextBlock(imageAnalysis);
   if (thread.length === 0) {
-    return `This message was just posted in the company Slack channel:\n\n"${input}"\n\nYou're one of the first to respond in the thread. Write your Slack reply.\n\n${buildAudienceReminder(targetSentiment)}`;
+    return `This message was just posted in the company Slack channel:\n\n"${input}"${
+      imageContext ? `\n\n${imageContext}` : ""
+    }\n\nYou're one of the first to respond in the thread. Write your Slack reply.\n\n${buildAudienceReminder(targetSentiment)}`;
   }
 
   const fullContext = thread
@@ -445,7 +483,9 @@ function buildSlackUserPrompt(
     .join("\n");
 
   if (replyTarget) {
-    return `The announcement in the channel was: "${input}"
+    return `The announcement in the channel was: "${input}"${
+      imageContext ? `\n\n${imageContext}` : ""
+    }
 
 Recent replies in the thread:
 ${fullContext}
@@ -459,7 +499,9 @@ ${buildAudienceReminder(targetSentiment)}`;
   }
 
   if (respondToRoot) {
-    return `The announcement in the channel was: "${input}"
+    return `The announcement in the channel was: "${input}"${
+      imageContext ? `\n\n${imageContext}` : ""
+    }
 
 Recent replies in the thread:
 ${fullContext}
@@ -469,7 +511,9 @@ You're replying directly to the original announcement.
 ${buildAudienceReminder(targetSentiment)}`;
   }
 
-  return `The announcement in the channel was: "${input}"
+  return `The announcement in the channel was: "${input}"${
+    imageContext ? `\n\n${imageContext}` : ""
+  }
 
 Recent replies in the thread:
 ${fullContext}
@@ -561,6 +605,7 @@ The "reaction" field is the public-facing reply. Do NOT include labels, prefixes
 
 export function buildUserPrompt(
   input: string,
+  imageAnalysis: SimulationImageAnalysis | null | undefined,
   thread: AgentMessage[],
   targetSentiment: TargetSentiment,
   round: number,
@@ -572,12 +617,27 @@ export function buildUserPrompt(
 ): string {
   switch (platform) {
     case "reddit":
-      return buildRedditUserPrompt(input, thread, targetSentiment, replyTarget, respondToRoot);
+      return buildRedditUserPrompt(
+        input,
+        imageAnalysis,
+        thread,
+        targetSentiment,
+        replyTarget,
+        respondToRoot
+      );
     case "slack":
-      return buildSlackUserPrompt(input, thread, targetSentiment, replyTarget, respondToRoot);
+      return buildSlackUserPrompt(
+        input,
+        imageAnalysis,
+        thread,
+        targetSentiment,
+        replyTarget,
+        respondToRoot
+      );
     case "linkedin":
       return buildLinkedInUserPrompt(
         input,
+        imageAnalysis,
         thread,
         targetSentiment,
         replyTarget,
@@ -586,6 +646,13 @@ export function buildUserPrompt(
       );
     case "twitter":
     default:
-      return buildTwitterUserPrompt(input, thread, targetSentiment, replyTarget, respondToRoot);
+      return buildTwitterUserPrompt(
+        input,
+        imageAnalysis,
+        thread,
+        targetSentiment,
+        replyTarget,
+        respondToRoot
+      );
   }
 }

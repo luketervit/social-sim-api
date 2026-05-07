@@ -6,13 +6,30 @@ import { getOrCreateUserApiKey } from "@/lib/user-api-key";
 import { createSimulationJob } from "@/lib/simulation/jobs";
 import { runSimulationInline } from "@/lib/simulation/runInline";
 import { CREDITS_PER_MESSAGE, SIMULATION_ROUNDS } from "@/lib/credits";
+import { analyzePostImage } from "@/lib/simulation/llm";
 
 export const maxDuration = 300;
 
 const ALLOWED_PLATFORMS = new Set(["twitter", "reddit", "slack", "linkedin"]);
 const MAX_INPUT_LENGTH = 2000;
-const MIN_PERSONA_CAP = 5;
-const MAX_PERSONA_CAP = 200;
+const MAX_IMAGE_URL_LENGTH = 3_000_000;
+
+function sanitizeImageUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.length > MAX_IMAGE_URL_LENGTH) {
+    throw new Error("Attached image is too large.");
+  }
+  if (
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("data:image/")
+  ) {
+    return trimmed;
+  }
+  throw new Error("imageUrl must be an https URL or data:image payload.");
+}
 
 async function getUser(request: NextRequest) {
   const supabase = createServerClient(
@@ -59,7 +76,7 @@ export async function POST(request: NextRequest) {
     audienceId?: unknown;
     platform?: unknown;
     input?: unknown;
-    personaCap?: unknown;
+    imageUrl?: unknown;
   };
 
   const audienceId =
@@ -88,11 +105,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let personaCap: number | null = null;
-  if (typeof payload.personaCap === "number" && Number.isFinite(payload.personaCap)) {
-    personaCap = Math.max(
-      MIN_PERSONA_CAP,
-      Math.min(MAX_PERSONA_CAP, Math.floor(payload.personaCap))
+  let imageUrl: string | null = null;
+  try {
+    imageUrl = sanitizeImageUrl(payload.imageUrl);
+  } catch (error) {
+    return Response.json(
+      { error: error instanceof Error ? error.message : "Invalid imageUrl." },
+      { status: 400 }
     );
   }
 
@@ -121,9 +140,26 @@ export async function POST(request: NextRequest) {
   }
 
   const apiKey = await getOrCreateUserApiKey(user.email);
+  let imageAnalysis = null;
+  if (imageUrl) {
+    try {
+      const result = await analyzePostImage(input, platform, imageUrl);
+      imageAnalysis = result.analysis;
+    } catch (error) {
+      console.error("Image analysis failed:", error);
+      return Response.json(
+        {
+          error:
+            error instanceof Error
+              ? error.message
+              : "Could not analyze the attached image.",
+        },
+        { status: 502 }
+      );
+    }
+  }
 
-  const cap =
-    personaCap ?? Math.min(audience.row_count ?? 50, MAX_PERSONA_CAP);
+  const cap = Math.max(1, audience.row_count ?? 1);
   const reservedCredits = cap * SIMULATION_ROUNDS * CREDITS_PER_MESSAGE;
 
   const job = await createSimulationJob({
@@ -132,6 +168,8 @@ export async function POST(request: NextRequest) {
     personaCap: cap,
     platform,
     input,
+    imageUrl,
+    imageAnalysis,
     reservedCredits,
   });
 
@@ -147,6 +185,7 @@ export async function POST(request: NextRequest) {
       status: "queued",
       personaCap: cap,
       reservedCredits,
+      imageAnalyzed: Boolean(imageAnalysis),
     },
     { status: 202 }
   );

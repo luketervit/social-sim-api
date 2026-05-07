@@ -7,6 +7,7 @@ import { buildSystemPrompt, buildUserPrompt } from "./prompts";
 import { generateReply } from "./llm";
 import { classifySentiment } from "./sentimentClassifier";
 import { parseStructuredReply } from "./parseStructured";
+import type { SimulationImageAnalysis } from "./imageAnalysis";
 import {
   inferGenericLinkedInCommentQuality,
   inferLinkedInEngagementSignals,
@@ -30,6 +31,7 @@ interface RunSimulationOptions {
   onAfterMessage?: (turn: PlannedTurn, round: number, usage: TokenUsage) => Promise<void>;
   /** Override the OpenRouter model used for generation in this run. */
   generatorModel?: string;
+  imageAnalysis?: SimulationImageAnalysis | null;
 }
 
 const TOPIC_HEAT_WORDS = [
@@ -361,6 +363,7 @@ export async function* runSimulation(
     audience_id: audienceId,
     platform,
     input,
+    image_analysis: options?.imageAnalysis ?? null,
     personas,
     thread: [],
     round: 0,
@@ -395,6 +398,7 @@ export async function* runSimulation(
         );
         const userPrompt = buildUserPrompt(
           state.input,
+          state.image_analysis,
           priorThread,
           turn.targetSentiment,
           round,

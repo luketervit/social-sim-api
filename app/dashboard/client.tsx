@@ -27,7 +27,6 @@ import {
   SENTIMENT_COLORS,
   SENTIMENT_LABELS,
   SIMULATION_ROUNDS,
-  DEFAULT_PERSONA_CAP,
   avgAffinity,
   describeAffinity,
   formatHandle,
@@ -239,6 +238,7 @@ export default function DashboardClient({
             updateChatById(chatId, {
               audiencePersonas: personas,
               audienceLoading: false,
+              personaCap: personas.length,
             });
           } catch {
             /* ignore */
@@ -415,7 +415,7 @@ export default function DashboardClient({
       updateActive((c) => ({
         audiencePersonas: personas,
         audienceLoading: false,
-        personaCap: Math.min(c.personaCap, Math.max(5, personas.length)),
+        personaCap: personas.length,
         platform:
           c.platform ??
           (platform === "twitter" || platform === "reddit" || platform === "slack"
@@ -603,10 +603,7 @@ export default function DashboardClient({
           audienceId: chat.audienceId,
           platform: chat.platform,
           input: variant.post,
-          personaCap: Math.min(
-            chat.personaCap,
-            Math.max(5, chat.audiencePersonas.length)
-          ),
+          imageUrl: chat.imageDataUrl,
         }),
       });
       const payload = await res.json().catch(() => null);
@@ -627,7 +624,7 @@ export default function DashboardClient({
     }
   }
 
-  async function handleRunSingle() {
+  async function handleRunSimulation() {
     if (!activeChat) return;
     if (activeChat.post.trim().length === 0) {
       updateActive({ runError: "Paste a post first." });
@@ -642,41 +639,12 @@ export default function DashboardClient({
       return;
     }
 
-    const original: VariantRun = {
-      id: variantId(),
-      label: "Your draft",
-      post: activeChat.post.trim(),
-      simulationId: null,
-      status: "idle",
-      thread: [],
-      aggression: null,
-      error: null,
-    };
-    updateActive({ runError: null, mode: "single", variants: [original] });
-
-    const updated = await startSimulationFor(
-      { ...activeChat, mode: "single", variants: [original] },
-      original
-    );
-    updateChatById(activeChat.id, { variants: [updated] });
-  }
-
-  async function handleDraftVariations() {
-    if (!activeChat) return;
-    if (activeChat.post.trim().length === 0) {
-      updateActive({ variationsError: "Paste a post first." });
-      return;
-    }
-    if (!activeChat.audienceId || !activeChat.platform) {
-      updateActive({ variationsError: "Pick an audience and platform first." });
-      return;
-    }
-
     updateActive({
       runError: null,
       variationsError: null,
       variationsLoading: true,
       mode: "variations",
+      variants: [],
     });
 
     try {
@@ -723,9 +691,30 @@ export default function DashboardClient({
         aggression: null,
         error: null,
       }));
+      const queuedVariants = [original, ...drafted].map((variant) => ({
+        ...variant,
+        status: "queued" as VariantStatus,
+      }));
       updateActive({
-        variants: [original, ...drafted],
+        variants: queuedVariants,
         variationsLoading: false,
+      });
+      const started = await Promise.all(
+        queuedVariants.map((variant) =>
+          startSimulationFor(
+            {
+              ...activeChat,
+              mode: "variations",
+              variants: queuedVariants,
+            },
+            variant
+          )
+        )
+      );
+      updateChatById(activeChat.id, {
+        mode: "variations",
+        variationsLoading: false,
+        variants: started,
       });
     } catch (err) {
       updateActive({
@@ -733,6 +722,7 @@ export default function DashboardClient({
           err instanceof Error ? err.message : "Could not draft variations.",
         variationsLoading: false,
         mode: null,
+        variants: [],
       });
     }
   }
@@ -790,6 +780,8 @@ export default function DashboardClient({
       variationsError: null,
       variationsLoading: false,
       post: "",
+      imageDataUrl: null,
+      imageName: null,
     });
   }
 
@@ -1009,11 +1001,14 @@ export default function DashboardClient({
               onPickAudience={(a) => void handlePickAudienceForActive(a)}
               onUnpickAudience={handleUnpickAudience}
               onPickPlatform={(p) => updateActive({ platform: p })}
-              onChangePlatform={() => updateActive({ platform: null })}
               onSetPost={(post) => updateActive({ post })}
-              onSetPersonaCap={(personaCap) => updateActive({ personaCap })}
-              onRunSingle={handleRunSingle}
-              onDraftVariations={handleDraftVariations}
+              onSetImage={(imageDataUrl, imageName) =>
+                updateActive({ imageDataUrl, imageName })
+              }
+              onClearImage={() =>
+                updateActive({ imageDataUrl: null, imageName: null })
+              }
+              onRunSimulation={handleRunSimulation}
               onEditVariant={handleEditVariant}
               onRemoveVariant={handleRemoveVariant}
               onRunAll={handleRunAll}
@@ -1062,11 +1057,10 @@ interface ChatConversationProps {
   onPickAudience: (a: AudienceSummary) => void;
   onUnpickAudience: () => void;
   onPickPlatform: (p: Platform) => void;
-  onChangePlatform: () => void;
   onSetPost: (post: string) => void;
-  onSetPersonaCap: (n: number) => void;
-  onRunSingle: () => void;
-  onDraftVariations: () => void;
+  onSetImage: (imageDataUrl: string | null, imageName: string | null) => void;
+  onClearImage: () => void;
+  onRunSimulation: () => void;
   onEditVariant: (id: string, post: string) => void;
   onRemoveVariant: (id: string) => void;
   onRunAll: () => void;
@@ -1088,11 +1082,10 @@ function ChatConversation(props: ChatConversationProps) {
     onPickAudience,
     onUnpickAudience,
     onPickPlatform,
-    onChangePlatform,
     onSetPost,
-    onSetPersonaCap,
-    onRunSingle,
-    onDraftVariations,
+    onSetImage,
+    onClearImage,
+    onRunSimulation,
     onEditVariant,
     onRemoveVariant,
     onRunAll,
@@ -1276,8 +1269,8 @@ function ChatConversation(props: ChatConversationProps) {
             role: "atharias",
             body: (
               <>
-                Paste the draft you want to test. Run it as-is, or let me draft a
-                few variations to A/B test.
+                Paste the draft you want to test. I&apos;ll run your original plus
+                3 variations across the full audience automatically.
               </>
             ),
           });
@@ -1288,12 +1281,11 @@ function ChatConversation(props: ChatConversationProps) {
               <PostComposer
                 post={chat.post}
                 onPostChange={onSetPost}
-                personaCap={chat.personaCap}
-                onPersonaCapChange={onSetPersonaCap}
-                maxPersonas={Math.max(5, chat.audiencePersonas.length)}
-                onRunSingle={onRunSingle}
-                onDraftVariations={onDraftVariations}
-                onChangePlatform={onChangePlatform}
+                imageName={chat.imageName}
+                onImageChange={onSetImage}
+                onClearImage={onClearImage}
+                audienceSize={chat.audiencePersonas.length}
+                onRunSimulation={onRunSimulation}
                 platformLabel={PLATFORM_LABELS[chat.platform]}
                 error={chat.runError ?? chat.variationsError}
                 draftingVariations={chat.variationsLoading}
@@ -1302,14 +1294,13 @@ function ChatConversation(props: ChatConversationProps) {
           });
         }
 
-        // Drafting state — Claude is generating variants but they haven't
-        // come back yet. Without this, the chat went blank between the
-        // user's "Draft variations" tap and the editable cards landing.
+        // Drafting state while the automatic variation set is being generated
+        // and queued. Without this, the chat goes blank before the runs start.
         if (chat.mode === "variations" && chat.variants.length === 0) {
           messages.push({
             id: "user-asked-variations-loading",
             role: "user",
-            body: <>Draft variations.</>,
+            body: <>Run simulation.</>,
           });
           messages.push({
             id: "drafting-variations-msg",
@@ -1320,7 +1311,11 @@ function ChatConversation(props: ChatConversationProps) {
                 <strong style={{ color: "var(--text-primary)" }}>
                   3 variations
                 </strong>{" "}
-                plus your original draft. This takes ~5 seconds.
+                and starting 4 simulations across{" "}
+                <strong style={{ color: "var(--text-primary)" }}>
+                  {chat.audiencePersonas.length.toLocaleString()}
+                </strong>{" "}
+                personas. This takes ~5 seconds.
               </>
             ),
           });
@@ -1339,7 +1334,7 @@ function ChatConversation(props: ChatConversationProps) {
           messages.push({
             id: "user-asked-variations",
             role: "user",
-            body: <>Draft variations.</>,
+            body: <>Run simulation.</>,
           });
           messages.push({
             id: "variations-explainer",
@@ -1351,7 +1346,7 @@ function ChatConversation(props: ChatConversationProps) {
                   {chat.variants.length}
                 </strong>{" "}
                 drafts total: your original plus 3 variations. Edit any of them,
-                drop the ones you don&apos;t want, then run all.
+                drop the ones you don&apos;t want, then run simulation.
               </>
             ),
           });
@@ -1366,7 +1361,7 @@ function ChatConversation(props: ChatConversationProps) {
                 onRunAll={onRunAll}
                 onCancel={onResetRun}
                 error={chat.runError}
-                personaCap={Math.min(chat.personaCap, chat.audiencePersonas.length)}
+                personaCap={chat.audiencePersonas.length}
               />
             ),
           });
@@ -1397,7 +1392,7 @@ function ChatConversation(props: ChatConversationProps) {
             messages.push({
               id: "running-variants-msg",
               role: "user",
-              body: <>Run all {chat.variants.length}.</>,
+              body: <>Run simulation.</>,
             });
           }
 
@@ -2672,30 +2667,27 @@ function PlatformChips({
 function PostComposer({
   post,
   onPostChange,
-  personaCap,
-  onPersonaCapChange,
-  maxPersonas,
-  onRunSingle,
-  onDraftVariations,
-  onChangePlatform,
+  imageName,
+  onImageChange,
+  onClearImage,
+  audienceSize,
+  onRunSimulation,
   platformLabel,
   error,
   draftingVariations,
 }: {
   post: string;
   onPostChange: (v: string) => void;
-  personaCap: number;
-  onPersonaCapChange: (n: number) => void;
-  maxPersonas: number;
-  onRunSingle: () => void;
-  onDraftVariations: () => void;
-  onChangePlatform: () => void;
+  imageName: string | null;
+  onImageChange: (imageDataUrl: string | null, imageName: string | null) => void;
+  onClearImage: () => void;
+  audienceSize: number;
+  onRunSimulation: () => void;
   platformLabel: string;
   error: string | null;
   draftingVariations: boolean;
 }) {
-  const cap = Math.max(5, Math.min(personaCap, maxPersonas));
-  const estCredits = cap * SIMULATION_ROUNDS;
+  const estCredits = audienceSize * SIMULATION_ROUNDS * 4;
   return (
     <div
       style={{
@@ -2716,7 +2708,7 @@ function PostComposer({
         onKeyDown={(e) => {
           if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
             e.preventDefault();
-            onRunSingle();
+            onRunSimulation();
           }
         }}
         style={{
@@ -2734,6 +2726,89 @@ function PostComposer({
           minHeight: 96,
         }}
       />
+
+      <div
+        style={{
+          marginTop: 12,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          flexWrap: "wrap",
+        }}
+      >
+        <label
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            fontSize: 12,
+            color: "var(--text-secondary)",
+            cursor: "pointer",
+          }}
+        >
+          <span
+            style={{
+              padding: "6px 10px",
+              borderRadius: 999,
+              border: "1px solid var(--border)",
+              background: "var(--bg-subtle)",
+            }}
+          >
+            Attach image
+          </span>
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) {
+                onImageChange(null, null);
+                return;
+              }
+              const reader = new FileReader();
+              reader.onload = () => {
+                onImageChange(
+                  typeof reader.result === "string" ? reader.result : null,
+                  file.name
+                );
+              };
+              reader.readAsDataURL(file);
+              e.currentTarget.value = "";
+            }}
+          />
+        </label>
+        {imageName ? (
+          <>
+            <span
+              style={{
+                fontSize: 12,
+                color: "var(--text-tertiary)",
+                maxWidth: 220,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {imageName}
+            </span>
+            <button
+              type="button"
+              onClick={onClearImage}
+              style={{
+                border: "none",
+                background: "transparent",
+                color: "var(--text-tertiary)",
+                fontSize: 12,
+                cursor: "pointer",
+                padding: 0,
+              }}
+            >
+              Remove
+            </button>
+          </>
+        ) : null}
+      </div>
 
       <div
         style={{
@@ -2764,43 +2839,17 @@ function PostComposer({
         >
           {platformLabel}
         </span>
-
-        <label
+        <span
           style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
             fontSize: 12,
             color: "var(--text-tertiary)",
             fontFamily: "var(--font-data), monospace",
             letterSpacing: "0.04em",
+            textTransform: "uppercase",
           }}
         >
-          PERSONAS
-          <input
-            type="number"
-            min={5}
-            max={Math.max(5, maxPersonas)}
-            step={5}
-            value={cap}
-            onChange={(e) =>
-              onPersonaCapChange(Number.parseInt(e.target.value, 10) || 5)
-            }
-            className="tabular-nums"
-            style={{
-              padding: "6px 10px",
-              fontSize: 13,
-              width: 76,
-              minHeight: 32,
-              borderRadius: 8,
-              border: "1px solid var(--border)",
-              background: "var(--surface)",
-              color: "var(--text-primary)",
-              outline: "none",
-            }}
-            aria-label="Persona cap"
-          />
-        </label>
+          All {Math.max(0, audienceSize).toLocaleString()} personas
+        </span>
 
         <span
           className="tabular-nums"
@@ -2826,7 +2875,7 @@ function PostComposer({
       >
         <button
           type="button"
-          onClick={onRunSingle}
+          onClick={onRunSimulation}
           disabled={post.trim().length === 0 || draftingVariations}
           style={{
             background: "var(--ink)",
@@ -2846,43 +2895,18 @@ function PostComposer({
         >
           Run simulation →
         </button>
-        <button
-          type="button"
-          onClick={onDraftVariations}
-          disabled={post.trim().length === 0 || draftingVariations}
-          style={{
-            background: "transparent",
-            color: "var(--text-primary)",
-            border: "1px solid var(--border-hover)",
-            borderRadius: 999,
-            padding: "10px 18px",
-            fontSize: 14,
-            fontWeight: 500,
-            minHeight: 40,
-            cursor:
-              post.trim().length === 0 || draftingVariations
-                ? "not-allowed"
-                : "pointer",
-            opacity: post.trim().length === 0 || draftingVariations ? 0.55 : 1,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
-          {draftingVariations ? "Drafting…" : "Draft 3 variations →"}
-          <span
-            style={{
-              fontFamily: "var(--font-data), monospace",
-              fontSize: 10,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-              color: "var(--text-tertiary)",
-            }}
-          >
-            4× credits
-          </span>
-        </button>
       </div>
+
+      <p
+        style={{
+          marginTop: 10,
+          fontSize: 12,
+          lineHeight: 1.55,
+          color: "var(--text-tertiary)",
+        }}
+      >
+        Runs your original draft plus 3 variations across the full audience.
+      </p>
 
       {error ? (
         <p role="alert" style={{ marginTop: 10, fontSize: 13, color: "var(--coral)" }}>
@@ -2950,7 +2974,7 @@ function VariationReview({
             opacity: variants.length === 0 ? 0.55 : 1,
           }}
         >
-          Run all {variants.length} →
+          Run simulation →
         </button>
         <button
           type="button"
@@ -3715,10 +3739,8 @@ function buildReportHtml(
   });
   const audienceName = chat.audienceName ?? "—";
   const platformLabel = chat.platform ? PLATFORM_LABELS[chat.platform] : "—";
-  const personaCount = Math.min(
-    chat.personaCap,
-    chat.audienceRowCount ?? chat.personaCap
-  );
+  const personaCount =
+    chat.audienceRowCount ?? chat.audiencePersonas.length ?? chat.personaCap;
 
   const archetypes = summariseArchetypes(chat.audiencePersonas).slice(0, 6);
   const audienceTone =
@@ -3928,7 +3950,7 @@ function buildReportHtml(
     </div>
   </header>
 
-  <p class="meta-line">For <strong>${escapeHtml(audienceName)}</strong> on <strong>${escapeHtml(platformLabel)}</strong> · ${personaCount}${chat.audienceRowCount ? `/${chat.audienceRowCount}` : ""} personas tested${chat.variants.length > 1 ? ` · ${chat.variants.length} drafts compared` : ""}</p>
+  <p class="meta-line">For <strong>${escapeHtml(audienceName)}</strong> on <strong>${escapeHtml(platformLabel)}</strong> · ${personaCount} personas tested${chat.variants.length > 1 ? ` · ${chat.variants.length} drafts compared` : ""}</p>
 
   <div class="stack">
   ${sectionRecommendation}
@@ -4236,7 +4258,7 @@ function buildReportMarkdown(chat: ChatState): string {
   lines.push("");
   lines.push(`**Audience:** ${chat.audienceName ?? "—"}`);
   lines.push(`**Platform:** ${chat.platform ? PLATFORM_LABELS[chat.platform] : "—"}`);
-  lines.push(`**Personas tested:** ${Math.min(chat.personaCap, chat.audiencePersonas.length)} of ${chat.audiencePersonas.length}`);
+  lines.push(`**Personas tested:** ${chat.audienceRowCount ?? chat.audiencePersonas.length}`);
   lines.push(`**Generated:** ${date}`);
   lines.push("");
 

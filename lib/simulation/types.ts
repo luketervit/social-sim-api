@@ -1,4 +1,5 @@
 import type { Persona } from "@/lib/schemas";
+import type { SimulationImageAnalysis } from "./imageAnalysis";
 
 export interface AgentEngagementSignals {
   relevance: number;
@@ -45,6 +46,7 @@ export interface SimulationState {
   audience_id: string;
   platform: string;
   input: string;
+  image_analysis?: SimulationImageAnalysis | null;
   personas: Persona[];
   thread: AgentMessage[];
   round: number;

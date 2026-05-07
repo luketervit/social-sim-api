@@ -43,6 +43,7 @@ export const SimulateInputSchema = z.object({
   audience_id: z.string().min(1),
   platform: z.enum(["twitter", "slack", "reddit", "linkedin"]),
   input: z.string().min(1).max(2000),
+  image_url: z.string().max(3_000_000).optional(),
 });
 
 export type SimulateInput = z.infer<typeof SimulateInputSchema>;
