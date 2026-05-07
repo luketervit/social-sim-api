@@ -228,52 +228,114 @@ function MockAudience() {
 }
 
 function MockReactions() {
+  const segments = [
+    { label: "positive", value: 38, color: "var(--mint)" },
+    { label: "neutral", value: 27, color: "var(--text-tertiary)" },
+    { label: "negative", value: 24, color: "var(--coral)" },
+    { label: "hostile", value: 11, color: "var(--tomato)" },
+  ];
+
   return (
     <div
+      className="panel mock-card"
       style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 10,
-        maxWidth: 340,
-        transform: "rotate(-0.8deg)",
+        padding: "18px 20px",
+        maxWidth: 360,
+        transform: "rotate(-1deg)",
       }}
     >
-      {[
-        { who: "@reply_guy", text: "ratio incoming", color: "var(--coral)" },
-        { who: "@power_user", text: "honestly fair", color: "var(--mint)" },
-        { who: "@too_online", text: "and the support tickets begin", color: "var(--coral)" },
-      ].map((c, i) => (
-        <div
-          key={i}
-          className="panel mock-card"
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <span
+          className="mono-label"
+          style={{ fontSize: 10, color: "var(--text-tertiary)" }}
+        >
+          Verdict
+        </span>
+        <span
           style={{
-            padding: "10px 14px",
-            transform: `rotate(${i % 2 ? 1 : -1}deg)`,
+            fontFamily: "var(--font-data), monospace",
+            fontSize: 10,
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            color: "var(--text-tertiary)",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+          1,128 agents
+        </span>
+      </div>
+
+      <p
+        style={{
+          margin: "10px 0 14px",
+          fontFamily: "var(--font-display), Georgia, serif",
+          fontSize: 18,
+          lineHeight: 1.3,
+          letterSpacing: "-0.01em",
+          color: "var(--text-primary)",
+        }}
+      >
+        Ship the rewrite —{" "}
+        <span style={{ fontStyle: "italic" }}>not the original.</span>
+      </p>
+
+      <div
+        style={{
+          display: "flex",
+          height: 8,
+          borderRadius: 999,
+          overflow: "hidden",
+          background: "var(--bg-subtle)",
+        }}
+      >
+        {segments.map((s) => (
+          <span
+            key={s.label}
+            style={{
+              flexBasis: `${s.value}%`,
+              background: s.color,
+            }}
+          />
+        ))}
+      </div>
+
+      <div
+        style={{
+          marginTop: 10,
+          display: "grid",
+          gridTemplateColumns: "repeat(4, 1fr)",
+          gap: 6,
+          fontFamily: "var(--font-data), monospace",
+          fontSize: 10,
+          letterSpacing: "0.04em",
+          textTransform: "uppercase",
+          color: "var(--text-tertiary)",
+        }}
+      >
+        {segments.map((s) => (
+          <div
+            key={s.label}
+            style={{ display: "flex", alignItems: "center", gap: 5 }}
+          >
             <span
               style={{
                 width: 6,
                 height: 6,
                 borderRadius: 999,
-                background: c.color,
+                background: s.color,
+                flexShrink: 0,
               }}
             />
-            <span
-              style={{
-                fontFamily: "var(--font-data), monospace",
-                fontSize: 10,
-                color: "var(--text-tertiary)",
-                letterSpacing: "0.04em",
-              }}
-            >
-              {c.who}
-            </span>
+            <span style={{ color: "var(--text-primary)" }}>{s.value}%</span>
+            <span>{s.label}</span>
           </div>
-          <span style={{ fontSize: 13, color: "var(--text-primary)" }}>{c.text}</span>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
