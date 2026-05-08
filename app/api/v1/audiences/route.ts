@@ -10,7 +10,7 @@ import {
   hasCurrentConsent,
 } from "@/lib/operator-accounts";
 
-export const maxDuration = 300;
+export const maxDuration = 800;
 
 const ALLOWED_PLATFORMS = new Set(["twitter", "reddit", "slack", "linkedin"]);
 const NAME_MAX_CHARS = 80;

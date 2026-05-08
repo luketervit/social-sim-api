@@ -11,6 +11,9 @@ const MODEL =
 const BATCH_SIZE = 20;
 const MAX_RETRIES = 2;
 const REQUEST_TIMEOUT_MS = 20_000;
+const BATCH_CONCURRENCY = Number(
+  process.env.OPENROUTER_CLASSIFIER_CONCURRENCY || 8
+);
 
 export type RowScores = Partial<Record<ClassifierField, Record<string, number>>>;
 
@@ -311,23 +314,33 @@ export async function classifyTexts(
   const rows: RowScores[] = texts.map(() => ({}));
   const batches = chunk(texts, BATCH_SIZE);
 
-  let cursor = 0;
+  const offsets: number[] = [];
+  let running = 0;
   for (const batch of batches) {
-    const inferred = await inferBatch(batch, fields);
-    if (!inferred) {
-      cursor += batch.length;
-      continue;
-    }
+    offsets.push(running);
+    running += batch.length;
+  }
 
-    for (let i = 0; i < batch.length; i += 1) {
-      const result = inferred[i] ?? {};
-      for (const field of fields) {
-        const mapped = fieldInferenceToMap(field, result[field]);
-        if (mapped) rows[cursor + i][field] = mapped;
+  const concurrency = Math.max(1, BATCH_CONCURRENCY);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(concurrency, batches.length) }, async () => {
+    while (true) {
+      const idx = next++;
+      if (idx >= batches.length) return;
+      const batch = batches[idx];
+      const offset = offsets[idx];
+      const inferred = await inferBatch(batch, fields);
+      if (!inferred) continue;
+      for (let i = 0; i < batch.length; i += 1) {
+        const result = inferred[i] ?? {};
+        for (const field of fields) {
+          const mapped = fieldInferenceToMap(field, result[field]);
+          if (mapped) rows[offset + i][field] = mapped;
+        }
       }
     }
-    cursor += batch.length;
-  }
+  });
+  await Promise.all(workers);
 
   return rows;
 }
