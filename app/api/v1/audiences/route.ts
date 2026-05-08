@@ -1,9 +1,10 @@
-import { NextRequest, after } from "next/server";
+import { NextRequest } from "next/server";
 import { randomUUID } from "node:crypto";
 import { createServerClient } from "@supabase/ssr";
+import { start } from "workflow/api";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { MAX_UPLOAD_BYTES, parseUpload } from "@/lib/audiences/parse";
-import { processAudienceUpload } from "@/lib/audiences/process";
+import { audienceUploadWorkflow } from "@/lib/audiences/workflow";
 import { parseLinkedInCompleteExportAttachment } from "@/lib/audiences/linkedinExport";
 import {
   getOperatorAccountByUserId,
@@ -219,16 +220,50 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  after(() =>
-    processAudienceUpload({
-      audienceId,
-      audienceName: name,
-      platform,
-      rows: parsed.rows,
-      headers: parsed.headers,
-      synthetic: parsed.synthetic,
-    })
-  );
+  const { error: stagingError } = await db.from("audience_staging").insert({
+    audience_id: audienceId,
+    rows: parsed.rows,
+    headers: parsed.headers,
+    synthetic: parsed.synthetic,
+    audience_name: name,
+    platform,
+  });
+
+  if (stagingError) {
+    console.error("Failed to stage audience rows:", stagingError);
+    await db
+      .from("audiences")
+      .update({
+        status: "failed",
+        error_message: "Could not stage upload for processing.",
+      })
+      .eq("id", audienceId);
+    return Response.json(
+      { error: "Could not stage upload for processing." },
+      { status: 500 }
+    );
+  }
+
+  try {
+    const run = await start(audienceUploadWorkflow, [audienceId]);
+    await db
+      .from("audience_staging")
+      .update({ workflow_run_id: run.runId })
+      .eq("audience_id", audienceId);
+  } catch (err) {
+    console.error("Failed to start audience workflow:", err);
+    await db
+      .from("audiences")
+      .update({
+        status: "failed",
+        error_message: "Could not start processing workflow.",
+      })
+      .eq("id", audienceId);
+    return Response.json(
+      { error: "Could not start processing workflow." },
+      { status: 500 }
+    );
+  }
 
   return Response.json(
     {
