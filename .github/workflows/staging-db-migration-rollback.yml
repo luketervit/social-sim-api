@@ -16,7 +16,7 @@ concurrency:
 jobs:
   rollback:
     if: github.event.pull_request.merged == true
-    runs-on: ubuntu-latest
+    runs-on: ["self-hosted", "linux", "superoptimizers", "staging-db-migration-rollback"]
     permissions:
       id-token: write
       pull-requests: read
@@ -73,7 +73,17 @@ jobs:
           OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
           PULL_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          curl -sS -f -X POST https://api.superoptimizers.cofounder.co/migrations/v1/rollback-reverted \
+          response_file=$(mktemp)
+          status_code=$(curl -sS -o "$response_file" -w "%{http_code}" -X POST \
+            https://api.superoptimizers.cofounder.co/migrations/v1/rollback-reverted \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "{\"pull_number\":$PULL_NUMBER}"
+            -d "{\"pull_number\":$PULL_NUMBER}")
+          if [ "$status_code" -ge 400 ]; then
+            echo "Migration rollback API failed with status $status_code"
+            cat "$response_file"
+            rm -f "$response_file"
+            exit 1
+          fi
+          cat "$response_file"
+          rm -f "$response_file"
