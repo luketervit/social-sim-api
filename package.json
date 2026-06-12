@@ -49,5 +49,9 @@
     "tailwindcss": "^4.2.2",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "lodash-es": "^4.17.24",
+    "ws": "^8.20.1"
   }
 }

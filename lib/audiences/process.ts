@@ -3,7 +3,7 @@ import type { LinkedInPostEvalRow } from "./linkedinExport";
 import { classifyTexts } from "./classify";
 import { synthesizePersona } from "./synthesize";
 import { enrichPersonasWithModel } from "./persona-writer";
-import { MAX_TEXT_CHARS, MIN_TEXT_CHARS, type ParsedRow } from "./parse";
+import { MAX_TEXT_CHARS, MIN_TEXT_CHARS, type ParsedRow } from "./types";
 import { selectUsefulColumns } from "./select-columns";
 import { routeAudience } from "@/lib/models/router";
 import { evaluateLinkedInPrivateDataset } from "@/lib/evals/linkedinPrivate";

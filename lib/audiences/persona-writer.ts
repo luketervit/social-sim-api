@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import type { Persona } from "@/lib/schemas";
 import { getOpenRouterEnv } from "@/lib/env";
-import type { ParsedRow } from "./parse";
+import type { ParsedRow } from "./types";
 import type { RowScores } from "./classify";
 
 const MODEL =
