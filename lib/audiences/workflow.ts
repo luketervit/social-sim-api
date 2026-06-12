@@ -11,7 +11,7 @@ import {
   DEFAULT_GENERATOR_ID,
   generatorById,
 } from "@/lib/models/registry";
-import { MAX_TEXT_CHARS, MIN_TEXT_CHARS, type ParsedRow } from "./parse";
+import { MAX_TEXT_CHARS, MIN_TEXT_CHARS, type ParsedRow } from "./types";
 import type { LinkedInPostEvalRow } from "./linkedinExport";
 import type { RowScores } from "./classify";
 

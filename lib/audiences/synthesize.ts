@@ -1,5 +1,5 @@
 import type { Persona } from "@/lib/schemas";
-import type { ParsedRow } from "./parse";
+import type { ParsedRow } from "./types";
 import type { RowScores } from "./classify";
 import {
   defaultPrioritiesForRoleFamily,

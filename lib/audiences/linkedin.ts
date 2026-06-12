@@ -23,7 +23,7 @@ import { getEnv } from "@/lib/env";
  * stripped row set.
  */
 
-import type { ParsedRow } from "./parse";
+import type { ParsedRow } from "./types";
 
 const LINKEDIN_REQUIRED_HEADERS = [
   "First Name",
