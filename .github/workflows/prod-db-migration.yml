@@ -28,5 +28,15 @@ jobs:
         env:
           OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
         run: |
-          curl -sS -f -X POST https://api.superoptimizers.cofounder.co/migrations/v1/run \
-            -H "Authorization: Bearer $OIDC_TOKEN"
+          response_file=$(mktemp)
+          status_code=$(curl -sS -o "$response_file" -w "%{http_code}" -X POST \
+            https://api.superoptimizers.cofounder.co/migrations/v1/run \
+            -H "Authorization: Bearer $OIDC_TOKEN")
+          if [ "$status_code" -ge 400 ]; then
+            echo "Migration API failed with status $status_code"
+            cat "$response_file"
+            rm -f "$response_file"
+            exit 1
+          fi
+          cat "$response_file"
+          rm -f "$response_file"

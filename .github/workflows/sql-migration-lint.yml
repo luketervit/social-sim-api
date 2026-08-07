@@ -11,6 +11,8 @@ jobs:
     runs-on: ["self-hosted", "linux", "superoptimizers", "lint-migrations"]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Get changed migration files
         id: changed-files
@@ -27,8 +29,11 @@ jobs:
         if: steps.changed-files.outputs.any_changed == 'true'
         env:
           CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+          ADDED_FILES: ${{ steps.changed-files.outputs.added_files }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
           bun -e '
+          import { execFileSync } from "node:child_process";
           import { existsSync, readFileSync, statSync } from "node:fs";
           import { basename } from "node:path";
 
@@ -41,8 +46,15 @@ jobs:
             console.log("No changed SQL migration files found, skipping migration lint.");
             process.exit(0);
           }
+          const addedFiles = new Set(
+            (process.env.ADDED_FILES ?? "")
+              .split(/\s+/)
+              .filter(Boolean)
+              .filter((file) => file.endsWith(".sql")),
+          );
 
           const filenamePattern = /^\d{14}_[a-z0-9][a-z0-9_-]*\.sql$/;
+          const migrationTimestampPattern = /^(\d{14})_/;
           const sqlIdentifier = String.raw`"[^"]+"|[A-Za-z_][A-Za-z0-9_]*`;
           const createTablePattern = new RegExp(
             String.raw`^\s*CREATE\s+(?:(?<temp>TEMP|TEMPORARY)\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:(?<schema>${sqlIdentifier})\s*\.\s*)?(?<table>${sqlIdentifier})\s*\(`,
@@ -55,6 +67,39 @@ jobs:
           const rlsDisableCommentPattern = /--\s*rls-lint:\s*disable/i;
           const seenTimestamps = new Set();
           const errors = [];
+
+          const getBaseMigrationFiles = () => {
+            const baseRef = process.env.BASE_REF || "main";
+            try {
+              return execFileSync(
+                "git",
+                [
+                  "ls-tree",
+                  "-r",
+                  "--name-only",
+                  `origin/${baseRef}`,
+                  "supabase/migrations",
+                ],
+                { encoding: "utf8" },
+              )
+                .split(/\s+/)
+                .filter(Boolean)
+                .filter((file) => file.endsWith(".sql"));
+            } catch (error) {
+              console.warn(
+                `Warning: could not inspect base migration history for origin/${baseRef}; skipping added-migration timestamp ordering check.`,
+              );
+              return [];
+            }
+          };
+
+          const baseMigrationTimestamps = getBaseMigrationFiles()
+            .map((file) => basename(file).match(migrationTimestampPattern)?.[1])
+            .filter(Boolean)
+            .sort();
+          const existingMigrationTimestamps = new Set(baseMigrationTimestamps);
+          const latestExistingMigrationTimestamp =
+            baseMigrationTimestamps.at(-1) ?? null;
 
           const normalizeIdentifier = (identifier) => {
             if (!identifier) {
@@ -148,6 +193,22 @@ jobs:
               errors.push(`${file}: duplicate migration timestamp ${timestamp}.`);
             }
             seenTimestamps.add(timestamp);
+
+            if (addedFiles.has(file) && filenamePattern.test(filename)) {
+              if (existingMigrationTimestamps.has(timestamp)) {
+                errors.push(
+                  `${file}: duplicate migration timestamp ${timestamp}; an existing migration already uses that timestamp.`,
+                );
+              }
+              if (
+                latestExistingMigrationTimestamp !== null &&
+                timestamp < latestExistingMigrationTimestamp
+              ) {
+                errors.push(
+                  `${file}: migration timestamp ${timestamp} is older than existing migration timestamp ${latestExistingMigrationTimestamp}; create new migrations with supabase migration new so they sort after current history.`,
+                );
+              }
+            }
 
             if (stats.size === 0) {
               errors.push(`${file}: file is empty.`);
